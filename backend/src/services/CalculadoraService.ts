@@ -1,6 +1,7 @@
 import { AppDataSource } from '../database/data-source';
 import { Despesa } from '../entities/Despesa';
 import { Participante } from '../entities/Participante';
+import { Grupo } from '../entities/Grupo';
 import { GrupoParticipantesEvento } from '../entities/GrupoParticipantesEvento';
 
 export interface SaldoParticipante {
@@ -30,16 +31,25 @@ export interface SugestaoPagamento {
 }
 
 export class CalculadoraService {
-  static async calcularSaldosGrupo(grupoId: number): Promise<SaldoParticipante[]> {
+  static async calcularSaldosGrupo(grupoId: number, usuarioId: number): Promise<SaldoParticipante[]> {
     const despesaRepository = AppDataSource.getRepository(Despesa);
     const participanteRepository = AppDataSource.getRepository(Participante);
+    const grupoRepository = AppDataSource.getRepository(Grupo);
+
+    // Verificar se o grupo pertence ao usu�rio
+    const grupo = await grupoRepository.findOne({ where: { id: grupoId, usuario_id: usuarioId } });
+    if (!grupo) {
+      throw new Error('Grupo n�o encontrado ou n�o pertence ao usu�rio');
+    }
 
     const despesas = await despesaRepository.find({
-      where: { grupo_id: grupoId },
+      where: { grupo_id: grupoId, usuario_id: usuarioId },
       relations: ['pagador', 'participacoes', 'participacoes.participante'],
     });
 
-    const participantes = await participanteRepository.find();
+    const participantes = await participanteRepository.find({
+      where: { usuario_id: usuarioId },
+    });
 
     const saldos: Map<number, SaldoParticipante> = new Map();
 
@@ -77,9 +87,19 @@ export class CalculadoraService {
     return saldosArray.filter(s => s.totalPagou > 0 || s.totalDeve > 0);
   }
 
-  static async calcularSaldosPorGrupo(grupoId: number): Promise<SaldoGrupo[]> {
+  static async calcularSaldosPorGrupo(grupoId: number, usuarioId: number): Promise<SaldoGrupo[]> {
     const grupoParticipantesRepository = AppDataSource.getRepository(GrupoParticipantesEvento);
     const despesaRepository = AppDataSource.getRepository(Despesa);
+    const grupoRepository = AppDataSource.getRepository(Grupo);
+
+    // Verificar se o grupo pertence ao usu�rio e buscar com participantes
+    const grupo = await grupoRepository.findOne({ 
+      where: { id: grupoId, usuario_id: usuarioId },
+      relations: ['participantes', 'participantes.participante'],
+    });
+    if (!grupo) {
+      throw new Error('Grupo n�o encontrado ou n�o pertence ao usu�rio');
+    }
 
     const gruposParticipantes = await grupoParticipantesRepository.find({
       where: { grupo_id: grupoId },
@@ -87,12 +107,26 @@ export class CalculadoraService {
     });
 
     const despesas = await despesaRepository.find({
-      where: { grupo_id: grupoId },
+      where: { grupo_id: grupoId, usuario_id: usuarioId },
       relations: ['pagador', 'participacoes', 'participacoes.participante'],
     });
 
+    // Identificar participantes que est�o em grupos
+    const participantesEmGrupos = new Set<number>();
+    gruposParticipantes.forEach(gp => {
+      gp.participantes.forEach(p => {
+        participantesEmGrupos.add(p.participante_id);
+      });
+    });
+
+    // Identificar participantes do evento que n�o est�o em nenhum grupo
+    const participantesSolitarios = grupo.participantes
+      .filter(pg => !participantesEmGrupos.has(pg.participante_id))
+      .map(pg => pg.participante);
+
     const saldosGrupos: SaldoGrupo[] = [];
 
+    // Calcular saldos para grupos reais
     for (const grupoParticipantes of gruposParticipantes) {
       const saldoGrupo: SaldoGrupo = {
         grupoId: grupoParticipantes.id,
@@ -115,6 +149,38 @@ export class CalculadoraService {
 
         despesa.participacoes.forEach(participacao => {
           if (participantesIds.includes(participacao.participante_id)) {
+            saldoGrupo.totalDeve += Number(participacao.valorDevePagar);
+          }
+        });
+      });
+
+      saldoGrupo.saldo = saldoGrupo.totalPagou - saldoGrupo.totalDeve;
+      saldosGrupos.push(saldoGrupo);
+    }
+
+    // Criar grupos virtuais para participantes solit�rios
+    for (const participante of participantesSolitarios) {
+      const saldoGrupo: SaldoGrupo = {
+        grupoId: -participante.id, // ID negativo para indicar que � um grupo virtual
+        grupoNome: participante.nome, // Nome do participante como nome do grupo
+        participantes: [{
+          participanteId: participante.id,
+          participanteNome: participante.nome,
+        }],
+        totalPagou: 0,
+        totalDeve: 0,
+        saldo: 0,
+      };
+
+      const participanteId = participante.id;
+
+      despesas.forEach(despesa => {
+        if (despesa.participante_pagador_id === participanteId) {
+          saldoGrupo.totalPagou += Number(despesa.valorTotal);
+        }
+
+        despesa.participacoes.forEach(participacao => {
+          if (participacao.participante_id === participanteId) {
             saldoGrupo.totalDeve += Number(participacao.valorDevePagar);
           }
         });

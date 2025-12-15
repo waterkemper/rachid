@@ -84,3 +84,14 @@ export interface SaldoGrupo {
   saldo: number;
 }
 
+export interface Usuario {
+  id: number;
+  email: string;
+  nome: string;
+  ddd?: string;
+  telefone?: string;
+  criadoEm: string;
+  plano?: 'FREE' | 'PRO';
+  planoValidoAte?: string | null;
+}
+

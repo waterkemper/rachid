@@ -1,11 +1,19 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
 import { Despesa } from './Despesa';
 import { ParticipanteGrupo } from './ParticipanteGrupo';
+import { Usuario } from './Usuario';
 
 @Entity('grupos')
 export class Grupo {
   @PrimaryGeneratedColumn()
   id!: number;
+
+  @ManyToOne(() => Usuario, usuario => usuario.grupos)
+  @JoinColumn({ name: 'usuario_id' })
+  usuario!: Usuario;
+
+  @Column('integer')
+  usuario_id!: number;
 
   @Column('varchar')
   nome!: string;
@@ -13,7 +21,7 @@ export class Grupo {
   @Column({ type: 'text', nullable: true })
   descricao?: string;
 
-  @Column({ type: 'datetime', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   data!: Date;
 
   @CreateDateColumn()

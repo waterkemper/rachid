@@ -6,14 +6,14 @@ export class ParticipacaoService {
   private static participacaoRepository = AppDataSource.getRepository(ParticipacaoDespesa);
   private static despesaRepository = AppDataSource.getRepository(Despesa);
 
-  static async toggleParticipacao(despesaId: number, participanteId: number): Promise<ParticipacaoDespesa | null> {
+  static async toggleParticipacao(despesaId: number, participanteId: number, usuarioId: number): Promise<ParticipacaoDespesa | null> {
     const despesa = await this.despesaRepository.findOne({
-      where: { id: despesaId },
+      where: { id: despesaId, usuario_id: usuarioId },
       relations: ['participacoes'],
     });
 
     if (!despesa) {
-      throw new Error('Despesa não encontrada');
+      throw new Error('Despesa não encontrada ou não pertence ao usuário');
     }
 
     const participacaoExistente = await this.participacaoRepository.findOne({
@@ -25,7 +25,7 @@ export class ParticipacaoService {
 
     if (participacaoExistente) {
       await this.participacaoRepository.delete(participacaoExistente.id);
-      await this.recalcularValores(despesaId);
+      await this.recalcularValores(despesaId, usuarioId);
       return null;
     } else {
       const valorPorPessoa = await this.calcularValorPorPessoa(despesaId);
@@ -35,14 +35,14 @@ export class ParticipacaoService {
         valorDevePagar: valorPorPessoa,
       });
       const participacaoSalva = await this.participacaoRepository.save(novaParticipacao);
-      await this.recalcularValores(despesaId);
+      await this.recalcularValores(despesaId, usuarioId);
       return participacaoSalva;
     }
   }
 
-  static async recalcularValores(despesaId: number): Promise<void> {
+  static async recalcularValores(despesaId: number, usuarioId: number): Promise<void> {
     const despesa = await this.despesaRepository.findOne({
-      where: { id: despesaId },
+      where: { id: despesaId, usuario_id: usuarioId },
       relations: ['participacoes'],
     });
 

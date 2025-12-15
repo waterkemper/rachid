@@ -5,44 +5,70 @@ import { DespesaController } from '../controllers/DespesaController';
 import { RelatorioController } from '../controllers/RelatorioController';
 import { ParticipacaoController } from '../controllers/ParticipacaoController';
 import { GrupoParticipantesController } from '../controllers/GrupoParticipantesController';
+import { GrupoMaiorController } from '../controllers/GrupoMaiorController';
+import { AuthController } from '../controllers/AuthController';
+import { authMiddleware } from '../middleware/auth';
+import { AnalyticsController } from '../controllers/AnalyticsController';
 
 const router = Router();
 
-router.get('/participantes', ParticipanteController.getAll);
-router.get('/participantes/:id', ParticipanteController.getById);
-router.post('/participantes', ParticipanteController.create);
-router.put('/participantes/:id', ParticipanteController.update);
-router.delete('/participantes/:id', ParticipanteController.delete);
+// Rotas públicas (sem autenticação)
+router.post('/auth/login', AuthController.login);
+router.post('/auth/logout', AuthController.logout);
+router.post('/auth/create-user', AuthController.createUser);
 
-router.get('/grupos', GrupoController.getAll);
-router.get('/grupos/:id', GrupoController.getById);
-router.post('/grupos', GrupoController.create);
-router.put('/grupos/:id', GrupoController.update);
-router.delete('/grupos/:id', GrupoController.delete);
-router.post('/grupos/:id/participantes', GrupoController.adicionarParticipante);
-router.delete('/grupos/:id/participantes', GrupoController.removerParticipante);
+// Rotas protegidas (requerem autenticação)
+router.get('/auth/me', authMiddleware, AuthController.me);
+router.post('/analytics/event', authMiddleware, AnalyticsController.track);
 
-router.get('/despesas', DespesaController.getAll);
-router.get('/despesas/:id', DespesaController.getById);
-router.post('/despesas', DespesaController.create);
-router.put('/despesas/:id', DespesaController.update);
-router.delete('/despesas/:id', DespesaController.delete);
+router.get('/participantes', authMiddleware, ParticipanteController.getAll);
+router.get('/participantes/:id', authMiddleware, ParticipanteController.getById);
+router.post('/participantes', authMiddleware, ParticipanteController.create);
+router.put('/participantes/:id', authMiddleware, ParticipanteController.update);
+router.delete('/participantes/:id', authMiddleware, ParticipanteController.delete);
 
-router.get('/grupos/:id/saldos', RelatorioController.getSaldosGrupo);
-router.get('/grupos/:id/saldos-por-grupo', RelatorioController.getSaldosPorGrupo);
-router.get('/grupos/:id/sugestoes-pagamento-grupos', RelatorioController.getSugestoesPagamentoEntreGrupos);
-router.get('/grupos/:id/sugestoes-pagamento', RelatorioController.getSugestoesPagamento);
+router.get('/grupos', authMiddleware, GrupoController.getAll);
+router.get('/grupos/:id', authMiddleware, GrupoController.getById);
+router.post('/grupos', authMiddleware, GrupoController.create);
+router.put('/grupos/:id', authMiddleware, GrupoController.update);
+router.delete('/grupos/:id', authMiddleware, GrupoController.delete);
+router.post('/grupos/:id/duplicar', authMiddleware, GrupoController.duplicar);
+router.post('/grupos/:id/participantes', authMiddleware, GrupoController.adicionarParticipante);
+router.delete('/grupos/:id/participantes', authMiddleware, GrupoController.removerParticipante);
 
-router.post('/despesas/:despesaId/participacoes', ParticipacaoController.toggle);
-router.post('/despesas/:despesaId/recalcular', ParticipacaoController.recalcular);
+router.get('/despesas', authMiddleware, DespesaController.getAll);
+router.get('/despesas/:id', authMiddleware, DespesaController.getById);
+router.post('/despesas', authMiddleware, DespesaController.create);
+router.put('/despesas/:id', authMiddleware, DespesaController.update);
+router.delete('/despesas/:id', authMiddleware, DespesaController.delete);
 
-router.get('/grupos/:eventoId/grupos-participantes', GrupoParticipantesController.getAll);
-router.get('/grupos/:eventoId/grupos-participantes/:id', GrupoParticipantesController.getById);
-router.post('/grupos/:eventoId/grupos-participantes', GrupoParticipantesController.create);
-router.put('/grupos/:eventoId/grupos-participantes/:id', GrupoParticipantesController.update);
-router.delete('/grupos/:eventoId/grupos-participantes/:id', GrupoParticipantesController.delete);
-router.post('/grupos/:eventoId/grupos-participantes/:grupoId/participantes', GrupoParticipantesController.adicionarParticipante);
-router.delete('/grupos/:eventoId/grupos-participantes/:grupoId/participantes/:participanteId', GrupoParticipantesController.removerParticipante);
+router.get('/grupos/:id/saldos', authMiddleware, RelatorioController.getSaldosGrupo);
+router.get('/grupos/:id/saldos-por-grupo', authMiddleware, RelatorioController.getSaldosPorGrupo);
+router.get('/grupos/:id/sugestoes-pagamento-grupos', authMiddleware, RelatorioController.getSugestoesPagamentoEntreGrupos);
+router.get('/grupos/:id/sugestoes-pagamento', authMiddleware, RelatorioController.getSugestoesPagamento);
+
+router.post('/despesas/:despesaId/participacoes', authMiddleware, ParticipacaoController.toggle);
+router.post('/despesas/:despesaId/recalcular', authMiddleware, ParticipacaoController.recalcular);
+
+router.get('/grupos/:eventoId/grupos-participantes', authMiddleware, GrupoParticipantesController.getAll);
+router.get('/grupos/:eventoId/grupos-participantes/:id', authMiddleware, GrupoParticipantesController.getById);
+router.post('/grupos/:eventoId/grupos-participantes', authMiddleware, GrupoParticipantesController.create);
+router.put('/grupos/:eventoId/grupos-participantes/:id', authMiddleware, GrupoParticipantesController.update);
+router.delete('/grupos/:eventoId/grupos-participantes/:id', authMiddleware, GrupoParticipantesController.delete);
+router.post('/grupos/:eventoId/grupos-participantes/:grupoId/participantes', authMiddleware, GrupoParticipantesController.adicionarParticipante);
+router.delete('/grupos/:eventoId/grupos-participantes/:grupoId/participantes/:participanteId', authMiddleware, GrupoParticipantesController.removerParticipante);
+
+router.get('/grupos-maiores', authMiddleware, GrupoMaiorController.getAll);
+router.get('/grupos-maiores/recentes', authMiddleware, GrupoMaiorController.getRecentes);
+router.get('/grupos-maiores/:id', authMiddleware, GrupoMaiorController.getById);
+router.post('/grupos-maiores', authMiddleware, GrupoMaiorController.create);
+router.put('/grupos-maiores/:id', authMiddleware, GrupoMaiorController.update);
+router.delete('/grupos-maiores/:id', authMiddleware, GrupoMaiorController.delete);
+router.post('/grupos-maiores/:id/grupos', authMiddleware, GrupoMaiorController.adicionarGrupo);
+router.delete('/grupos-maiores/:id/grupos', authMiddleware, GrupoMaiorController.removerGrupo);
+router.post('/grupos-maiores/:id/participantes', authMiddleware, GrupoMaiorController.adicionarParticipante);
+router.delete('/grupos-maiores/:id/participantes/:participanteId', authMiddleware, GrupoMaiorController.removerParticipante);
+router.get('/grupos-maiores/:id/participantes', authMiddleware, GrupoMaiorController.obterTodosParticipantes);
 
 export default router;
 

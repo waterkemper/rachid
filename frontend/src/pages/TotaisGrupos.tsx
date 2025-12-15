@@ -1,25 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { relatorioApi, grupoApi, grupoParticipantesApi, participanteApi } from '../services/api';
-import { Grupo, SaldoGrupo, GrupoParticipantesEvento, Participante } from '../types';
+import { useSearchParams } from 'react-router-dom';
+import { relatorioApi, grupoApi, grupoParticipantesApi, participanteApi, despesaApi, participacaoApi } from '../services/api';
+import { Grupo, SaldoGrupo, GrupoParticipantesEvento, Participante, Despesa } from '../types';
 import Modal from '../components/Modal';
 
 const TotaisGrupos: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [grupoSelecionado, setGrupoSelecionado] = useState<number | ''>('');
   const [gruposParticipantes, setGruposParticipantes] = useState<GrupoParticipantesEvento[]>([]);
   const [saldosGrupos, setSaldosGrupos] = useState<SaldoGrupo[]>([]);
+  const [despesas, setDespesas] = useState<Despesa[]>([]);
+  const [participacoesMap, setParticipacoesMap] = useState<Map<string, boolean>>(new Map());
   const [loading, setLoading] = useState(false);
+  const [inicializando, setInicializando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModalParticipanteOpen, setIsModalParticipanteOpen] = useState(false);
   const [grupoEditando, setGrupoEditando] = useState<GrupoParticipantesEvento | null>(null);
   const [grupoSelecionadoParaParticipante, setGrupoSelecionadoParaParticipante] = useState<GrupoParticipantesEvento | null>(null);
   const [formData, setFormData] = useState({ nome: '', descricao: '' });
-  const [participantes, setParticipantes] = useState<Participante[]>([]);
+  const [, setParticipantes] = useState<Participante[]>([]);
   const [participantesDisponiveis, setParticipantesDisponiveis] = useState<Participante[]>([]);
 
   useEffect(() => {
     loadGrupos();
+  }, []);
+
+  useEffect(() => {
+    const eventoId = searchParams.get('evento');
+    if (eventoId) {
+      setGrupoSelecionado(Number(eventoId));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -42,26 +55,96 @@ const TotaisGrupos: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const [gruposParticipantesData, saldosData, participantesData, grupoData] = await Promise.all([
+      const [gruposParticipantesData, saldosData, participantesData, grupoData, despesasData] = await Promise.all([
         grupoParticipantesApi.getAll(grupoId),
         relatorioApi.getSaldosPorGrupo(grupoId),
         participanteApi.getAll(),
         grupoApi.getById(grupoId),
+        despesaApi.getAll(grupoId),
       ]);
 
       setGruposParticipantes(gruposParticipantesData);
       setSaldosGrupos(saldosData);
       setParticipantes(participantesData);
+      setDespesas(despesasData);
 
+      // Determinar participantes do evento
+      let participantesNoEvento: Participante[] = [];
       if (grupoData?.participantes) {
         const participantesIds = grupoData.participantes.map(p => p.participante_id);
-        const participantesNoEvento = participantesData.filter(p => participantesIds.includes(p.id));
+        participantesNoEvento = participantesData.filter(p => participantesIds.includes(p.id));
         setParticipantesDisponiveis(participantesNoEvento);
       }
+
+      // Criar mapa de participações
+      const map = new Map<string, boolean>();
+      despesasData.forEach(despesa => {
+        participantesNoEvento.forEach(participante => {
+          const key = `${despesa.id}-${participante.id}`;
+          const temParticipacao = despesa.participacoes?.some(p => p.participante_id === participante.id) || false;
+          map.set(key, temParticipacao);
+        });
+      });
+      setParticipacoesMap(map);
+
+      // Inicializar participações automaticamente (assumir que todos consumiram tudo)
+      await inicializarParticipacoes(grupoId, participantesNoEvento, despesasData);
     } catch (err) {
       setError('Erro ao carregar dados');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const inicializarParticipacoes = async (grupoId: number, participantesNoEvento: Participante[], despesasData: Despesa[]) => {
+    if (participantesNoEvento.length === 0 || despesasData.length === 0) return;
+
+    setInicializando(true);
+    try {
+      let precisaRecarregar = false;
+      
+      for (const despesa of despesasData) {
+        const participantesIdsComParticipacao = despesa.participacoes?.map(p => p.participante_id) || [];
+        
+        for (const participante of participantesNoEvento) {
+          if (!participantesIdsComParticipacao.includes(participante.id)) {
+            // Criar participação automaticamente
+            try {
+              await participacaoApi.toggle(despesa.id, participante.id);
+              precisaRecarregar = true;
+            } catch (err) {
+              console.error(`Erro ao criar participação para despesa ${despesa.id} e participante ${participante.id}:`, err);
+            }
+          }
+        }
+      }
+
+      if (precisaRecarregar) {
+        // Recarregar dados após criar participações
+        await loadDadosGrupo(grupoId);
+      }
+    } catch (err) {
+      console.error('Erro ao inicializar participações:', err);
+    } finally {
+      setInicializando(false);
+    }
+  };
+
+  const toggleParticipacao = async (despesaId: number, participanteId: number) => {
+    const key = `${despesaId}-${participanteId}`;
+    const atual = participacoesMap.get(key) || false;
+    
+    try {
+      await participacaoApi.toggle(despesaId, participanteId);
+      setParticipacoesMap(new Map(participacoesMap.set(key, !atual)));
+      
+      // Recarregar saldos após mudança
+      if (grupoSelecionado) {
+        const saldosData = await relatorioApi.getSaldosPorGrupo(Number(grupoSelecionado));
+        setSaldosGrupos(saldosData);
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Erro ao atualizar participação');
     }
   };
 
@@ -161,6 +244,10 @@ const TotaisGrupos: React.FC = () => {
     }).format(value);
   };
 
+  const calcularTotalDespesas = (): number => {
+    return despesas.reduce((total, despesa) => total + Number(despesa.valorTotal), 0);
+  };
+
   const formatarData = (dataStr: string): string => {
     const dataParte = dataStr.split('T')[0];
     const [ano, mes, dia] = dataParte.split('-');
@@ -206,7 +293,80 @@ const TotaisGrupos: React.FC = () => {
             ))}
           </select>
         </div>
+        {grupoSelecionado && despesas.length > 0 && (
+          <div style={{ 
+            marginTop: '12px', 
+            padding: '10px 14px', 
+            background: 'rgba(99, 102, 241, 0.12)', 
+            borderRadius: '10px',
+            border: '1px solid rgba(99, 102, 241, 0.20)',
+            display: 'inline-block'
+          }}>
+            <span style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.78)', marginRight: '8px' }}>
+              Total do evento:
+            </span>
+            <strong style={{ fontSize: '16px', color: 'rgba(255, 255, 255, 0.95)' }}>
+              {formatCurrency(calcularTotalDespesas())}
+            </strong>
+          </div>
+        )}
       </div>
+
+      {inicializando && (
+        <div className="card" style={{ marginBottom: '20px', textAlign: 'center', padding: '20px' }}>
+          <p>Inicializando participações... Assumindo que todos consumiram tudo.</p>
+        </div>
+      )}
+
+      {grupoSelecionado && despesas.length > 0 && participantesDisponiveis.length > 0 && !inicializando && (
+        <div className="card" style={{ marginBottom: '20px' }}>
+          <h3 style={{ marginBottom: '15px' }}>Participações nas Despesas</h3>
+          <p style={{ marginBottom: '15px', color: '#666', fontSize: '14px' }}>
+            Por padrão, todos os participantes consomem todas as despesas. Desmarque as participações que não se aplicam.
+          </p>
+          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Despesa</th>
+                  {participantesDisponiveis.map((participante) => (
+                    <th key={participante.id} style={{ textAlign: 'center', fontSize: '12px' }}>
+                      {participante.nome}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {despesas.map((despesa) => (
+                  <tr key={despesa.id}>
+                    <td style={{ fontWeight: '500' }}>
+                      {despesa.descricao}
+                      <br />
+                      <span style={{ fontSize: '12px', color: '#666' }}>
+                        R$ {despesa.valorTotal.toFixed(2)}
+                      </span>
+                    </td>
+                    {participantesDisponiveis.map((participante) => {
+                      const key = `${despesa.id}-${participante.id}`;
+                      const temParticipacao = participacoesMap.get(key) || false;
+                      return (
+                        <td key={participante.id} style={{ textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={temParticipacao}
+                            onChange={() => toggleParticipacao(despesa.id, participante.id)}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {grupoSelecionado && (
         <div className="card" style={{ marginBottom: '20px' }}>

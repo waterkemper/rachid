@@ -7,11 +7,61 @@ import {
   SugestaoPagamento,
   GrupoParticipantesEvento,
   SaldoGrupo,
+  Usuario,
 } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
+  withCredentials: true, // Importante para enviar cookies
 });
+
+// Interceptor para tratar erros de autenticação
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Não redirecionar se já estiver na página de login
+      // Não redirecionar se a requisição for para /auth/me (verificação de autenticação)
+      const url = error.config?.url || '';
+      const path = window.location.pathname;
+      const isPublicPage = path === '/login' || path === '/cadastro' || path === '/home' || path === '/';
+      const isAuthMe = url.includes('/auth/me');
+      
+      if (!isPublicPage && !isAuthMe) {
+        // Token inválido ou expirado - redirecionar apenas se não estiver em página pública
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export const authApi = {
+  login: async (email: string, senha: string): Promise<Usuario> => {
+    const response = await api.post('/auth/login', { email, senha });
+    return response.data.usuario;
+  },
+
+  logout: async (): Promise<void> => {
+    await api.post('/auth/logout');
+  },
+
+  me: async (): Promise<Usuario> => {
+    const response = await api.get('/auth/me');
+    return response.data.usuario;
+  },
+
+  createUser: async (data: {
+    nome: string;
+    email: string;
+    senha: string;
+    ddd?: string;
+    telefone?: string;
+  }): Promise<Usuario> => {
+    const response = await api.post('/auth/create-user', data);
+    return response.data.usuario;
+  },
+};
 
 export const participanteApi = {
   getAll: async (): Promise<Participante[]> => {
@@ -82,18 +132,61 @@ export const grupoApi = {
   delete: async (id: number): Promise<void> => {
     await api.delete(`/grupos/${id}`);
   },
+
+  duplicar: async (id: number): Promise<Grupo> => {
+    const response = await api.post(`/grupos/${id}/duplicar`);
+    return response.data;
+  },
 };
 
 export const despesaApi = {
   getAll: async (grupoId?: number): Promise<Despesa[]> => {
     const params = grupoId ? { grupoId } : {};
     const response = await api.get('/despesas', { params });
-    return response.data;
+    const toNumber = (v: unknown): number => {
+      if (typeof v === 'number') return v;
+      if (typeof v === 'string') {
+        const n = Number(v.replace(',', '.'));
+        return Number.isFinite(n) ? n : 0;
+      }
+      return 0;
+    };
+
+    const normalizeDespesa = (d: any): Despesa => ({
+      ...d,
+      valorTotal: toNumber(d?.valorTotal),
+      participacoes: Array.isArray(d?.participacoes)
+        ? d.participacoes.map((p: any) => ({
+            ...p,
+            valorDevePagar: toNumber(p?.valorDevePagar),
+          }))
+        : d?.participacoes,
+    });
+
+    return Array.isArray(response.data) ? response.data.map(normalizeDespesa) : [];
   },
 
   getById: async (id: number): Promise<Despesa> => {
     const response = await api.get(`/despesas/${id}`);
-    return response.data;
+    const toNumber = (v: unknown): number => {
+      if (typeof v === 'number') return v;
+      if (typeof v === 'string') {
+        const n = Number(v.replace(',', '.'));
+        return Number.isFinite(n) ? n : 0;
+      }
+      return 0;
+    };
+    const d: any = response.data;
+    return {
+      ...d,
+      valorTotal: toNumber(d?.valorTotal),
+      participacoes: Array.isArray(d?.participacoes)
+        ? d.participacoes.map((p: any) => ({
+            ...p,
+            valorDevePagar: toNumber(p?.valorDevePagar),
+          }))
+        : d?.participacoes,
+    };
   },
 
   create: async (data: {
@@ -108,7 +201,25 @@ export const despesaApi = {
     }>;
   }): Promise<Despesa> => {
     const response = await api.post('/despesas', data);
-    return response.data;
+    const toNumber = (v: unknown): number => {
+      if (typeof v === 'number') return v;
+      if (typeof v === 'string') {
+        const n = Number(v.replace(',', '.'));
+        return Number.isFinite(n) ? n : 0;
+      }
+      return 0;
+    };
+    const d: any = response.data;
+    return {
+      ...d,
+      valorTotal: toNumber(d?.valorTotal),
+      participacoes: Array.isArray(d?.participacoes)
+        ? d.participacoes.map((p: any) => ({
+            ...p,
+            valorDevePagar: toNumber(p?.valorDevePagar),
+          }))
+        : d?.participacoes,
+    };
   },
 
   update: async (id: number, data: Partial<{
@@ -123,7 +234,25 @@ export const despesaApi = {
     }>;
   }>): Promise<Despesa> => {
     const response = await api.put(`/despesas/${id}`, data);
-    return response.data;
+    const toNumber = (v: unknown): number => {
+      if (typeof v === 'number') return v;
+      if (typeof v === 'string') {
+        const n = Number(v.replace(',', '.'));
+        return Number.isFinite(n) ? n : 0;
+      }
+      return 0;
+    };
+    const d: any = response.data;
+    return {
+      ...d,
+      valorTotal: toNumber(d?.valorTotal),
+      participacoes: Array.isArray(d?.participacoes)
+        ? d.participacoes.map((p: any) => ({
+            ...p,
+            valorDevePagar: toNumber(p?.valorDevePagar),
+          }))
+        : d?.participacoes,
+    };
   },
 
   delete: async (id: number): Promise<void> => {
@@ -150,6 +279,16 @@ export const relatorioApi = {
   getSugestoesPagamentoGrupos: async (grupoId: number): Promise<SugestaoPagamento[]> => {
     const response = await api.get(`/grupos/${grupoId}/sugestoes-pagamento-grupos`);
     return response.data;
+  },
+};
+
+export const participacaoApi = {
+  toggle: async (despesaId: number, participanteId: number): Promise<void> => {
+    await api.post(`/despesas/${despesaId}/participacoes`, { participanteId });
+  },
+
+  recalcular: async (despesaId: number): Promise<void> => {
+    await api.post(`/despesas/${despesaId}/recalcular`);
   },
 };
 
@@ -190,6 +329,95 @@ export const grupoParticipantesApi = {
 
   removerParticipante: async (eventoId: number, grupoId: number, participanteId: number): Promise<void> => {
     await api.delete(`/grupos/${eventoId}/grupos-participantes/${grupoId}/participantes/${participanteId}`);
+  },
+};
+
+export interface GrupoMaior {
+  id: number;
+  nome: string;
+  descricao?: string;
+  usuario_id: number;
+  criadoEm: string;
+  ultimoUsoEm?: string | null;
+  grupos?: Array<{
+    id: number;
+    grupo_maior_id: number;
+    grupo_id: number;
+    grupo?: Grupo;
+  }>;
+  participantes?: Array<{
+    id: number;
+    grupo_maior_id: number;
+    participante_id: number;
+    participante?: Participante;
+  }>;
+}
+
+export const grupoMaiorApi = {
+  getAll: async (): Promise<GrupoMaior[]> => {
+    const response = await api.get('/grupos-maiores');
+    return response.data;
+  },
+
+  getRecentes: async (limit?: number): Promise<GrupoMaior[]> => {
+    const response = await api.get('/grupos-maiores/recentes', {
+      params: typeof limit === 'number' ? { limit } : undefined,
+    });
+    return response.data;
+  },
+
+  getById: async (id: number): Promise<GrupoMaior> => {
+    const response = await api.get(`/grupos-maiores/${id}`);
+    return response.data;
+  },
+
+  create: async (data: {
+    nome: string;
+    descricao?: string;
+    grupoIds?: number[];
+    participanteIds?: number[];
+  }): Promise<GrupoMaior> => {
+    const response = await api.post('/grupos-maiores', data);
+    return response.data;
+  },
+
+  update: async (id: number, data: {
+    nome?: string;
+    descricao?: string;
+  }): Promise<GrupoMaior> => {
+    const response = await api.put(`/grupos-maiores/${id}`, data);
+    return response.data;
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await api.delete(`/grupos-maiores/${id}`);
+  },
+
+  adicionarGrupo: async (id: number, grupoId: number): Promise<void> => {
+    await api.post(`/grupos-maiores/${id}/grupos`, { grupoId });
+  },
+
+  removerGrupo: async (id: number, grupoId: number): Promise<void> => {
+    await api.delete(`/grupos-maiores/${id}/grupos`, { data: { grupoId } });
+  },
+
+  adicionarParticipante: async (id: number, participanteId: number): Promise<void> => {
+    await api.post(`/grupos-maiores/${id}/participantes`, { participanteId });
+  },
+
+  removerParticipante: async (id: number, participanteId: number): Promise<void> => {
+    await api.delete(`/grupos-maiores/${id}/participantes/${participanteId}`);
+  },
+
+  obterTodosParticipantes: async (id: number): Promise<{ participanteIds: number[] }> => {
+    const response = await api.get(`/grupos-maiores/${id}/participantes`);
+    return response.data;
+  },
+};
+
+export const analyticsApi = {
+  track: async (event: string, props?: Record<string, any>): Promise<void> => {
+    await api.post('/analytics/event', { event, props });
   },
 };
 

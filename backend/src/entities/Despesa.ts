@@ -2,11 +2,19 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, On
 import { Grupo } from './Grupo';
 import { Participante } from './Participante';
 import { ParticipacaoDespesa } from './ParticipacaoDespesa';
+import { Usuario } from './Usuario';
 
 @Entity('despesas')
 export class Despesa {
   @PrimaryGeneratedColumn()
   id!: number;
+
+  @ManyToOne(() => Usuario, usuario => usuario.despesas)
+  @JoinColumn({ name: 'usuario_id' })
+  usuario!: Usuario;
+
+  @Column('integer')
+  usuario_id!: number;
 
   @ManyToOne(() => Grupo, grupo => grupo.despesas)
   @JoinColumn({ name: 'grupo_id' })
@@ -28,7 +36,7 @@ export class Despesa {
   @Column('integer')
   participante_pagador_id!: number;
 
-  @Column({ type: 'datetime', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   data!: Date;
 
   @CreateDateColumn()

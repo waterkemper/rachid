@@ -1,24 +1,42 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { grupoApi, despesaApi, grupoParticipantesApi, relatorioApi } from '../services/api';
 import { Grupo, Despesa, Participante, GrupoParticipantesEvento, SugestaoPagamento } from '../types';
 import axios from 'axios';
 import jsPDF from 'jspdf';
 // @ts-ignore
 import autoTable from 'jspdf-autotable';
+import PaywallModal from '../components/PaywallModal';
+import { useAuth } from '../contexts/AuthContext';
+import { isPro } from '../utils/plan';
+import { track } from '../services/analytics';
+import './Participacoes.css';
 
 const Participacoes: React.FC = () => {
+  const { usuario } = useAuth();
+  const [searchParams] = useSearchParams();
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [grupoSelecionado, setGrupoSelecionado] = useState<number | ''>('');
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [gruposParticipantes, setGruposParticipantes] = useState<GrupoParticipantesEvento[]>([]);
   const [loading, setLoading] = useState(false);
+  const [bulkDespesaId, setBulkDespesaId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saldos, setSaldos] = useState<Map<number, { deve: number; pagou: number; saldo: number }>>(new Map());
   const [sugestoesPagamento, setSugestoesPagamento] = useState<SugestaoPagamento[]>([]);
+  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
 
   useEffect(() => {
     loadGrupos();
+  }, []);
+
+  useEffect(() => {
+    const eventoId = searchParams.get('evento');
+    if (eventoId) {
+      setGrupoSelecionado(Number(eventoId));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -77,7 +95,9 @@ const Participacoes: React.FC = () => {
         relatorioApi.getSugestoesPagamentoGrupos(grupoId).catch(() => []),
       ]);
 
-      setDespesas(despesasData);
+      // Ordem estável das colunas: nunca reordenar despesas ao marcar/desmarcar
+      const despesasOrdenadas = [...despesasData].sort((a, b) => a.id - b.id);
+      setDespesas(despesasOrdenadas);
       setGruposParticipantes(gruposParticipantesData);
       setSugestoesPagamento(sugestoesData || []);
       
@@ -134,6 +154,35 @@ const Participacoes: React.FC = () => {
       }
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Erro ao atualizar participação');
+    }
+  };
+
+  const setParticipacaoParaTodos = async (despesaId: number, marcarTodos: boolean) => {
+    if (!grupoSelecionado) return;
+    if (bulkDespesaId) return;
+
+    const despesa = despesas.find((d) => d.id === despesaId);
+    if (!despesa) return;
+
+    // snapshot do estado atual (para não depender de re-render durante o loop)
+    const idsAtuais = new Set<number>((despesa.participacoes || []).map((p) => p.participante_id));
+
+    try {
+      setError(null);
+      setBulkDespesaId(despesaId);
+
+      for (const participante of participantes) {
+        const estaMarcado = idsAtuais.has(participante.id);
+        const precisaMudar = marcarTodos ? !estaMarcado : estaMarcado;
+        if (!precisaMudar) continue;
+        await axios.post(`/api/despesas/${despesaId}/participacoes`, { participanteId: participante.id });
+      }
+
+      await loadDadosGrupo(Number(grupoSelecionado));
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Erro ao atualizar participação');
+    } finally {
+      setBulkDespesaId(null);
     }
   };
 
@@ -214,7 +263,18 @@ const Participacoes: React.FC = () => {
     }).format(value);
   };
 
+  const calcularTotalDespesas = (): number => {
+    return despesas.reduce((total, despesa) => total + Number(despesa.valorTotal), 0);
+  };
+
   const exportarPDF = () => {
+    track('export_pdf_click', { source: 'participacoes', pro: isPro(usuario) });
+    if (!isPro(usuario)) {
+      track('paywall_view', { feature: 'export_pdf', source: 'participacoes_exportar_pdf' });
+      setIsPaywallOpen(true);
+      return;
+    }
+
     if (!grupoSelecionado || despesas.length === 0 || participantes.length === 0) {
       setError('Selecione um evento com despesas e participantes para exportar');
       return;
@@ -368,21 +428,48 @@ const Participacoes: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginBottom: '20px',
+          gap: '12px',
+          flexWrap: 'wrap',
+        }}
+        className="participacoesHeader"
+      >
+        <div style={{ minWidth: 240 }}>
           <h2>Participações nas Despesas</h2>
-          <p style={{ color: '#666', marginTop: '5px', marginBottom: 0 }}>
+          <p style={{ marginTop: '6px', marginBottom: 0 }}>
             Marque na tabela quem participou de cada despesa. Os valores serão calculados automaticamente.
           </p>
+          {grupoSelecionado && despesas.length > 0 && (
+            <div style={{ 
+              marginTop: '12px', 
+              padding: '10px 14px', 
+              background: 'rgba(99, 102, 241, 0.12)', 
+              borderRadius: '10px',
+              border: '1px solid rgba(99, 102, 241, 0.20)',
+              display: 'inline-block'
+            }}>
+              <span style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.78)', marginRight: '8px' }}>
+                Total do evento:
+              </span>
+              <strong style={{ fontSize: '16px', color: 'rgba(255, 255, 255, 0.95)' }}>
+                {formatCurrency(calcularTotalDespesas())}
+              </strong>
+            </div>
+          )}
         </div>
         {grupoSelecionado && (
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div className="participacoesActions">
             <button 
               className="btn btn-secondary" 
               onClick={() => loadDadosGrupo(Number(grupoSelecionado))}
               style={{ height: 'fit-content' }}
             >
-              🔄 Atualizar
+              Atualizar
             </button>
             <button 
               className="btn btn-primary" 
@@ -390,7 +477,7 @@ const Participacoes: React.FC = () => {
               style={{ height: 'fit-content' }}
               disabled={!grupoSelecionado || despesas.length === 0 || participantes.length === 0}
             >
-              📄 Exportar PDF
+              Exportar PDF {isPro(usuario) ? '' : '(Pro)'}
             </button>
           </div>
         )}
@@ -416,48 +503,70 @@ const Participacoes: React.FC = () => {
       </div>
 
       {grupoSelecionado && despesas.length > 0 && participantes.length > 0 && (
-        <div style={{ overflowX: 'auto', maxHeight: '80vh', overflowY: 'auto' }}>
-          <table style={{ minWidth: '800px', width: '100%' }}>
-            <thead style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#f8f9fa' }}>
+        <div className="card participacoesTableCard" style={{ marginBottom: '20px' }}>
+          <div className="participacoesTableWrapper">
+            <table className="participacoesTable">
+              <thead>
               <tr>
-                <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8f9fa', zIndex: 21, minWidth: '150px' }}>
+                <th style={{ minWidth: '180px' }}>
                   Participante
                 </th>
                 {despesas.map((despesa) => (
-                  <th key={despesa.id} style={{ minWidth: '120px', textAlign: 'center', backgroundColor: '#f8f9fa' }}>
+                  <th key={despesa.id} style={{ minWidth: '110px', textAlign: 'center', fontSize: '12px', padding: '8px 6px' }}>
                     <div>{despesa.descricao}</div>
-                    <div style={{ fontSize: '12px', fontWeight: 'normal', color: '#666' }}>
+                    <div className="participacoesMeta">
                       {formatCurrency(despesa.valorTotal)}
                     </div>
-                    <div style={{ fontSize: '11px', fontWeight: 'normal', color: '#999' }}>
-                      Pago por: {despesa.pagador?.nome}
+                    <div className="participacoesMetaMuted">
+                      Pago por: {despesa.pagador?.nome || '-'}
+                    </div>
+                    <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'center' }}>
+                      {(() => {
+                        const idsAtuais = new Set<number>((despesa.participacoes || []).map((p) => p.participante_id));
+                        const total = participantes.length;
+                        const marcados = participantes.reduce((acc, p) => acc + (idsAtuais.has(p.id) ? 1 : 0), 0);
+                        const allChecked = total > 0 && marcados === total;
+                        const someChecked = marcados > 0 && marcados < total;
+
+                        return (
+                          <input
+                            type="checkbox"
+                            checked={allChecked}
+                            disabled={bulkDespesaId === despesa.id}
+                            ref={(el) => {
+                              if (el) el.indeterminate = someChecked;
+                            }}
+                            onChange={() => setParticipacaoParaTodos(despesa.id, !allChecked)}
+                            title={allChecked ? 'Desmarcar todos' : 'Marcar todos'}
+                          />
+                        );
+                      })()}
                     </div>
                   </th>
                 ))}
-                <th style={{ backgroundColor: '#f8f9fa', minWidth: '100px' }}>Total Deve</th>
-                <th style={{ backgroundColor: '#f8f9fa', minWidth: '100px' }}>Total Pagou</th>
-                <th style={{ backgroundColor: '#f8f9fa', minWidth: '120px' }}>Saldo</th>
+                <th style={{ minWidth: '100px', fontSize: '12px', padding: '8px 10px' }}>Total Deve</th>
+                <th style={{ minWidth: '100px', fontSize: '12px', padding: '8px 10px' }}>Total Pagou</th>
+                <th style={{ minWidth: '120px', fontSize: '12px', padding: '8px 10px' }}>Saldo</th>
               </tr>
             </thead>
             <tbody>
               {getParticipantesAgrupados().map((agrupamento, grupoIndex) => (
                 <React.Fragment key={grupoIndex}>
                   {agrupamento.grupo && (
-                    <tr style={{ backgroundColor: '#e7f3ff' }}>
+                    <tr>
                       <td
                         colSpan={despesas.length + 4}
                         style={{
                           fontWeight: '700',
-                          padding: '12px',
-                          borderBottom: '2px solid #b3d9ff',
-                          position: 'sticky',
-                          left: 0,
-                          zIndex: 3,
+                          padding: '8px 10px',
+                          background: 'rgba(99, 102, 241, 0.10)',
+                          borderBottom: '1px solid rgba(99, 102, 241, 0.18)',
+                          fontSize: '13px',
                         }}
                       >
-                        👨‍👩‍👧‍👦 {agrupamento.grupo.nome}
+                        {agrupamento.grupo.nome}
                         {agrupamento.grupo.descricao && (
-                          <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#666', marginLeft: '10px' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 'normal', color: '#666', marginLeft: '10px' }}>
                             ({agrupamento.grupo.descricao})
                           </span>
                         )}
@@ -465,14 +574,15 @@ const Participacoes: React.FC = () => {
                     </tr>
                   )}
                   {agrupamento.grupo === null && gruposParticipantes.length > 0 && (
-                    <tr style={{ backgroundColor: '#f8f9fa' }}>
+                    <tr>
                       <td
                         colSpan={despesas.length + 4}
                         style={{
                           fontWeight: '600',
-                          padding: '10px',
-                          fontSize: '13px',
-                          color: '#666',
+                          padding: '8px 10px',
+                          fontSize: '12px',
+                          color: 'rgba(15, 23, 42, 0.72)',
+                          background: 'rgba(2, 6, 23, 0.03)',
                         }}
                       >
                         Outros Participantes
@@ -485,12 +595,10 @@ const Participacoes: React.FC = () => {
                       <tr key={participante.id}>
                         <td
                           style={{
-                            position: 'sticky',
-                            left: 0,
-                            backgroundColor: agrupamento.grupo ? '#f0f8ff' : 'white',
-                            zIndex: 5,
                             fontWeight: '600',
-                            paddingLeft: agrupamento.grupo ? '20px' : '10px',
+                            paddingLeft: agrupamento.grupo ? '16px' : '8px',
+                            fontSize: '13px',
+                            padding: '8px 10px',
                           }}
                         >
                           {participante.nome}
@@ -500,20 +608,16 @@ const Participacoes: React.FC = () => {
                           return (
                             <td
                               key={despesa.id}
-                              style={{
-                                textAlign: 'center',
-                                padding: '10px',
-                                backgroundColor: agrupamento.grupo ? '#f9fcff' : 'white',
-                              }}
+                              className="participacoesCheckboxCell"
                             >
                               <input
                                 type="checkbox"
                                 checked={participando}
                                 onChange={() => toggleParticipacao(despesa.id, participante.id)}
-                                style={{ cursor: 'pointer', width: '20px', height: '20px' }}
+                                className="participacoesCheckbox"
                               />
                               {participando && despesa.participacoes && (
-                                <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                <div className="participacoesMeta" style={{ marginTop: '6px' }}>
                                   {formatCurrency(
                                     despesa.participacoes.find(p => p.participante_id === participante.id)?.valorDevePagar || 0
                                   )}
@@ -522,39 +626,19 @@ const Participacoes: React.FC = () => {
                             </td>
                           );
                         })}
-                        <td
-                          style={{
-                            backgroundColor: agrupamento.grupo ? '#f9fcff' : '#f8f9fa',
-                            fontWeight: '600',
-                          }}
-                        >
+                        <td style={{ fontWeight: '600', fontSize: '13px', padding: '8px 10px' }}>
                           {formatCurrency(saldo.deve)}
                         </td>
-                        <td
-                          style={{
-                            backgroundColor: agrupamento.grupo ? '#f9fcff' : '#f8f9fa',
-                            fontWeight: '600',
-                          }}
-                        >
+                        <td style={{ fontWeight: '600', fontSize: '13px', padding: '8px 10px' }}>
                           {formatCurrency(saldo.pagou)}
                         </td>
                         <td
-                          style={{
-                            backgroundColor:
-                              agrupamento.grupo
-                                ? saldo.saldo >= 0
-                                  ? '#d4edda'
-                                  : '#f8d7da'
-                                : saldo.saldo >= 0
-                                ? '#d4edda'
-                                : '#f8d7da',
-                            fontWeight: '600',
-                            color: saldo.saldo >= 0 ? '#155724' : '#721c24',
-                          }}
+                          className={saldo.saldo >= 0 ? 'participacoesSaldoPositivo' : 'participacoesSaldoNegativo'}
+                          style={{ fontWeight: '700', fontSize: '13px', padding: '8px 10px' }}
                         >
                           {formatCurrency(saldo.saldo)}
-                          {saldo.saldo > 0 && <span style={{ fontSize: '12px' }}> (recebe)</span>}
-                          {saldo.saldo < 0 && <span style={{ fontSize: '12px' }}> (deve pagar)</span>}
+                          {saldo.saldo > 0 && <span style={{ fontSize: '11px' }}> (recebe)</span>}
+                          {saldo.saldo < 0 && <span style={{ fontSize: '11px' }}> (deve pagar)</span>}
                         </td>
                       </tr>
                     );
@@ -562,15 +646,12 @@ const Participacoes: React.FC = () => {
                   {agrupamento.grupo && agrupamento.participantes.length > 0 && (() => {
                     const totaisGrupo = calcularTotaisGrupo(agrupamento);
                     return (
-                      <tr style={{ backgroundColor: '#d0e7ff', fontWeight: '700' }}>
+                      <tr style={{ background: 'rgba(59, 130, 246, 0.10)' }}>
                         <td
                           style={{
-                            position: 'sticky',
-                            left: 0,
-                            backgroundColor: '#d0e7ff',
-                            zIndex: 5,
-                            padding: '12px',
-                            borderTop: '2px solid #b3d9ff',
+                            padding: '8px 10px',
+                            borderTop: '1px solid rgba(59, 130, 246, 0.20)',
+                            fontSize: '13px',
                           }}
                         >
                           <strong>Total {agrupamento.grupo.nome}</strong>
@@ -588,9 +669,10 @@ const Participacoes: React.FC = () => {
                               key={despesa.id}
                               style={{
                                 textAlign: 'center',
-                                padding: '12px',
-                                backgroundColor: '#d0e7ff',
-                                borderTop: '2px solid #b3d9ff',
+                                padding: '8px 6px',
+                                borderTop: '1px solid rgba(59, 130, 246, 0.20)',
+                                fontWeight: 700,
+                                fontSize: '13px',
                               }}
                             >
                               {valorTotal > 0 && formatCurrency(valorTotal)}
@@ -599,47 +681,40 @@ const Participacoes: React.FC = () => {
                         })}
                         <td
                           style={{
-                            backgroundColor: '#d0e7ff',
-                            padding: '12px',
-                            borderTop: '2px solid #b3d9ff',
+                            padding: '8px 10px',
+                            borderTop: '1px solid rgba(59, 130, 246, 0.20)',
+                            fontWeight: 700,
+                            fontSize: '13px',
                           }}
                         >
                           {formatCurrency(totaisGrupo.deve)}
                         </td>
                         <td
                           style={{
-                            backgroundColor: '#d0e7ff',
-                            padding: '12px',
-                            borderTop: '2px solid #b3d9ff',
+                            padding: '8px 10px',
+                            borderTop: '1px solid rgba(59, 130, 246, 0.20)',
+                            fontWeight: 700,
+                            fontSize: '13px',
                           }}
                         >
                           {formatCurrency(totaisGrupo.pagou)}
                         </td>
                         <td
-                          style={{
-                            backgroundColor: totaisGrupo.saldo >= 0 ? '#c3e6cb' : '#f5c6cb',
-                            fontWeight: '700',
-                            color: totaisGrupo.saldo >= 0 ? '#155724' : '#721c24',
-                            padding: '12px',
-                            borderTop: '2px solid #b3d9ff',
-                          }}
+                          className={totaisGrupo.saldo >= 0 ? 'participacoesSaldoPositivo' : 'participacoesSaldoNegativo'}
+                          style={{ fontWeight: 800, padding: '8px 10px', borderTop: '1px solid rgba(59, 130, 246, 0.20)', fontSize: '13px' }}
                         >
                           {formatCurrency(totaisGrupo.saldo)}
-                          {totaisGrupo.saldo > 0 && <span style={{ fontSize: '12px' }}> (recebe)</span>}
-                          {totaisGrupo.saldo < 0 && <span style={{ fontSize: '12px' }}> (deve pagar)</span>}
+                          {totaisGrupo.saldo > 0 && <span style={{ fontSize: '11px' }}> (recebe)</span>}
+                          {totaisGrupo.saldo < 0 && <span style={{ fontSize: '11px' }}> (deve pagar)</span>}
                         </td>
                       </tr>
                     );
                   })()}
-                  {grupoIndex < getParticipantesAgrupados().length - 1 && (
-                    <tr>
-                      <td colSpan={despesas.length + 4} style={{ height: '10px', backgroundColor: '#f8f9fa' }}></td>
-                    </tr>
-                  )}
                 </React.Fragment>
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -658,31 +733,48 @@ const Participacoes: React.FC = () => {
         {grupoSelecionado && sugestoesPagamento.length > 0 && (
           <div className="card" style={{ marginTop: '20px' }}>
             <h3 style={{ marginBottom: '15px' }}>💡 Sugestões de Pagamento entre Grupos</h3>
-            <p style={{ color: '#666', marginBottom: '15px' }}>
+            <p style={{ color: 'rgba(226, 232, 240, 0.78)', marginBottom: '15px' }}>
               Para quitar os saldos de forma otimizada, siga as seguintes transferências:
             </p>
-            <table style={{ width: '100%' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', minWidth: '500px' }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left' }}>Grupo que Deve</th>
-                  <th style={{ textAlign: 'left' }}>Grupo que Recebe</th>
-                  <th style={{ textAlign: 'right' }}>Valor</th>
+                    <th style={{ textAlign: 'left', padding: '10px', borderBottom: '1px solid rgba(148, 163, 184, 0.20)' }}>Grupo que Deve</th>
+                    <th style={{ textAlign: 'left', padding: '10px', borderBottom: '1px solid rgba(148, 163, 184, 0.20)' }}>Grupo que Recebe</th>
+                    <th style={{ textAlign: 'right', padding: '10px', borderBottom: '1px solid rgba(148, 163, 184, 0.20)' }}>Valor</th>
                 </tr>
               </thead>
               <tbody>
                 {sugestoesPagamento.map((sugestao, index) => (
-                  <tr key={index}>
-                    <td>{sugestao.de}</td>
-                    <td>{sugestao.para}</td>
-                    <td style={{ textAlign: 'right', fontWeight: '600' }}>
+                    <tr key={index} style={{ borderBottom: '1px solid rgba(148, 163, 184, 0.10)' }}>
+                      <td style={{ padding: '10px' }}>{sugestao.de}</td>
+                      <td style={{ padding: '10px' }}>{sugestao.para}</td>
+                      <td style={{ textAlign: 'right', padding: '10px', fontWeight: '600' }}>
                       {formatCurrency(sugestao.valor)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
+
+        <PaywallModal
+          isOpen={isPaywallOpen}
+          onClose={() => setIsPaywallOpen(false)}
+          title="Tenha relatórios e PDF"
+          bullets={[
+            'Exportar PDF/CSV do resultado',
+            'Relatórios por pessoa e por grupo',
+            'Reuso rápido de grupos com histórico',
+          ]}
+          onCta={() => {
+            track('paywall_click_cta', { feature: 'export_pdf', source: 'participacoes' });
+            window.location.href = '/conta';
+          }}
+        />
       </div>
     );
   };

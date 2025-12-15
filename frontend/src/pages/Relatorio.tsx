@@ -1,17 +1,33 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { relatorioApi, grupoApi } from '../services/api';
 import { Grupo, SaldoParticipante, SugestaoPagamento } from '../types';
+import PaywallModal from '../components/PaywallModal';
+import { useAuth } from '../contexts/AuthContext';
+import { isPro } from '../utils/plan';
+import { track } from '../services/analytics';
 
 const Relatorio: React.FC = () => {
+  const { usuario } = useAuth();
+  const [searchParams] = useSearchParams();
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [grupoSelecionado, setGrupoSelecionado] = useState<number | ''>('');
   const [saldos, setSaldos] = useState<SaldoParticipante[]>([]);
   const [sugestoes, setSugestoes] = useState<SugestaoPagamento[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
 
   useEffect(() => {
     loadGrupos();
+  }, []);
+
+  useEffect(() => {
+    const eventoId = searchParams.get('evento');
+    if (eventoId) {
+      setGrupoSelecionado(Number(eventoId));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -64,10 +80,47 @@ const Relatorio: React.FC = () => {
 
   return (
     <div>
-      <h2>Relatórios e Cálculos</h2>
+      <h2>Relatórios</h2>
+
+      {!isPro(usuario) && (
+        <div className="card" style={{ marginBottom: '20px' }}>
+          <h3 style={{ marginBottom: '10px' }}>Disponível no plano Pro</h3>
+          <p style={{ color: '#666', marginTop: 0 }}>
+            Relatórios por pessoa e por grupo, com exportação e histórico.
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              track('paywall_view', { feature: 'relatorios', source: 'relatorio_page' });
+              setIsPaywallOpen(true);
+            }}
+          >
+            Desbloquear no Pro
+          </button>
+        </div>
+      )}
 
       {error && <div className="alert alert-error">{error}</div>}
 
+      {!isPro(usuario) && (
+        <PaywallModal
+          isOpen={isPaywallOpen}
+          onClose={() => setIsPaywallOpen(false)}
+          title="Relatórios no Pro"
+          bullets={[
+            'Relatórios por pessoa e por grupo',
+            'Exportar PDF/CSV do resultado',
+            'Grupos reutilizáveis ilimitados',
+          ]}
+          onCta={() => {
+            track('paywall_click_cta', { feature: 'relatorios', source: 'relatorio_page' });
+            window.location.href = '/conta';
+          }}
+        />
+      )}
+
+      {!isPro(usuario) ? null : (
       <div className="card" style={{ marginBottom: '20px' }}>
         <div className="form-group">
           <label>Selecione um Evento</label>
@@ -84,10 +137,11 @@ const Relatorio: React.FC = () => {
           </select>
         </div>
       </div>
+      )}
 
       {loading && <div>Carregando relatório...</div>}
 
-      {!loading && grupoSelecionado && saldos.length > 0 && (
+      {!loading && isPro(usuario) && grupoSelecionado && saldos.length > 0 && (
         <>
           <div className="card" style={{ marginBottom: '20px' }}>
             <h3 style={{ marginBottom: '20px' }}>Saldos dos Participantes</h3>
@@ -159,13 +213,13 @@ const Relatorio: React.FC = () => {
         </>
       )}
 
-      {!loading && grupoSelecionado && saldos.length === 0 && (
+      {!loading && isPro(usuario) && grupoSelecionado && saldos.length === 0 && (
         <div className="card">
           <p>Nenhum dado encontrado para este evento. Adicione despesas primeiro.</p>
         </div>
       )}
 
-      {!grupoSelecionado && (
+      {isPro(usuario) && !grupoSelecionado && (
         <div className="card">
           <p>Selecione um evento acima para ver os relatórios e cálculos de saldos.</p>
         </div>

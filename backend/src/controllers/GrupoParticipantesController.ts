@@ -1,23 +1,26 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthRequest } from '../middleware/auth';
 import { GrupoParticipantesService } from '../services/GrupoParticipantesService';
 
 export class GrupoParticipantesController {
-  static async getAll(req: Request, res: Response) {
+  static async getAll(req: AuthRequest, res: Response) {
     try {
       const eventoId = parseInt(req.params.eventoId);
-      const grupos = await GrupoParticipantesService.findAllByEvento(eventoId);
+      const usuarioId = req.usuarioId!;
+      const grupos = await GrupoParticipantesService.findAllByEvento(eventoId, usuarioId);
       res.json(grupos);
     } catch (error) {
       res.status(500).json({ error: 'Erro ao buscar grupos de participantes' });
     }
   }
 
-  static async getById(req: Request, res: Response) {
+  static async getById(req: AuthRequest, res: Response) {
     try {
       const id = parseInt(req.params.id);
-      const grupo = await GrupoParticipantesService.findById(id);
+      const usuarioId = req.usuarioId!;
+      const grupo = await GrupoParticipantesService.findById(id, usuarioId);
       if (!grupo) {
-        return res.status(404).json({ error: 'Grupo n√£o encontrado' });
+        return res.status(404).json({ error: 'Grupo n„o encontrado' });
       }
       res.json(grupo);
     } catch (error) {
@@ -25,19 +28,21 @@ export class GrupoParticipantesController {
     }
   }
 
-  static async create(req: Request, res: Response) {
+  static async create(req: AuthRequest, res: Response) {
     try {
       const eventoId = parseInt(req.params.eventoId);
       const { nome, descricao } = req.body;
+      const usuarioId = req.usuarioId!;
 
       if (!nome) {
-        return res.status(400).json({ error: 'Nome √© obrigat√≥rio' });
+        return res.status(400).json({ error: 'Nome È obrigatÛrio' });
       }
 
       const grupo = await GrupoParticipantesService.create({
         grupo_id: eventoId,
         nome,
         descricao,
+        usuario_id: usuarioId,
       });
       res.status(201).json(grupo);
     } catch (error) {
@@ -45,14 +50,15 @@ export class GrupoParticipantesController {
     }
   }
 
-  static async update(req: Request, res: Response) {
+  static async update(req: AuthRequest, res: Response) {
     try {
       const id = parseInt(req.params.id);
       const { nome, descricao } = req.body;
+      const usuarioId = req.usuarioId!;
 
-      const grupo = await GrupoParticipantesService.update(id, { nome, descricao });
+      const grupo = await GrupoParticipantesService.update(id, usuarioId, { nome, descricao });
       if (!grupo) {
-        return res.status(404).json({ error: 'Grupo n√£o encontrado' });
+        return res.status(404).json({ error: 'Grupo n„o encontrado' });
       }
       res.json(grupo);
     } catch (error) {
@@ -60,12 +66,13 @@ export class GrupoParticipantesController {
     }
   }
 
-  static async delete(req: Request, res: Response) {
+  static async delete(req: AuthRequest, res: Response) {
     try {
       const id = parseInt(req.params.id);
-      const sucesso = await GrupoParticipantesService.delete(id);
+      const usuarioId = req.usuarioId!;
+      const sucesso = await GrupoParticipantesService.delete(id, usuarioId);
       if (!sucesso) {
-        return res.status(404).json({ error: 'Grupo n√£o encontrado' });
+        return res.status(404).json({ error: 'Grupo n„o encontrado' });
       }
       res.status(204).send();
     } catch (error) {
@@ -73,19 +80,20 @@ export class GrupoParticipantesController {
     }
   }
 
-  static async adicionarParticipante(req: Request, res: Response) {
+  static async adicionarParticipante(req: AuthRequest, res: Response) {
     try {
       const grupoId = parseInt(req.params.grupoId);
       const eventoId = parseInt(req.params.eventoId);
       const { participanteId } = req.body;
+      const usuarioId = req.usuarioId!;
 
       if (!participanteId) {
-        return res.status(400).json({ error: 'ID do participante √© obrigat√≥rio' });
+        return res.status(400).json({ error: 'ID do participante È obrigatÛrio' });
       }
 
-      const sucesso = await GrupoParticipantesService.adicionarParticipante(grupoId, participanteId, eventoId);
+      const sucesso = await GrupoParticipantesService.adicionarParticipante(grupoId, participanteId, eventoId, usuarioId);
       if (!sucesso) {
-        return res.status(400).json({ error: 'Participante j√° est√° em um grupo neste evento' });
+        return res.status(400).json({ error: 'Participante j· est· em um grupo neste evento' });
       }
 
       res.json({ message: 'Participante adicionado ao grupo' });
@@ -94,14 +102,15 @@ export class GrupoParticipantesController {
     }
   }
 
-  static async removerParticipante(req: Request, res: Response) {
+  static async removerParticipante(req: AuthRequest, res: Response) {
     try {
       const grupoId = parseInt(req.params.grupoId);
       const { participanteId } = req.params;
+      const usuarioId = req.usuarioId!;
 
-      const sucesso = await GrupoParticipantesService.removerParticipante(grupoId, parseInt(participanteId));
+      const sucesso = await GrupoParticipantesService.removerParticipante(grupoId, parseInt(participanteId), usuarioId);
       if (!sucesso) {
-        return res.status(404).json({ error: 'Participante n√£o est√° neste grupo' });
+        return res.status(404).json({ error: 'Participante n„o est· neste grupo' });
       }
 
       res.json({ message: 'Participante removido do grupo' });

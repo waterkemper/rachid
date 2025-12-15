@@ -1,0 +1,217 @@
+.cadastro-page {
+  position: relative;
+  min-height: 100vh;
+  color: #0f172a;
+}
+
+.cadastro-bg {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(900px 500px at 15% 10%, rgba(99, 102, 241, 0.28), transparent 60%),
+    radial-gradient(700px 450px at 85% 20%, rgba(34, 197, 94, 0.18), transparent 55%),
+    radial-gradient(800px 500px at 50% 100%, rgba(59, 130, 246, 0.18), transparent 60%),
+    linear-gradient(135deg, #0b1220 0%, #111b33 35%, #0b1220 100%);
+  z-index: -1;
+}
+
+.cadastro-top {
+  padding: 18px 0;
+}
+
+.cadastro-top-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cadastro-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cadastro-logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 6px;
+}
+
+.cadastro-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.cadastro-brand-name {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.98);
+  font-size: 18px;
+}
+
+.cadastro-brand-tagline {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.cadastro-top-btn {
+  border-radius: 999px;
+  padding: 10px 14px;
+}
+
+.cadastro-main {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 8px 20px 40px;
+  display: flex;
+  justify-content: center;
+}
+
+.cadastro-card {
+  width: 100%;
+  max-width: 720px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(10px);
+  padding: 18px;
+}
+
+.cadastro-card-header {
+  margin-bottom: 14px;
+}
+
+.cadastro-card-header h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.cadastro-card-header p {
+  margin-top: 8px;
+  color: rgba(226, 232, 240, 0.82);
+  line-height: 1.5;
+}
+
+.cadastro-error {
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  color: rgba(254, 226, 226, 0.98);
+  padding: 12px 12px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.cadastro-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cadastro-span-2 {
+  grid-column: span 2;
+}
+
+.cadastro-card .form-group {
+  margin-bottom: 0;
+}
+
+.cadastro-card .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 700;
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 13px;
+}
+
+.cadastro-card .form-group input {
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.20);
+  background: rgba(2, 6, 23, 0.32);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.cadastro-card .form-group input::placeholder {
+  color: rgba(226, 232, 240, 0.55);
+}
+
+.cadastro-card .form-group input:focus {
+  border-color: rgba(99, 102, 241, 0.60);
+  background: rgba(2, 6, 23, 0.42);
+}
+
+.cadastro-card .form-group input:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.cadastro-btn-primary {
+  width: 100%;
+  margin-top: 14px;
+  border-radius: 999px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #6366f1 0%, #3b82f6 45%, #22c55e 110%);
+  color: white;
+  box-shadow: 0 10px 30px rgba(99, 102, 241, 0.35);
+}
+
+.cadastro-btn-primary:hover {
+  filter: brightness(1.05);
+}
+
+.cadastro-btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.cadastro-footer {
+  margin-top: 12px;
+  text-align: center;
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 12px;
+}
+
+.cadastro-brand:focus-visible,
+.cadastro-top-btn:focus-visible,
+.cadastro-btn-primary:focus-visible {
+  outline: 3px solid rgba(99, 102, 241, 0.55);
+  outline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  .cadastro-top-inner {
+    padding: 0 14px;
+  }
+
+  .cadastro-main {
+    padding: 8px 14px 28px;
+  }
+
+  .cadastro-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cadastro-span-2 {
+    grid-column: span 1;
+  }
+}

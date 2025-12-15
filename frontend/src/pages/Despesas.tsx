@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { despesaApi, grupoApi, participanteApi } from '../services/api';
 import { Despesa, Grupo, Participante } from '../types';
 import Modal from '../components/Modal';
+import AdicionarParticipanteRapido from '../components/AdicionarParticipanteRapido';
 
 const Despesas: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [filtroGrupo, setFiltroGrupo] = useState<number | ''>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalParticipanteRapidoOpen, setIsModalParticipanteRapidoOpen] = useState(false);
   const [editingDespesa, setEditingDespesa] = useState<Despesa | null>(null);
   const [formData, setFormData] = useState({
     grupo_id: 0,
@@ -22,6 +27,11 @@ const Despesas: React.FC = () => {
 
   useEffect(() => {
     loadData();
+    // Verificar se há um eventoId na URL (vindo do fluxo guiado)
+    const eventoId = searchParams.get('evento');
+    if (eventoId) {
+      setFiltroGrupo(Number(eventoId));
+    }
   }, []);
 
   useEffect(() => {
@@ -48,6 +58,7 @@ const Despesas: React.FC = () => {
   const loadDespesas = async () => {
     try {
       const grupoId = filtroGrupo === '' ? undefined : filtroGrupo;
+      // Adicionar timestamp para evitar cache
       const data = await despesaApi.getAll(grupoId);
       setDespesas(data);
     } catch (err) {
@@ -95,21 +106,30 @@ const Despesas: React.FC = () => {
 
     try {
       setError(null);
-      const despesaData = {
+      const despesaData: any = {
         grupo_id: formData.grupo_id,
         descricao: formData.descricao,
-        valorTotal: parseFloat(formData.valorTotal),
-        participante_pagador_id: formData.participante_pagador_id,
+        valorTotal: Number(String(formData.valorTotal).replace(',', '.')),
         data: formData.data,
       };
       
+      // Sempre enviar participante_pagador_id quando for edição
       if (editingDespesa) {
-        await despesaApi.update(editingDespesa.id, despesaData);
+        despesaData.participante_pagador_id = Number(formData.participante_pagador_id);
+      } else if (formData.participante_pagador_id > 0) {
+        despesaData.participante_pagador_id = Number(formData.participante_pagador_id);
+      }
+      
+      if (editingDespesa) {
+        const despesaAtualizada = await despesaApi.update(editingDespesa.id, despesaData);
+        // Atualizar o estado local imediatamente
+        setDespesas(prev => prev.map(d => d.id === editingDespesa.id ? despesaAtualizada : d));
       } else {
         await despesaApi.create(despesaData);
       }
       handleCloseModal();
-      loadDespesas();
+      // Recarregar despesas para garantir que os dados atualizados sejam exibidos
+      await loadDespesas();
     } catch (err: any) {
       const errorMessage = err?.response?.data?.error || 'Erro ao salvar despesa';
       setError(errorMessage);
@@ -128,6 +148,26 @@ const Despesas: React.FC = () => {
     }
   };
 
+  const handleParticipanteAdicionado = async (participanteId: number) => {
+    // Recarregar lista de participantes
+    await loadData();
+    // Atualizar o select de pagador se estiver aberto
+    if (isModalOpen && formData.participante_pagador_id === 0) {
+      setFormData({ ...formData, participante_pagador_id: participanteId });
+    }
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value);
+  };
+
+  const calcularTotalDespesas = (): number => {
+    return despesas.reduce((total, despesa) => total + Number(despesa.valorTotal), 0);
+  };
+
 
   if (loading) {
     return <div>Carregando...</div>;
@@ -135,11 +175,26 @@ const Despesas: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <h2>Despesas</h2>
-        <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-          + Nova Despesa
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {filtroGrupo && (
+            <>
+              <button className="btn btn-secondary" onClick={() => navigate(`/participacoes?evento=${filtroGrupo}`)}>
+                Ver resultado
+              </button>
+              <button className="btn btn-secondary" onClick={() => navigate(`/totais-grupos?evento=${filtroGrupo}`)}>
+                Totais por grupo
+              </button>
+            </>
+          )}
+          <button className="btn btn-secondary" onClick={() => setIsModalParticipanteRapidoOpen(true)}>
+            + Participante Rápido
+          </button>
+          <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+            + Nova Despesa
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -159,6 +214,23 @@ const Despesas: React.FC = () => {
             ))}
           </select>
         </div>
+        {filtroGrupo && despesas.length > 0 && (
+          <div style={{ 
+            marginTop: '12px', 
+            padding: '10px 14px', 
+            background: 'rgba(99, 102, 241, 0.12)', 
+            borderRadius: '10px',
+            border: '1px solid rgba(99, 102, 241, 0.20)',
+            display: 'inline-block'
+          }}>
+            <span style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.78)', marginRight: '8px' }}>
+              Total do evento:
+            </span>
+            <strong style={{ fontSize: '16px', color: 'rgba(255, 255, 255, 0.95)' }}>
+              {formatCurrency(calcularTotalDespesas())}
+            </strong>
+          </div>
+        )}
       </div>
 
       <div className="card">
@@ -254,10 +326,27 @@ const Despesas: React.FC = () => {
             />
           </div>
           <div className="form-group">
-            <label>Quem Pagou *</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+              <label>Quem Pagou *</label>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ padding: '4px 8px', fontSize: '12px' }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setIsModalOpen(false);
+                  setIsModalParticipanteRapidoOpen(true);
+                }}
+              >
+                + Novo Participante
+              </button>
+            </div>
             <select
-              value={formData.participante_pagador_id}
-              onChange={(e) => setFormData({ ...formData, participante_pagador_id: Number(e.target.value) })}
+              value={formData.participante_pagador_id || ''}
+              onChange={(e) => {
+                const value = e.target.value === '' ? 0 : Number(e.target.value);
+                setFormData({ ...formData, participante_pagador_id: value });
+              }}
               required
             >
               <option value="">Selecione quem pagou</option>
@@ -292,6 +381,17 @@ const Despesas: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      <AdicionarParticipanteRapido
+        isOpen={isModalParticipanteRapidoOpen}
+        onClose={() => {
+          setIsModalParticipanteRapidoOpen(false);
+          if (isModalOpen) {
+            setIsModalOpen(true);
+          }
+        }}
+        onParticipanteAdicionado={handleParticipanteAdicionado}
+      />
     </div>
   );
 };

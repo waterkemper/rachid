@@ -1,0 +1,154 @@
+.novo-evento-container {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 20px;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.novo-evento-container::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(900px 500px at 15% 10%, rgba(99, 102, 241, 0.28), transparent 60%),
+    radial-gradient(700px 450px at 85% 20%, rgba(34, 197, 94, 0.18), transparent 55%),
+    radial-gradient(800px 500px at 50% 100%, rgba(59, 130, 246, 0.18), transparent 60%),
+    linear-gradient(135deg, #0b1220 0%, #111b33 35%, #0b1220 100%);
+  z-index: -1;
+}
+
+.novo-evento-card {
+  width: 100%;
+  max-width: 720px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(10px);
+  padding: 18px;
+}
+
+.breadcrumb {
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.breadcrumb span {
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 700;
+}
+
+.novo-evento-card h1 {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.96);
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  color: rgba(226, 232, 240, 0.82);
+  margin: 10px 0 18px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.novo-evento-card .form-group {
+  margin-bottom: 12px;
+}
+
+.novo-evento-card .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 700;
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 13px;
+}
+
+.novo-evento-card .form-group input,
+.novo-evento-card .form-group select {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.20);
+  background: rgba(2, 6, 23, 0.32);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.novo-evento-card .form-group input::placeholder {
+  color: rgba(226, 232, 240, 0.55);
+}
+
+.novo-evento-card .form-group input:focus,
+.novo-evento-card .form-group select:focus {
+  border-color: rgba(99, 102, 241, 0.60);
+  background: rgba(2, 6, 23, 0.42);
+}
+
+.help-text {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.78);
+  font-style: italic;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.novo-evento-card .btn {
+  border-radius: 999px;
+  padding: 10px 14px;
+}
+
+.novo-evento-card .btn.btn-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #3b82f6 45%, #22c55e 110%);
+  color: white;
+  box-shadow: 0 10px 30px rgba(99, 102, 241, 0.35);
+}
+
+.novo-evento-card .btn.btn-primary:hover {
+  filter: brightness(1.05);
+}
+
+.novo-evento-card .btn.btn-secondary {
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.novo-evento-card .btn.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.error-message {
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  color: rgba(254, 226, 226, 0.98);
+  padding: 12px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 520px) {
+  .novo-evento-container {
+    padding: 18px 14px;
+  }
+
+  .form-actions {
+    justify-content: stretch;
+  }
+
+  .form-actions .btn {
+    width: 100%;
+  }
+}

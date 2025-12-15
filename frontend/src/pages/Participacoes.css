@@ -1,0 +1,151 @@
+.participacoesHeader p {
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.participacoesActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.participacoesTableCard {
+  padding: 0;
+  overflow: visible;
+  position: relative;
+}
+
+.participacoesTableWrapper {
+  overflow-x: scroll !important;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.96);
+  /* Force horizontal scrollbar to always be visible */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.4) rgba(15, 23, 42, 0.08);
+  /* Ensure scrollbar is always visible */
+  min-height: 0;
+  /* Force scrollbar to always show */
+  -ms-overflow-style: scrollbar;
+  /* Ensure table header is visible */
+  position: relative;
+}
+
+.participacoesTableWrapper::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+  -webkit-appearance: none;
+}
+
+.participacoesTableWrapper::-webkit-scrollbar:horizontal {
+  height: 12px;
+  display: block !important;
+}
+
+.participacoesTableWrapper::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
+}
+
+.participacoesTableWrapper::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.5);
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.96);
+}
+
+.participacoesTableWrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.7);
+}
+
+.participacoesTableWrapper::-webkit-scrollbar-corner {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+/* Override global table dark-theme colors ONLY inside this table */
+.participacoesTable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 0;
+  min-width: 900px;
+  color: #0f172a;
+}
+
+.participacoesTable th,
+.participacoesTable td {
+  color: #0f172a;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.10);
+}
+
+.participacoesTable thead {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.participacoesTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #f8fafc !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.14);
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08);
+  padding: 8px 10px;
+}
+
+.participacoesTable thead th:first-child {
+  left: 0;
+  z-index: 25;
+  background: #f8fafc;
+  box-shadow: 10px 0 18px rgba(15, 23, 42, 0.06);
+}
+
+.participacoesTable tbody td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background: #ffffff;
+  box-shadow: 10px 0 18px rgba(15, 23, 42, 0.06);
+}
+
+.participacoesTable tbody tr:nth-child(even) td {
+  background: rgba(2, 6, 23, 0.02);
+}
+
+.participacoesTable tbody tr:nth-child(even) td:first-child {
+  background: #ffffff;
+}
+
+.participacoesMeta {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(15, 23, 42, 0.65);
+}
+
+.participacoesMetaMuted {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(15, 23, 42, 0.48);
+}
+
+.participacoesCheckboxCell {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.participacoesCheckbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #6366f1;
+}
+
+.participacoesSaldoPositivo {
+  background: rgba(34, 197, 94, 0.14) !important;
+  color: #166534 !important;
+}
+
+.participacoesSaldoNegativo {
+  background: rgba(239, 68, 68, 0.12) !important;
+  color: #991b1b !important;
+}
+

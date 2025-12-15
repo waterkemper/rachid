@@ -1,46 +1,51 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthRequest } from '../middleware/auth';
 import { CalculadoraService } from '../services/CalculadoraService';
 
 export class RelatorioController {
-  static async getSaldosGrupo(req: Request, res: Response) {
+  static async getSaldosGrupo(req: AuthRequest, res: Response) {
     try {
       const grupoId = parseInt(req.params.id);
-      const saldos = await CalculadoraService.calcularSaldosGrupo(grupoId);
+      const usuarioId = req.usuarioId!;
+      const saldos = await CalculadoraService.calcularSaldosGrupo(grupoId, usuarioId);
       res.json(saldos);
     } catch (error) {
       res.status(500).json({ error: 'Erro ao calcular saldos' });
     }
   }
 
-  static async getSaldosPorGrupo(req: Request, res: Response) {
+  static async getSaldosPorGrupo(req: AuthRequest, res: Response) {
     try {
       const grupoId = parseInt(req.params.id);
-      const saldos = await CalculadoraService.calcularSaldosPorGrupo(grupoId);
+      const usuarioId = req.usuarioId!;
+      const saldos = await CalculadoraService.calcularSaldosPorGrupo(grupoId, usuarioId);
       res.json(saldos);
     } catch (error) {
       res.status(500).json({ error: 'Erro ao calcular saldos por grupo' });
     }
   }
 
-  static async getSugestoesPagamento(req: Request, res: Response) {
+  static async getSugestoesPagamento(req: AuthRequest, res: Response) {
     try {
       const grupoId = parseInt(req.params.id);
-      const saldos = await CalculadoraService.calcularSaldosGrupo(grupoId);
+      const usuarioId = req.usuarioId!;
+      const saldos = await CalculadoraService.calcularSaldosGrupo(grupoId, usuarioId);
       const sugestoes = CalculadoraService.otimizarPagamentos(saldos);
       res.json(sugestoes);
     } catch (error) {
-      res.status(500).json({ error: 'Erro ao calcular sugest√µes de pagamento' });
+      res.status(500).json({ error: 'Erro ao calcular sugestıes de pagamento' });
     }
   }
 
-  static async getSugestoesPagamentoEntreGrupos(req: Request, res: Response) {
+  static async getSugestoesPagamentoEntreGrupos(req: AuthRequest, res: Response) {
     try {
       const grupoId = parseInt(req.params.id);
-      const saldosGrupos = await CalculadoraService.calcularSaldosPorGrupo(grupoId);
+      const usuarioId = req.usuarioId!;
+      const saldosGrupos = await CalculadoraService.calcularSaldosPorGrupo(grupoId, usuarioId);
       const sugestoes = CalculadoraService.otimizarPagamentosEntreGrupos(saldosGrupos);
       res.json(sugestoes);
     } catch (error) {
-      res.status(500).json({ error: 'Erro ao calcular sugest√µes de pagamento entre grupos' });
+      res.status(500).json({ error: 'Erro ao calcular sugestıes de pagamento entre grupos' });
     }
   }
 }

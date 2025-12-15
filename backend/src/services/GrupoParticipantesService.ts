@@ -1,12 +1,20 @@
 import { AppDataSource } from '../database/data-source';
 import { GrupoParticipantesEvento } from '../entities/GrupoParticipantesEvento';
 import { ParticipanteGrupoEvento } from '../entities/ParticipanteGrupoEvento';
+import { Grupo } from '../entities/Grupo';
 
 export class GrupoParticipantesService {
   private static grupoParticipantesRepository = AppDataSource.getRepository(GrupoParticipantesEvento);
   private static participanteGrupoEventoRepository = AppDataSource.getRepository(ParticipanteGrupoEvento);
+  private static grupoRepository = AppDataSource.getRepository(Grupo);
 
-  static async findAllByEvento(eventoId: number): Promise<GrupoParticipantesEvento[]> {
+  static async findAllByEvento(eventoId: number, usuarioId: number): Promise<GrupoParticipantesEvento[]> {
+    // Verificar se o grupo (evento) pertence ao usuário
+    const grupo = await this.grupoRepository.findOne({ where: { id: eventoId, usuario_id: usuarioId } });
+    if (!grupo) {
+      throw new Error('Grupo não encontrado ou não pertence ao usuário');
+    }
+
     return await this.grupoParticipantesRepository.find({
       where: { grupo_id: eventoId },
       relations: ['participantes', 'participantes.participante'],
@@ -14,39 +22,64 @@ export class GrupoParticipantesService {
     });
   }
 
-  static async findById(id: number): Promise<GrupoParticipantesEvento | null> {
-    return await this.grupoParticipantesRepository.findOne({
+  static async findById(id: number, usuarioId: number): Promise<GrupoParticipantesEvento | null> {
+    const grupoParticipantes = await this.grupoParticipantesRepository.findOne({
       where: { id },
-      relations: ['participantes', 'participantes.participante'],
+      relations: ['grupo', 'participantes', 'participantes.participante'],
     });
+
+    if (!grupoParticipantes || grupoParticipantes.grupo.usuario_id !== usuarioId) {
+      return null;
+    }
+
+    return grupoParticipantes;
   }
 
   static async create(data: {
     grupo_id: number;
     nome: string;
     descricao?: string;
+    usuario_id: number;
   }): Promise<GrupoParticipantesEvento> {
-    const grupo = this.grupoParticipantesRepository.create(data);
-    return await this.grupoParticipantesRepository.save(grupo);
+    // Verificar se o grupo pertence ao usuário
+    const grupo = await this.grupoRepository.findOne({ where: { id: data.grupo_id, usuario_id: data.usuario_id } });
+    if (!grupo) {
+      throw new Error('Grupo não encontrado ou não pertence ao usuário');
+    }
+
+    const grupoParticipantes = this.grupoParticipantesRepository.create({
+      grupo_id: data.grupo_id,
+      nome: data.nome,
+      descricao: data.descricao,
+    });
+    return await this.grupoParticipantesRepository.save(grupoParticipantes);
   }
 
-  static async update(id: number, data: {
+  static async update(id: number, usuarioId: number, data: {
     nome?: string;
     descricao?: string;
   }): Promise<GrupoParticipantesEvento | null> {
-    const grupo = await this.findById(id);
+    const grupo = await this.findById(id, usuarioId);
     if (!grupo) return null;
 
     Object.assign(grupo, data);
     return await this.grupoParticipantesRepository.save(grupo);
   }
 
-  static async delete(id: number): Promise<boolean> {
+  static async delete(id: number, usuarioId: number): Promise<boolean> {
+    const grupo = await this.findById(id, usuarioId);
+    if (!grupo) return false;
+
     const result = await this.grupoParticipantesRepository.delete(id);
     return (result.affected ?? 0) > 0;
   }
 
-  static async adicionarParticipante(grupoParticipantesId: number, participanteId: number, eventoId: number): Promise<boolean> {
+  static async adicionarParticipante(grupoParticipantesId: number, participanteId: number, eventoId: number, usuarioId: number): Promise<boolean> {
+    // Verificar se o grupo (evento) pertence ao usuário
+    const grupo = await this.grupoRepository.findOne({ where: { id: eventoId, usuario_id: usuarioId } });
+    if (!grupo) {
+      throw new Error('Grupo não encontrado ou não pertence ao usuário');
+    }
     const participanteJaEmGrupo = await this.participanteGrupoEventoRepository
       .createQueryBuilder('pge')
       .innerJoin('pge.grupoParticipantes', 'gpe')
@@ -66,7 +99,13 @@ export class GrupoParticipantesService {
     return true;
   }
 
-  static async removerParticipante(grupoParticipantesId: number, participanteId: number): Promise<boolean> {
+  static async removerParticipante(grupoParticipantesId: number, participanteId: number, usuarioId: number): Promise<boolean> {
+    // Verificar se o grupo de participantes pertence ao usuário através do grupo
+    const grupoParticipantes = await this.findById(grupoParticipantesId, usuarioId);
+    if (!grupoParticipantes) {
+      return false;
+    }
+
     const result = await this.participanteGrupoEventoRepository.delete({
       grupo_participantes_evento_id: grupoParticipantesId,
       participante_id: participanteId,
