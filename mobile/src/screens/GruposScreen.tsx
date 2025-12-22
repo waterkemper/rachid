@@ -3,11 +3,16 @@ import { View, StyleSheet, FlatList, Alert } from 'react-native';
 import { FAB, Card, Text, Button, ActivityIndicator } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../navigation/AppNavigator';
+import { CompositeNavigationProp } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { RootStackParamList, MainTabParamList } from '../navigation/AppNavigator';
 import { grupoApi, despesaApi } from '../services/api';
 import { Grupo } from '../../shared/types';
 
-type GruposScreenNavigationProp = StackNavigationProp<RootStackParamList>;
+type GruposScreenNavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<MainTabParamList, 'Eventos'>,
+  StackNavigationProp<RootStackParamList>
+>;
 
 const GruposScreen: React.FC = () => {
   const navigation = useNavigation<GruposScreenNavigationProp>();
@@ -104,15 +109,29 @@ const GruposScreen: React.FC = () => {
             <Button 
               mode="outlined" 
               onPress={() => {
-                // Navigate to expenses or details
+                navigation.navigate('Despesas', { eventoId: item.id });
               }}
+              icon="currency-usd"
+              compact
             >
-              Ver Despesas
+              Despesas
+            </Button>
+            <Button 
+              mode="outlined" 
+              onPress={() => {
+                navigation.navigate('Relatorios', { eventoId: item.id });
+              }}
+              icon="chart-bar"
+              compact
+            >
+              Relatório
             </Button>
             <Button 
               mode="text" 
               textColor="red" 
               onPress={() => handleDelete(item.id)}
+              icon="delete"
+              compact
             >
               Excluir
             </Button>
@@ -174,7 +193,7 @@ const GruposScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#0b1220',
   },
   center: {
     flex: 1,

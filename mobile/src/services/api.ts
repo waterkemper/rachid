@@ -17,7 +17,12 @@ const api: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000, // 10 segundos de timeout
 });
+
+if (__DEV__) {
+  console.log('🔧 API URL configurada:', API_URL);
+}
 
 // Interceptor para adicionar token nas requisições
 api.interceptors.request.use(
@@ -26,6 +31,12 @@ api.interceptors.request.use(
       const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      }
+      if (__DEV__) {
+        console.log('📤 REQUEST:', config.method?.toUpperCase(), config.url);
+        if (config.data) {
+          console.log('Request Data:', JSON.stringify(config.data, null, 2));
+        }
       }
     } catch (error) {
       console.error('Erro ao obter token:', error);
@@ -39,8 +50,21 @@ api.interceptors.request.use(
 
 // Interceptor para tratar erros de autenticação
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (__DEV__) {
+      console.log('✅ RESPONSE:', response.status, response.config.url);
+      console.log('Response Data:', JSON.stringify(response.data, null, 2));
+    }
+    return response;
+  },
   (error: AxiosError) => {
+    if (__DEV__) {
+      console.error('❌ ERROR:', error.response?.status, error.config?.url);
+      console.error('Error Data:', error.response?.data);
+      if (error.message) {
+        console.error('Error Message:', error.message);
+      }
+    }
     if (error.response?.status === 401) {
       // Token inválido ou expirado
       AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);

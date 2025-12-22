@@ -1,9 +1,12 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../contexts/AuthContext';
 import { ActivityIndicator, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import AppHeader from '../components/AppHeader';
+import { customColors } from '../theme';
 
 // Auth Screens
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -32,8 +35,8 @@ export type RootStackParamList = {
 export type MainTabParamList = {
   Eventos: undefined;
   Participantes: undefined;
-  Despesas: undefined;
-  Relatorios: undefined;
+  Despesas: { eventoId?: number } | undefined;
+  Relatorios: { eventoId?: number } | undefined;
   Conta: undefined;
 };
 
@@ -42,28 +45,71 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 
 function MainTabs() {
   return (
-    <Tab.Navigator>
+    <Tab.Navigator
+      screenOptions={{
+        tabBarActiveTintColor: customColors.primary,
+        tabBarInactiveTintColor: customColors.textDisabled,
+        tabBarStyle: {
+          backgroundColor: 'rgba(11, 18, 32, 0.95)',
+          borderTopColor: customColors.border,
+          borderTopWidth: 1,
+          paddingBottom: 5,
+          paddingTop: 5,
+          height: 60,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+        },
+        header: () => <AppHeader />,
+      }}
+    >
       <Tab.Screen 
         name="Eventos" 
         component={GruposScreen}
-        options={{ title: 'Meus Eventos' }}
+        options={{ 
+          title: 'Eventos',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="calendar-multiple" size={size} color={color} />
+          ),
+        }}
       />
       <Tab.Screen 
         name="Participantes" 
         component={ParticipantesScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="account-group" size={size} color={color} />
+          ),
+        }}
       />
       <Tab.Screen 
         name="Despesas" 
         component={DespesasScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="currency-usd" size={size} color={color} />
+          ),
+        }}
       />
       <Tab.Screen 
         name="Relatorios" 
         component={RelatorioScreen}
-        options={{ title: 'Relatórios' }}
+        options={{ 
+          title: 'Relatórios',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="chart-box" size={size} color={color} />
+          ),
+        }}
       />
       <Tab.Screen 
         name="Conta" 
         component={ContaScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="account-circle" size={size} color={color} />
+          ),
+        }}
       />
     </Tab.Navigator>
   );
@@ -91,24 +137,38 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator 
+        screenOptions={{ 
+          headerShown: false,
+          cardStyle: { backgroundColor: '#0b1220' },
+        }}
+      >
         {usuario ? (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen 
               name="NovoEvento" 
               component={NovoEventoScreen}
-              options={{ headerShown: true, title: 'Novo Evento' }}
+              options={{ 
+                headerShown: true, 
+                header: () => <AppHeader title="Novo Evento" showBack />,
+              }}
             />
             <Stack.Screen 
               name="AdicionarParticipantesEvento" 
               component={AdicionarParticipantesEventoScreen}
-              options={{ headerShown: true, title: 'Adicionar Participantes' }}
+              options={{ 
+                headerShown: true,
+                header: () => <AppHeader title="Adicionar Participantes" showBack />,
+              }}
             />
             <Stack.Screen 
               name="GruposMaiores" 
               component={GruposMaioresScreen}
-              options={{ headerShown: true, title: 'Grupos Maiores' }}
+              options={{ 
+                headerShown: true,
+                header: () => <AppHeader title="Grupos Maiores" showBack />,
+              }}
             />
           </>
         ) : (

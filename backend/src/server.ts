@@ -16,6 +16,7 @@ app.use(cors({
     'exp://localhost:8081', // Expo dev
     /^exp:\/\/192\.168\.\d+\.\d+:8081$/, // Expo dev em rede local
     /^http:\/\/192\.168\.\d+\.\d+:8081$/, // Expo dev web em rede local
+    /^http:\/\/192\.168\.\d+\.\d+:3001$/, // Backend acessível via IP
   ],
   credentials: true,
 }));

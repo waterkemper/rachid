@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
-import { Card, Text, Button, ActivityIndicator, SegmentedButtons } from 'react-native-paper';
-import { relatorioApi, grupoApi } from '../services/api';
+import { View, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
+import { Card, Text, Button, ActivityIndicator, SegmentedButtons, Menu, TextInput } from 'react-native-paper';
+import { useRoute, RouteProp } from '@react-navigation/native';
+import { MainTabParamList } from '../navigation/AppNavigator';
+import { relatorioApi, grupoApi, grupoParticipantesApi } from '../services/api';
 import { SaldoParticipante, SugestaoPagamento, Grupo } from '../../shared/types';
+import { menuTheme } from '../theme';
+
+type RelatorioScreenRouteProp = RouteProp<MainTabParamList, 'Relatorios'>;
 
 const RelatorioScreen: React.FC = () => {
+  const route = useRoute<RelatorioScreenRouteProp>();
+  const eventoIdFromRoute = route.params?.eventoId;
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [grupoSelecionado, setGrupoSelecionado] = useState<number | null>(null);
   const [saldos, setSaldos] = useState<SaldoParticipante[]>([]);
@@ -13,6 +20,7 @@ const RelatorioScreen: React.FC = () => {
   const [carregandoRelatorio, setCarregandoRelatorio] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tipoRelatorio, setTipoRelatorio] = useState('saldos');
+  const [menuEventoVisible, setMenuEventoVisible] = useState(false);
 
   const formatCurrency = (value: number): string => {
     return new Intl.NumberFormat('pt-BR', {
@@ -26,6 +34,12 @@ const RelatorioScreen: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (eventoIdFromRoute) {
+      setGrupoSelecionado(eventoIdFromRoute);
+    }
+  }, [eventoIdFromRoute]);
+
+  useEffect(() => {
     if (grupoSelecionado) {
       loadRelatorio();
     }
@@ -36,7 +50,9 @@ const RelatorioScreen: React.FC = () => {
       setLoading(true);
       const data = await grupoApi.getAll();
       setGrupos(data);
-      if (data.length > 0) {
+      if (eventoIdFromRoute && data.some(g => g.id === eventoIdFromRoute)) {
+        setGrupoSelecionado(eventoIdFromRoute);
+      } else if (data.length > 0) {
         setGrupoSelecionado(data[0].id);
       }
       setError(null);
@@ -56,8 +72,21 @@ const RelatorioScreen: React.FC = () => {
         const saldosData = await relatorioApi.getSaldosGrupo(grupoSelecionado);
         setSaldos(saldosData);
       } else {
-        const sugestoesData = await relatorioApi.getSugestoesPagamento(grupoSelecionado);
-        setSugestoes(sugestoesData);
+        // Verificar se há grupos no evento para usar a API correta
+        try {
+          const gruposParticipantes = await grupoParticipantesApi.getAll(grupoSelecionado);
+          const temGrupos = gruposParticipantes && gruposParticipantes.length > 0;
+          
+          // Se houver grupos (sub-grupos), usar a API que considera grupos
+          const sugestoesData = temGrupos
+            ? await relatorioApi.getSugestoesPagamentoGrupos(grupoSelecionado)
+            : await relatorioApi.getSugestoesPagamento(grupoSelecionado);
+          setSugestoes(sugestoesData);
+        } catch (err) {
+          // Se der erro ao verificar grupos, usar a API padrão
+          const sugestoesData = await relatorioApi.getSugestoesPagamento(grupoSelecionado);
+          setSugestoes(sugestoesData);
+        }
       }
       setError(null);
     } catch (err) {
@@ -88,18 +117,39 @@ const RelatorioScreen: React.FC = () => {
       <Card style={styles.card}>
         <Card.Content>
           <Text variant="titleMedium" style={styles.title}>Selecione o evento:</Text>
-          <View style={styles.gruposList}>
-            {grupos.map((grupo) => (
-              <Button
-                key={grupo.id}
-                mode={grupoSelecionado === grupo.id ? 'contained' : 'outlined'}
-                onPress={() => setGrupoSelecionado(grupo.id)}
-                style={styles.grupoButton}
+          <Menu
+            visible={menuEventoVisible}
+            onDismiss={() => setMenuEventoVisible(false)}
+            theme={menuTheme}
+            contentStyle={styles.menuContent}
+            anchor={
+              <TouchableOpacity
+                onPress={() => setMenuEventoVisible(true)}
+                style={styles.dropdownButton}
               >
-                {grupo.nome}
-              </Button>
+                <TextInput
+                  value={grupoSelecionado ? grupos.find(g => g.id === grupoSelecionado)?.nome || 'Selecione um evento' : 'Selecione um evento'}
+                  mode="outlined"
+                  editable={false}
+                  style={styles.dropdownInput}
+                  right={<TextInput.Icon icon="chevron-down" />}
+                  placeholder="Selecione um evento"
+                />
+              </TouchableOpacity>
+            }
+          >
+            {grupos.map((grupo) => (
+              <Menu.Item
+                key={grupo.id}
+                onPress={() => {
+                  setGrupoSelecionado(grupo.id);
+                  setMenuEventoVisible(false);
+                }}
+                title={grupo.nome}
+                leadingIcon={grupoSelecionado === grupo.id ? 'check' : undefined}
+              />
             ))}
-          </View>
+          </Menu>
         </Card.Content>
       </Card>
 
@@ -179,7 +229,7 @@ const RelatorioScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#0b1220',
   },
   center: {
     flex: 1,
@@ -194,13 +244,15 @@ const styles = StyleSheet.create({
   title: {
     marginBottom: 12,
   },
-  gruposList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  dropdownButton: {
+    width: '100%',
+    marginBottom: 8,
   },
-  grupoButton: {
-    marginTop: 8,
+  dropdownInput: {
+    marginBottom: 0,
+  },
+  menuContent: {
+    backgroundColor: '#0b1220',
   },
   saldoItem: {
     paddingVertical: 12,
