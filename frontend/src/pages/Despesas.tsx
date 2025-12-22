@@ -11,7 +11,10 @@ const Despesas: React.FC = () => {
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
-  const [filtroGrupo, setFiltroGrupo] = useState<number | ''>('');
+  const [participantesDoEvento, setParticipantesDoEvento] = useState<Participante[]>([]);
+  // Inicializar filtroGrupo com o valor da URL se existir
+  const eventoIdFromUrl = searchParams.get('evento');
+  const [filtroGrupo, setFiltroGrupo] = useState<number | ''>(eventoIdFromUrl ? Number(eventoIdFromUrl) : '');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModalParticipanteRapidoOpen, setIsModalParticipanteRapidoOpen] = useState(false);
   const [editingDespesa, setEditingDespesa] = useState<Despesa | null>(null);
@@ -32,7 +35,7 @@ const Despesas: React.FC = () => {
     if (eventoId) {
       setFiltroGrupo(Number(eventoId));
     }
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     loadDespesas();
@@ -66,7 +69,37 @@ const Despesas: React.FC = () => {
     }
   };
 
-  const handleOpenModal = (despesa?: Despesa) => {
+  const loadParticipantesDoEvento = async (eventoId: number, incluirPagadorAtual?: number) => {
+    try {
+      const evento = await grupoApi.getById(eventoId);
+      if (evento.participantes) {
+        const participantesIds = evento.participantes.map(p => p.participante_id);
+        let participantesFiltrados = participantes.filter(p => participantesIds.includes(p.id));
+        
+        // Se estiver editando e o pagador atual não estiver na lista, incluir ele também
+        if (incluirPagadorAtual && !participantesIds.includes(incluirPagadorAtual)) {
+          const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
+          if (pagadorAtual) {
+            participantesFiltrados = [...participantesFiltrados, pagadorAtual];
+          }
+        }
+        
+        setParticipantesDoEvento(participantesFiltrados);
+      } else {
+        // Se não houver participantes no evento mas houver um pagador atual, incluir ele
+        if (incluirPagadorAtual) {
+          const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
+          setParticipantesDoEvento(pagadorAtual ? [pagadorAtual] : []);
+        } else {
+          setParticipantesDoEvento([]);
+        }
+      }
+    } catch (err) {
+      setParticipantesDoEvento([]);
+    }
+  };
+
+  const handleOpenModal = async (despesa?: Despesa) => {
     if (despesa) {
       setEditingDespesa(despesa);
       setFormData({
@@ -76,15 +109,25 @@ const Despesas: React.FC = () => {
         participante_pagador_id: despesa.participante_pagador_id,
         data: despesa.data.split('T')[0],
       });
+      // Carregar participantes do evento da despesa sendo editada
+      // Incluir o pagador atual caso ele não esteja mais no evento
+      await loadParticipantesDoEvento(despesa.grupo_id, despesa.participante_pagador_id);
     } else {
       setEditingDespesa(null);
+      const grupoId = filtroGrupo ? Number(filtroGrupo) : 0;
       setFormData({
-        grupo_id: filtroGrupo ? Number(filtroGrupo) : 0,
+        grupo_id: grupoId,
         descricao: '',
         valorTotal: '',
         participante_pagador_id: 0,
         data: new Date().toISOString().split('T')[0],
       });
+      // Carregar participantes do evento selecionado (ou do filtro)
+      if (grupoId > 0) {
+        await loadParticipantesDoEvento(grupoId);
+      } else {
+        setParticipantesDoEvento([]);
+      }
     }
     setIsModalOpen(true);
   };
@@ -92,6 +135,7 @@ const Despesas: React.FC = () => {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingDespesa(null);
+    setParticipantesDoEvento([]);
     setFormData({
       grupo_id: 0,
       descricao: '',
@@ -151,6 +195,10 @@ const Despesas: React.FC = () => {
   const handleParticipanteAdicionado = async (participanteId: number) => {
     // Recarregar lista de participantes
     await loadData();
+    // Se houver um evento selecionado no formulário, recarregar participantes do evento
+    if (formData.grupo_id > 0) {
+      await loadParticipantesDoEvento(formData.grupo_id);
+    }
     // Atualizar o select de pagador se estiver aberto
     if (isModalOpen && formData.participante_pagador_id === 0) {
       setFormData({ ...formData, participante_pagador_id: participanteId });
@@ -162,6 +210,29 @@ const Despesas: React.FC = () => {
       style: 'currency',
       currency: 'BRL',
     }).format(value);
+  };
+
+  const formatDate = (dateString: string) => {
+    // Se a data já está no formato YYYY-MM-DD (sem hora), usar diretamente sem conversão de timezone
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = dateString.split('-');
+      return `${day}/${month}/${year}`;
+    }
+    // Se a data tem hora (formato ISO), extrair apenas a parte da data
+    if (dateString.includes('T')) {
+      const datePart = dateString.split('T')[0];
+      const [year, month, day] = datePart.split('-');
+      return `${day}/${month}/${year}`;
+    }
+    // Caso contrário, tentar usar a conversão padrão
+    try {
+      const date = new Date(dateString);
+      // Ajustar para o fuso horário local para evitar problemas de timezone
+      const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+      return localDate.toLocaleDateString('pt-BR');
+    } catch {
+      return dateString;
+    }
   };
 
   const calcularTotalDespesas = (): number => {
@@ -260,7 +331,7 @@ const Despesas: React.FC = () => {
                   <td>{despesa.descricao}</td>
                   <td>R$ {despesa.valorTotal.toFixed(2)}</td>
                   <td>{despesa.pagador?.nome || '-'}</td>
-                  <td>{new Date(despesa.data).toLocaleDateString('pt-BR')}</td>
+                  <td>{formatDate(despesa.data)}</td>
                   <td>{despesa.participacoes?.length || 0}</td>
                   <td>
                     <button
@@ -294,7 +365,16 @@ const Despesas: React.FC = () => {
             <label>Evento *</label>
             <select
               value={formData.grupo_id}
-              onChange={(e) => setFormData({ ...formData, grupo_id: Number(e.target.value) })}
+              onChange={async (e) => {
+                const grupoId = Number(e.target.value);
+                setFormData({ ...formData, grupo_id: grupoId, participante_pagador_id: 0 });
+                // Carregar participantes do evento selecionado
+                if (grupoId > 0) {
+                  await loadParticipantesDoEvento(grupoId);
+                } else {
+                  setParticipantesDoEvento([]);
+                }
+              }}
               required
             >
               <option value="">Selecione um evento</option>
@@ -348,9 +428,16 @@ const Despesas: React.FC = () => {
                 setFormData({ ...formData, participante_pagador_id: value });
               }}
               required
+              disabled={!formData.grupo_id || participantesDoEvento.length === 0}
             >
-              <option value="">Selecione quem pagou</option>
-              {participantes.map((participante) => (
+              <option value="">
+                {!formData.grupo_id 
+                  ? 'Selecione um evento primeiro' 
+                  : participantesDoEvento.length === 0 
+                    ? 'Nenhum participante no evento' 
+                    : 'Selecione quem pagou'}
+              </option>
+              {participantesDoEvento.map((participante) => (
                 <option key={participante.id} value={participante.id}>
                   {participante.nome}
                 </option>

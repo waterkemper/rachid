@@ -116,15 +116,6 @@ export class GrupoController {
       const usuarioId = req.usuarioId!;
       const id = parseInt(req.params.id);
 
-      const isPro = await PlanService.isPro(usuarioId);
-      if (!isPro) {
-        return res.status(402).json({
-          error: 'Duplicar evento está disponível no plano Pro.',
-          errorCode: 'PRO_REQUIRED',
-          feature: 'duplicar_evento',
-        });
-      }
-
       const novoGrupo = await GrupoService.duplicar(id, usuarioId);
       if (!novoGrupo) {
         return res.status(404).json({ error: 'Grupo não encontrado' });

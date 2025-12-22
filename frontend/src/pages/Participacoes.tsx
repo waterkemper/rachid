@@ -269,11 +269,6 @@ const Participacoes: React.FC = () => {
 
   const exportarPDF = () => {
     track('export_pdf_click', { source: 'participacoes', pro: isPro(usuario) });
-    if (!isPro(usuario)) {
-      track('paywall_view', { feature: 'export_pdf', source: 'participacoes_exportar_pdf' });
-      setIsPaywallOpen(true);
-      return;
-    }
 
     if (!grupoSelecionado || despesas.length === 0 || participantes.length === 0) {
       setError('Selecione um evento com despesas e participantes para exportar');
@@ -286,9 +281,9 @@ const Participacoes: React.FC = () => {
 
     const doc = new jsPDF('landscape', 'mm', 'a4');
     
-    // Título
+      // Título
     doc.setFontSize(18);
-    doc.text(`Participações - ${grupoNome}`, 14, 15);
+    doc.text(`Participantes - ${grupoNome}`, 14, 15);
     
     if (dataFormatada) {
       doc.setFontSize(12);
@@ -399,7 +394,7 @@ const Participacoes: React.FC = () => {
     if (sugestoesPagamento.length > 0) {
       const finalY = (doc as any).lastAutoTable.finalY || 25;
       doc.setFontSize(14);
-      doc.text('Sugestões de Pagamento entre Grupos', 14, finalY + 15);
+      doc.text('Sugestões de Pagamento', 14, finalY + 15);
       
       const sugestoesData = sugestoesPagamento.map(s => [
         s.de,
@@ -477,7 +472,7 @@ const Participacoes: React.FC = () => {
               style={{ height: 'fit-content' }}
               disabled={!grupoSelecionado || despesas.length === 0 || participantes.length === 0}
             >
-              Exportar PDF {isPro(usuario) ? '' : '(Pro)'}
+              Exportar PDF
             </button>
           </div>
         )}
@@ -726,13 +721,13 @@ const Participacoes: React.FC = () => {
 
         {!grupoSelecionado && (
           <div className="card">
-            <p>Selecione um evento acima para ver a tabela de participações.</p>
+              <p>Selecione um evento acima para ver a tabela de participações.</p>
           </div>
         )}
 
         {grupoSelecionado && sugestoesPagamento.length > 0 && (
           <div className="card" style={{ marginTop: '20px' }}>
-            <h3 style={{ marginBottom: '15px' }}>💡 Sugestões de Pagamento entre Grupos</h3>
+            <h3 style={{ marginBottom: '15px' }}>Sugestões de Pagamento entre Grupos</h3>
             <p style={{ color: 'rgba(226, 232, 240, 0.78)', marginBottom: '15px' }}>
               Para quitar os saldos de forma otimizada, siga as seguintes transferências:
             </p>

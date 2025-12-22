@@ -74,12 +74,12 @@ export const participanteApi = {
     return response.data;
   },
 
-  create: async (data: { nome: string; email?: string }): Promise<Participante> => {
+  create: async (data: { nome: string; email?: string; chavePix?: string }): Promise<Participante> => {
     const response = await api.post('/participantes', data);
     return response.data;
   },
 
-  update: async (id: number, data: { nome?: string; email?: string }): Promise<Participante> => {
+  update: async (id: number, data: { nome?: string; email?: string; chavePix?: string }): Promise<Participante> => {
     const response = await api.put(`/participantes/${id}`, data);
     return response.data;
   },

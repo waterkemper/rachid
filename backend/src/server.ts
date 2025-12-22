@@ -10,7 +10,13 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: [
+    process.env.FRONTEND_URL || 'http://localhost:3000',
+    'http://localhost:8081', // Expo dev web
+    'exp://localhost:8081', // Expo dev
+    /^exp:\/\/192\.168\.\d+\.\d+:8081$/, // Expo dev em rede local
+    /^http:\/\/192\.168\.\d+\.\d+:8081$/, // Expo dev web em rede local
+  ],
   credentials: true,
 }));
 app.use(express.json());

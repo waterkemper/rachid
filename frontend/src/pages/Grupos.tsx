@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { grupoApi, participanteApi } from '../services/api';
+import { grupoApi, participanteApi, despesaApi } from '../services/api';
 import { Grupo, Participante } from '../types';
 import Modal from '../components/Modal';
-import PaywallModal from '../components/PaywallModal';
-import { useAuth } from '../contexts/AuthContext';
-import { isPro } from '../utils/plan';
-import { track } from '../services/analytics';
+import { FaEdit, FaUsers, FaMoneyBillWave, FaChartBar, FaCopy, FaTrash } from 'react-icons/fa';
+import './Grupos.css';
 
 const Grupos: React.FC = () => {
-  const { usuario } = useAuth();
   const navigate = useNavigate();
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
@@ -18,12 +15,19 @@ const Grupos: React.FC = () => {
   const [formData, setFormData] = useState({ nome: '', descricao: '', data: new Date().toISOString().split('T')[0], participanteIds: [] as number[] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
+  const [totaisDespesas, setTotaisDespesas] = useState<Map<number, number>>(new Map());
 
   const formatarData = (dataStr: string): string => {
     const dataParte = dataStr.split('T')[0];
     const [ano, mes, dia] = dataParte.split('-');
     return `${dia}/${mes}/${ano}`;
+  };
+
+  const formatCurrency = (value: number): string => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value);
   };
 
   useEffect(() => {
@@ -39,6 +43,22 @@ const Grupos: React.FC = () => {
       ]);
       setGrupos(gruposData);
       setParticipantes(participantesData);
+      
+      // Carregar totais de despesas para cada grupo
+      const totaisMap = new Map<number, number>();
+      await Promise.all(
+        gruposData.map(async (grupo) => {
+          try {
+            const despesas = await despesaApi.getAll(grupo.id);
+            const total = despesas.reduce((sum, despesa) => sum + Number(despesa.valorTotal), 0);
+            totaisMap.set(grupo.id, total);
+          } catch (err) {
+            totaisMap.set(grupo.id, 0);
+          }
+        })
+      );
+      setTotaisDespesas(totaisMap);
+      
       setError(null);
     } catch (err) {
       setError('Erro ao carregar dados');
@@ -116,22 +136,11 @@ const Grupos: React.FC = () => {
   };
 
   const handleDuplicar = async (id: number) => {
-    if (!isPro(usuario)) {
-      track('paywall_view', { feature: 'duplicar_evento', source: 'eventos_duplicar' });
-      setIsPaywallOpen(true);
-      return;
-    }
-
     try {
       await grupoApi.duplicar(id);
       loadData();
     } catch (err: any) {
       const payload = err?.response?.data;
-      if (err?.response?.status === 402 && payload?.errorCode === 'PRO_REQUIRED') {
-        track('paywall_view', { feature: payload?.feature || 'duplicar_evento', source: 'eventos_duplicar_backend' });
-        setIsPaywallOpen(true);
-        return;
-      }
       setError(payload?.error || 'Erro ao duplicar evento');
     }
   };
@@ -163,7 +172,7 @@ const Grupos: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <div className="grupos-header">
         <h2>Meus eventos</h2>
         <button className="btn btn-primary" onClick={() => handleOpenModal()}>
           + Novo Evento
@@ -173,82 +182,167 @@ const Grupos: React.FC = () => {
       {error && <div className="alert alert-error">{error}</div>}
 
       <div className="card">
-        <table>
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>Descrição</th>
-              <th>Data</th>
-              <th>Participantes</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {grupos.length === 0 ? (
+        {/* Desktop Table View */}
+        <div className="grupos-table-wrapper">
+          <table className="grupos-table">
+            <thead>
               <tr>
-                <td colSpan={5} style={{ textAlign: 'center', padding: '20px' }}>
-                  Nenhum evento cadastrado
-                </td>
+                <th>Nome</th>
+                <th>Descrição</th>
+                <th>Data</th>
+                <th>Participantes</th>
+                <th>Total Despesas</th>
+                <th>Ações</th>
               </tr>
-            ) : (
-              grupos.map((grupo) => (
-                <tr key={grupo.id}>
-                  <td>{grupo.nome}</td>
-                  <td>{grupo.descricao || '-'}</td>
-                  <td>{formatarData(grupo.data)}</td>
-                  <td>{grupo.participantes?.length || 0}</td>
-                  <td>
+            </thead>
+            <tbody>
+              {grupos.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>
+                    Nenhum evento cadastrado
+                  </td>
+                </tr>
+              ) : (
+                grupos.map((grupo) => (
+                  <tr key={grupo.id}>
+                    <td>{grupo.nome}</td>
+                    <td>{grupo.descricao || '-'}</td>
+                    <td>{formatarData(grupo.data)}</td>
+                    <td>{grupo.participantes?.length || 0}</td>
+                    <td>{formatCurrency(totaisDespesas.get(grupo.id) || 0)}</td>
+                    <td>
+                      <div className="grupos-actions">
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => handleOpenModal(grupo)}
+                          title="Editar evento"
+                        >
+                          <FaEdit />
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => handleGerenciarParticipantes(grupo.id)}
+                          title="Adicionar/remover participantes"
+                        >
+                          <FaUsers />
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => handleAbrirDespesas(grupo.id)}
+                          title="Adicionar despesas deste evento"
+                        >
+                          <FaMoneyBillWave />
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => handleVerResultado(grupo.id)}
+                          title="Ver resultado deste evento"
+                        >
+                          <FaChartBar />
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => handleDuplicar(grupo.id)}
+                          title="Duplicar evento"
+                        >
+                          <FaCopy />
+                        </button>
+                        <button
+                          className="btn btn-danger"
+                          onClick={() => handleDelete(grupo.id)}
+                          title="Excluir evento"
+                        >
+                          <FaTrash />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="grupos-cards">
+          {grupos.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '20px' }}>
+              Nenhum evento cadastrado
+            </div>
+          ) : (
+            grupos.map((grupo) => (
+              <div key={grupo.id} className="grupos-card">
+                <div className="grupos-card-header">
+                  <h3 className="grupos-card-title">{grupo.nome}</h3>
+                  <div className="grupos-actions">
                     <button
                       className="btn btn-secondary"
-                      style={{ marginRight: '10px' }}
                       onClick={() => handleOpenModal(grupo)}
+                      title="Editar evento"
                     >
-                      Editar
+                      <FaEdit />
                     </button>
                     <button
                       className="btn btn-secondary"
-                      style={{ marginRight: '10px' }}
                       onClick={() => handleGerenciarParticipantes(grupo.id)}
                       title="Adicionar/remover participantes"
                     >
-                      Participantes
+                      <FaUsers />
                     </button>
                     <button
                       className="btn btn-secondary"
-                      style={{ marginRight: '10px' }}
                       onClick={() => handleAbrirDespesas(grupo.id)}
                       title="Adicionar despesas deste evento"
                     >
-                      Gastos
+                      <FaMoneyBillWave />
                     </button>
                     <button
                       className="btn btn-secondary"
-                      style={{ marginRight: '10px' }}
                       onClick={() => handleVerResultado(grupo.id)}
                       title="Ver resultado deste evento"
                     >
-                      Resultado
+                      <FaChartBar />
                     </button>
                     <button
                       className="btn btn-secondary"
-                      style={{ marginRight: '10px' }}
                       onClick={() => handleDuplicar(grupo.id)}
-                      title={isPro(usuario) ? 'Duplicar evento' : 'Disponível no Pro'}
+                      title="Duplicar evento"
                     >
-                      Duplicar {isPro(usuario) ? '' : '(Pro)'}
+                      <FaCopy />
                     </button>
                     <button
                       className="btn btn-danger"
                       onClick={() => handleDelete(grupo.id)}
+                      title="Excluir evento"
                     >
-                      Excluir
+                      <FaTrash />
                     </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                  </div>
+                </div>
+                <div className="grupos-card-info">
+                  {grupo.descricao && (
+                    <div className="grupos-card-info-item">
+                      <span className="grupos-card-info-label">Descrição:</span>
+                      <span>{grupo.descricao}</span>
+                    </div>
+                  )}
+                  <div className="grupos-card-info-item">
+                    <span className="grupos-card-info-label">Data:</span>
+                    <span>{formatarData(grupo.data)}</span>
+                  </div>
+                  <div className="grupos-card-info-item">
+                    <span className="grupos-card-info-label">Participantes:</span>
+                    <span>{grupo.participantes?.length || 0}</span>
+                  </div>
+                  <div className="grupos-card-info-item grupos-card-total">
+                    <span className="grupos-card-info-label">Total de despesas:</span>
+                    <span className="grupos-card-total-value">{formatCurrency(totaisDespesas.get(grupo.id) || 0)}</span>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       <Modal
@@ -299,7 +393,7 @@ const Grupos: React.FC = () => {
                 </button>
               </div>
               <p className="help-text" style={{ marginTop: '8px' }}>
-                Dica: o fluxo recomendado é Participantes → Gastos → Resultado.
+                Dica: o fluxo recomendado é Participantes &gt; Gastos &gt; Resultado.
               </p>
             </div>
           )}
@@ -347,21 +441,6 @@ const Grupos: React.FC = () => {
           </div>
         </form>
       </Modal>
-
-      <PaywallModal
-        isOpen={isPaywallOpen}
-        onClose={() => setIsPaywallOpen(false)}
-        title="Duplicar evento no Pro"
-        bullets={[
-          'Duplicar evento com as mesmas pessoas',
-          'Grupos reutilizáveis ilimitados',
-          'Exportar PDF/CSV e relatórios',
-        ]}
-        onCta={() => {
-          track('paywall_click_cta', { feature: 'duplicar_evento', source: 'eventos' });
-          window.location.href = '/conta';
-        }}
-      />
     </div>
   );
 };

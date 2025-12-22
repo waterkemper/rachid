@@ -98,7 +98,7 @@ const Home: React.FC = () => {
               <div className="home-pill">Sem planilhas</div>
               <div className="home-pill">Cálculo automático</div>
               <div className="home-pill">Grupos e famílias</div>
-              <div className="home-pill">Consumo por padrão</div>
+              <div className="home-pill">Consumo por padrÃ£o</div>
             </div>
           </div>
 
@@ -106,7 +106,7 @@ const Home: React.FC = () => {
             <div className="home-preview">
               <div className="home-preview-header">
                 <div className="home-preview-title">Seu evento em poucos cliques</div>
-                <div className="home-preview-sub">Exemplo: “Churrasco do sábado”</div>
+                <div className="home-preview-sub">Exemplo: "Churrasco do sábado"</div>
               </div>
 
               <div className="home-preview-steps">
@@ -206,17 +206,17 @@ const Home: React.FC = () => {
           <div className="home-features-grid">
             <div className="home-feature">
               <div className="home-feature-title">Consumo por padrão</div>
-              <div className="home-feature-desc">Comece com tudo marcado e ajuste apenas o que não foi consumido.</div>
+              <div className="home-feature-desc">Comece com tudo marcado e ajuste apenas o que nÃ£o foi consumido.</div>
             </div>
 
             <div className="home-feature">
               <div className="home-feature-title">Grupos e famílias</div>
-              <div className="home-feature-desc">Agrupe pessoas para visualizar totais por família ou subgrupo do evento.</div>
+              <div className="home-feature-desc">Agrupe pessoas para visualizar totais por famÃ­lia ou subgrupo do evento.</div>
             </div>
 
             <div className="home-feature">
               <div className="home-feature-title">Grupos maiores (grupos de grupos)</div>
-              <div className="home-feature-desc">Ex.: “Pais da escola” contendo famílias; “Basquete” contendo várias pessoas.</div>
+              <div className="home-feature-desc">Ex.: "Pais da escola" contendo famílias; "Basquete" contendo várias pessoas.</div>
             </div>
 
             <div className="home-feature">

@@ -65,7 +65,7 @@ export class GrupoMaiorService {
     // Adicionar grupos
     if (data.grupoIds && data.grupoIds.length > 0) {
       for (const grupoId of data.grupoIds) {
-        // Verificar se o grupo pertence ao usuário
+        // Verificar se o grupo pertence ao usuÃ¡rio
         const grupo = await this.grupoRepository.findOne({
           where: { id: grupoId, usuario_id: data.usuario_id },
         });
@@ -82,7 +82,7 @@ export class GrupoMaiorService {
     // Adicionar participantes
     if (data.participanteIds && data.participanteIds.length > 0) {
       for (const participanteId of data.participanteIds) {
-        // Verificar se o participante pertence ao usuário
+        // Verificar se o participante pertence ao usuÃ¡rio
         const participante = await this.participanteRepository.findOne({
           where: { id: participanteId, usuario_id: data.usuario_id },
         });
@@ -134,7 +134,7 @@ export class GrupoMaiorService {
       return false;
     }
 
-    // Verificar se o grupo pertence ao usuário
+    // Verificar se o grupo pertence ao usuÃ¡rio
     const grupo = await this.grupoRepository.findOne({
       where: { id: grupoId, usuario_id: usuarioId },
     });
@@ -142,12 +142,12 @@ export class GrupoMaiorService {
       return false;
     }
 
-    // Verificar se já existe
+    // Verificar se jÃ¡ existe
     const existe = await this.grupoMaiorGrupoRepository.findOne({
       where: { grupo_maior_id: grupoMaiorId, grupo_id: grupoId },
     });
     if (existe) {
-      return true; // Já existe, retornar sucesso
+      return true; // JÃ¡ existe, retornar sucesso
     }
 
     const grupoMaiorGrupo = this.grupoMaiorGrupoRepository.create({
@@ -179,7 +179,7 @@ export class GrupoMaiorService {
       return false;
     }
 
-    // Verificar se o participante pertence ao usuário
+    // Verificar se o participante pertence ao usuÃ¡rio
     const participante = await this.participanteRepository.findOne({
       where: { id: participanteId, usuario_id: usuarioId },
     });
@@ -187,12 +187,12 @@ export class GrupoMaiorService {
       return false;
     }
 
-    // Verificar se já existe
+    // Verificar se jÃ¡ existe
     const existe = await this.grupoMaiorParticipanteRepository.findOne({
       where: { grupo_maior_id: grupoMaiorId, participante_id: participanteId },
     });
     if (existe) {
-      return true; // Já existe, retornar sucesso
+      return true; // JÃ¡ existe, retornar sucesso
     }
 
     const grupoMaiorParticipante = this.grupoMaiorParticipanteRepository.create({
@@ -218,7 +218,7 @@ export class GrupoMaiorService {
     return true;
   }
 
-  // Método para obter todos os participantes de um grupo maior (incluindo dos grupos menores)
+  // MÃ©todo para obter todos os participantes de um grupo maior (incluindo dos grupos menores)
   static async obterTodosParticipantes(grupoMaiorId: number, usuarioId: number): Promise<number[]> {
     const grupoMaior = await this.findById(grupoMaiorId, usuarioId);
     if (!grupoMaior) {

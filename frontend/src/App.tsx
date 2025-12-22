@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import PaywallModal from './components/PaywallModal';
 import { isPro } from './utils/plan';
 import { track } from './services/analytics';
+import { FaBars, FaTimes } from 'react-icons/fa';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Cadastro from './pages/Cadastro';
@@ -16,7 +17,6 @@ import Despesas from './pages/Despesas';
 import Participacoes from './pages/Participacoes';
 import TotaisGrupos from './pages/TotaisGrupos';
 import Relatorio from './pages/Relatorio';
-import GruposMaiores from './pages/GruposMaiores';
 import Conta from './pages/Conta';
 
 function Navbar() {
@@ -25,6 +25,7 @@ function Navbar() {
   const { usuario, logout } = useAuth();
   const [logoSrc, setLogoSrc] = React.useState<string | undefined>(undefined);
   const [isPaywallOpen, setIsPaywallOpen] = React.useState(false);
+  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
   React.useEffect(() => {
     // Tentar carregar o logo de forma assíncrona
@@ -43,7 +44,7 @@ function Navbar() {
     navigate('/login');
   };
 
-  // Não mostrar navbar na tela de login, cadastro ou home
+  // Não mostrar navbar na tela de login,   cadastro ou home
   if (location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/home' || location.pathname === '/') {
     return null;
   }
@@ -55,56 +56,77 @@ function Navbar() {
           {logoSrc && <img src={logoSrc} alt="Logo Racha Contas" className="navbar-logo" />}
           <h1>Rachid</h1>
         </div>
-        <ul className="navbar-nav">
-          <li>
-            <Link to="/participantes" className={isActive('/participantes') ? 'active' : ''}>
-              Participantes
-            </Link>
-          </li>
-          <li>
-            <Link to="/eventos" className={isActive('/eventos') ? 'active' : ''}>
-              Meus eventos
-            </Link>
-          </li>
-          <li>
-            <Link to="/grupos-maiores" className={isActive('/grupos-maiores') ? 'active' : ''}>
-              Grupos
-            </Link>
-          </li>
-          <li>
-            <Link to="/novo-evento" className={isActive('/novo-evento') ? 'active' : ''}>
-              Criar evento
-            </Link>
-          </li>
-          <li>
-            <a
-              href="/relatorio"
-              className={isActive('/relatorio') ? 'active' : ''}
-              onClick={(e) => {
-                if (!isPro(usuario)) {
-                  e.preventDefault();
-                  track('paywall_view', { feature: 'relatorios', source: 'navbar_relatorios' });
-                  setIsPaywallOpen(true);
-                  return;
-                }
-                navigate('/relatorio');
-              }}
-              style={{ cursor: 'pointer' }}
-            >
-              Relatórios {isPro(usuario) ? '' : '(Pro)'}
-            </a>
-          </li>
-          <li>
-            <Link to="/conta" className={isActive('/conta') ? 'active' : ''}>
-              Conta
-            </Link>
-          </li>
-        </ul>
-        <div className="navbar-user">
-          <span className="user-name">{usuario?.nome}</span>
-          <button onClick={handleLogout} className="btn btn-secondary" style={{ marginLeft: '10px' }}>
-            Sair
-          </button>
+        <button 
+          className="navbar-toggle"
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+          aria-label="Toggle menu"
+        >
+          {isMenuOpen ? <FaTimes /> : <FaBars />}
+        </button>
+        <div className={`navbar-menu ${isMenuOpen ? 'navbar-menu-open' : ''}`}>
+          <ul className="navbar-nav">
+            <li>
+              <Link 
+                to="/participantes" 
+                className={isActive('/participantes') ? 'active' : ''}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Participantes
+              </Link>
+            </li>
+            <li>
+              <Link 
+                to="/eventos" 
+                className={isActive('/eventos') ? 'active' : ''}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Meus eventos
+              </Link>
+            </li>
+            <li>
+              <Link 
+                to="/novo-evento" 
+                className={isActive('/novo-evento') ? 'active' : ''}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Criar evento
+              </Link>
+            </li>
+            <li>
+              <a
+                href="/relatorio"
+                className={isActive('/relatorio') ? 'active' : ''}
+                onClick={(e) => {
+                  setIsMenuOpen(false);
+                  if (!isPro(usuario)) {
+                    e.preventDefault();
+                    track('paywall_view', { feature: 'relatorios', source: 'navbar_relatorios' });
+                    setIsPaywallOpen(true);
+                    return;
+                  }
+                  navigate('/relatorio');
+                }}
+                style={{ cursor: 'pointer' }}
+              >
+                Relatórios {isPro(usuario) ? '' : '(Pro)'}
+              </a>
+            </li>
+            <li>
+              <Link 
+                to="/conta" 
+                className={isActive('/conta') ? 'active' : ''}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Conta
+              </Link>
+            </li>
+          </ul>
+          <div className="navbar-user">
+            <span className="user-name">{usuario?.nome}</span>
+            <button onClick={handleLogout} className="btn btn-secondary" style={{ marginLeft: '10px' }}>
+              Sair
+            </button>
+          </div>
         </div>
       </div>
 
@@ -208,14 +230,6 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Relatorio />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/grupos-maiores"
-          element={
-            <ProtectedRoute>
-              <GruposMaiores />
             </ProtectedRoute>
           }
         />

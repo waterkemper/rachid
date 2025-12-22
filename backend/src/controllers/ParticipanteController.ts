@@ -19,7 +19,7 @@ export class ParticipanteController {
       const usuarioId = req.usuarioId!;
       const participante = await ParticipanteService.findById(id, usuarioId);
       if (!participante) {
-        return res.status(404).json({ error: 'Participante n„o encontrado' });
+        return res.status(404).json({ error: 'Participante n√£o encontrado' });
       }
       res.json(participante);
     } catch (error) {
@@ -29,12 +29,12 @@ export class ParticipanteController {
 
   static async create(req: AuthRequest, res: Response) {
     try {
-      const { nome, email } = req.body;
+      const { nome, email, chavePix } = req.body;
       const usuarioId = req.usuarioId!;
       if (!nome) {
-        return res.status(400).json({ error: 'Nome È obrigatÛrio' });
+        return res.status(400).json({ error: 'Nome √© obrigat√≥rio' });
       }
-      const participante = await ParticipanteService.create({ nome, email, usuario_id: usuarioId });
+      const participante = await ParticipanteService.create({ nome, email, chavePix, usuario_id: usuarioId });
       res.status(201).json(participante);
     } catch (error) {
       res.status(500).json({ error: 'Erro ao criar participante' });
@@ -44,11 +44,11 @@ export class ParticipanteController {
   static async update(req: AuthRequest, res: Response) {
     try {
       const id = parseInt(req.params.id);
-      const { nome, email } = req.body;
+      const { nome, email, chavePix } = req.body;
       const usuarioId = req.usuarioId!;
-      const participante = await ParticipanteService.update(id, usuarioId, { nome, email });
+      const participante = await ParticipanteService.update(id, usuarioId, { nome, email, chavePix });
       if (!participante) {
-        return res.status(404).json({ error: 'Participante n„o encontrado' });
+        return res.status(404).json({ error: 'Participante n√£o encontrado' });
       }
       res.json(participante);
     } catch (error) {
@@ -62,7 +62,7 @@ export class ParticipanteController {
       const usuarioId = req.usuarioId!;
       const sucesso = await ParticipanteService.delete(id, usuarioId);
       if (!sucesso) {
-        return res.status(404).json({ error: 'Participante n„o encontrado' });
+        return res.status(404).json({ error: 'Participante n√£o encontrado' });
       }
       res.status(204).send();
     } catch (error) {

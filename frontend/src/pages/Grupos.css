@@ -1,0 +1,255 @@
+/* Mobile-first responsive table */
+.grupos-table-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.4) rgba(15, 23, 42, 0.08);
+  /* Force horizontal scrollbar to always be visible */
+  -ms-overflow-style: scrollbar;
+  scrollbar-gutter: stable;
+}
+
+.grupos-table-wrapper::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  -webkit-appearance: none;
+}
+
+.grupos-table-wrapper::-webkit-scrollbar:horizontal {
+  height: 10px;
+  display: block !important;
+}
+
+.grupos-table-wrapper::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
+}
+
+.grupos-table-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.5);
+  border-radius: 10px;
+  border: 2px solid rgba(15, 23, 42, 0.06);
+}
+
+.grupos-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.7);
+}
+
+.grupos-table-wrapper::-webkit-scrollbar-corner {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.grupos-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* Desktop: allow table to expand */
+@media (min-width: 769px) {
+  .grupos-table {
+    min-width: 600px;
+  }
+}
+
+.grupos-table th,
+.grupos-table td {
+  padding: 10px 8px;
+  white-space: nowrap;
+}
+
+.grupos-table th {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.grupos-table td {
+  font-size: 13px;
+}
+
+.grupos-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  min-width: fit-content;
+}
+
+.grupos-actions button {
+  padding: 6px 10px !important;
+  min-width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.grupos-actions button svg {
+  font-size: 14px;
+}
+
+.grupos-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.grupos-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.grupos-header .btn {
+  white-space: nowrap;
+}
+
+/* Mobile styles - use card layout instead of table */
+.grupos-cards {
+  display: none;
+}
+
+.grupos-card {
+  background: rgba(2, 6, 23, 0.32);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.grupos-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.grupos-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.92);
+  margin: 0;
+  flex: 1;
+  min-width: 120px;
+}
+
+.grupos-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.grupos-card-total {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.grupos-card-total-value {
+  font-weight: 600;
+  font-size: 14px;
+  color: rgba(34, 197, 94, 0.9);
+}
+
+.grupos-card-info-item {
+  display: flex;
+  gap: 8px;
+}
+
+.grupos-card-info-label {
+  font-weight: 600;
+  min-width: 90px;
+}
+
+@media (max-width: 768px) {
+  .grupos-table-wrapper {
+    overflow: visible;
+    display: none; /* Hide table wrapper on mobile */
+  }
+
+  .grupos-table {
+    display: none; /* Hide table on mobile */
+  }
+
+  .grupos-cards {
+    display: block;
+  }
+
+  .grupos-card {
+    padding: 18px;
+    margin-bottom: 18px;
+  }
+
+  .grupos-card-header {
+    flex-direction: column;
+    gap: 16px;
+    padding-bottom: 16px;
+  }
+
+  .grupos-card-title {
+    width: 100%;
+  }
+
+  .grupos-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .grupos-card-info {
+    gap: 12px;
+  }
+
+  .grupos-card-info-item {
+    padding: 4px 0;
+  }
+
+  .grupos-card-total {
+    margin-top: 12px;
+    padding-top: 14px;
+  }
+
+  .grupos-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .grupos-header h2 {
+    font-size: 18px;
+  }
+
+  .grupos-header .btn {
+    width: 100%;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 480px) {
+  .grupos-table {
+    min-width: 650px;
+  }
+
+  .grupos-table th,
+  .grupos-table td {
+    padding: 6px 4px;
+    font-size: 11px;
+  }
+
+  .grupos-actions button {
+    padding: 5px 6px !important;
+    min-width: 28px;
+    height: 28px;
+  }
+
+  .grupos-actions button svg {
+    font-size: 11px;
+  }
+}

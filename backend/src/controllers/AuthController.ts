@@ -16,7 +16,7 @@ export class AuthController {
         return res.status(401).json({ error: 'Email ou senha invÃ¡lidos' });
       }
 
-      // Configurar cookie HTTP-only
+      // Configurar cookie HTTP-only (para web)
       res.cookie('token', resultado.token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -24,7 +24,8 @@ export class AuthController {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
       });
 
-      res.json({ usuario: resultado.usuario });
+      // Retornar token no body também (para mobile)
+      res.json({ usuario: resultado.usuario, token: resultado.token });
     } catch (error) {
       console.error('Erro no login:', error);
       res.status(500).json({ error: 'Erro ao fazer login' });

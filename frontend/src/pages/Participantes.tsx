@@ -7,7 +7,7 @@ const Participantes: React.FC = () => {
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingParticipante, setEditingParticipante] = useState<Participante | null>(null);
-  const [formData, setFormData] = useState({ nome: '', email: '' });
+  const [formData, setFormData] = useState({ nome: '', email: '', chavePix: '' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,10 +31,10 @@ const Participantes: React.FC = () => {
   const handleOpenModal = (participante?: Participante) => {
     if (participante) {
       setEditingParticipante(participante);
-      setFormData({ nome: participante.nome, email: participante.email || '' });
+      setFormData({ nome: participante.nome, email: participante.email || '', chavePix: participante.chavePix || '' });
     } else {
       setEditingParticipante(null);
-      setFormData({ nome: '', email: '' });
+      setFormData({ nome: '', email: '', chavePix: '' });
     }
     setIsModalOpen(true);
   };
@@ -42,7 +42,7 @@ const Participantes: React.FC = () => {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingParticipante(null);
-    setFormData({ nome: '', email: '' });
+    setFormData({ nome: '', email: '', chavePix: '' });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,13 +93,14 @@ const Participantes: React.FC = () => {
             <tr>
               <th>Nome</th>
               <th>Email</th>
+              <th>Chave PIX</th>
               <th>Ações</th>
             </tr>
           </thead>
           <tbody>
             {participantes.length === 0 ? (
               <tr>
-                <td colSpan={3} style={{ textAlign: 'center', padding: '20px' }}>
+                <td colSpan={4} style={{ textAlign: 'center', padding: '20px' }}>
                   Nenhum participante cadastrado
                 </td>
               </tr>
@@ -108,6 +109,7 @@ const Participantes: React.FC = () => {
                 <tr key={participante.id}>
                   <td>{participante.nome}</td>
                   <td>{participante.email || '-'}</td>
+                  <td>{participante.chavePix || '-'}</td>
                   <td>
                     <button
                       className="btn btn-secondary"
@@ -153,6 +155,15 @@ const Participantes: React.FC = () => {
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             />
           </div>
+          <div className="form-group">
+            <label>Chave PIX</label>
+            <input
+              type="text"
+              value={formData.chavePix}
+              onChange={(e) => setFormData({ ...formData, chavePix: e.target.value })}
+              placeholder="CPF, e-mail, telefone ou chave aleatória"
+            />
+          </div>
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
             <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
               Cancelar
@@ -168,4 +179,3 @@ const Participantes: React.FC = () => {
 };
 
 export default Participantes;
-

@@ -10,7 +10,7 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
     // Tentar obter token do cookie primeiro
     let token = req.cookies?.token;
 
-    // Se n„o tiver no cookie, tentar no header Authorization
+    // Se n√£o tiver no cookie, tentar no header Authorization
     if (!token && req.headers.authorization) {
       const authHeader = req.headers.authorization;
       if (authHeader.startsWith('Bearer ')) {
@@ -19,7 +19,7 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
     }
 
     if (!token) {
-      return res.status(401).json({ error: 'Token n„o fornecido' });
+      return res.status(401).json({ error: 'Token n√£o fornecido' });
     }
 
     try {
@@ -27,10 +27,10 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
       req.usuarioId = payload.usuarioId;
       next();
     } catch (error) {
-      return res.status(401).json({ error: 'Token inv·lido' });
+      return res.status(401).json({ error: 'Token inv√°lido' });
     }
   } catch (error) {
-    return res.status(401).json({ error: 'Erro na autenticaÁ„o' });
+    return res.status(401).json({ error: 'Erro na autentica√ß√£o' });
   }
 }
 
