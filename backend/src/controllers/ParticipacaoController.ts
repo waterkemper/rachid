@@ -10,18 +10,18 @@ export class ParticipacaoController {
       const usuarioId = req.usuarioId!;
 
       if (!participanteId) {
-        return res.status(400).json({ error: 'ID do participante é obrigatório' });
+        return res.status(400).json({ error: 'ID do participante Ã© obrigatÃ³rio' });
       }
 
       const participacao = await ParticipacaoService.toggleParticipacao(despesaId, participanteId, usuarioId);
       
       if (participacao) {
-        res.json({ message: 'Participação adicionada', participacao });
+        res.json({ message: 'ParticipaÃ§Ã£o adicionada', participacao });
       } else {
-        res.json({ message: 'Participação removida' });
+        res.json({ message: 'ParticipaÃ§Ã£o removida' });
       }
     } catch (error: any) {
-      res.status(500).json({ error: error.message || 'Erro ao atualizar participação' });
+      res.status(500).json({ error: error.message || 'Erro ao atualizar participaÃ§Ã£o' });
     }
   }
 
