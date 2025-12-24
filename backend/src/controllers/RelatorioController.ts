@@ -33,7 +33,7 @@ export class RelatorioController {
       const sugestoes = CalculadoraService.otimizarPagamentos(saldos);
       res.json(sugestoes);
     } catch (error) {
-      res.status(500).json({ error: 'Erro ao calcular sugestıes de pagamento' });
+      res.status(500).json({ error: 'Erro ao calcular sugest√µes de pagamento' });
     }
   }
 
@@ -45,7 +45,7 @@ export class RelatorioController {
       const sugestoes = CalculadoraService.otimizarPagamentosEntreGrupos(saldosGrupos);
       res.json(sugestoes);
     } catch (error) {
-      res.status(500).json({ error: 'Erro ao calcular sugestıes de pagamento entre grupos' });
+      res.status(500).json({ error: 'Erro ao calcular sugest√µes de pagamento entre grupos' });
     }
   }
 }
