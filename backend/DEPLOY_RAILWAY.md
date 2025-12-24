@@ -82,3 +82,18 @@ curl https://api.orachid.com.br/api/health
 - As variáveis de ambiente devem ser configuradas **apenas no Railway**
 - O arquivo `ENV_VARIABLES.md` contém a documentação completa
 
+## 🔧 Troubleshooting
+
+### Erro: `EBUSY: resource busy or locked`
+
+Se você encontrar este erro durante o build:
+1. O `nixpacks.toml` já está configurado para usar `npm install` ao invés de `npm ci`
+2. Limpe o cache do Railway: Settings → Clear Build Cache
+3. Tente fazer deploy novamente
+
+### Erro: `tsc: Permission denied`
+
+Se você encontrar este erro:
+1. Verifique se `typescript` está em `dependencies` (não `devDependencies`)
+2. O build script já usa `npx tsc` para garantir execução correta
+
