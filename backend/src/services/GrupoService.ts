@@ -1,6 +1,9 @@
 import { AppDataSource } from '../database/data-source';
 import { Grupo } from '../entities/Grupo';
 import { ParticipanteGrupo } from '../entities/ParticipanteGrupo';
+import { GrupoParticipantesEvento } from '../entities/GrupoParticipantesEvento';
+import { Despesa } from '../entities/Despesa';
+import { ParticipanteGrupoEvento } from '../entities/ParticipanteGrupoEvento';
 
 export class GrupoService {
   private static grupoRepository = AppDataSource.getRepository(Grupo);
@@ -85,14 +88,82 @@ export class GrupoService {
     const grupo = await this.findById(grupoId, usuarioId);
     if (!grupo) return false;
 
+    // Remover participante do evento
     const result = await this.participanteGrupoRepository.delete({
       grupo_id: grupoId,
       participante_id: participanteId,
     });
-    return (result.affected ?? 0) > 0;
+    
+    if ((result.affected ?? 0) > 0) {
+      // Remover também de todos os sub-grupos vinculados ao evento
+      const grupoParticipantesRepository = AppDataSource.getRepository(GrupoParticipantesEvento);
+      const participanteGrupoEventoRepository = AppDataSource.getRepository(ParticipanteGrupoEvento);
+      
+      // Buscar todos os sub-grupos do evento
+      const subGrupos = await grupoParticipantesRepository.find({
+        where: { grupo_id: grupoId },
+      });
+      
+      // Remover o participante de cada sub-grupo
+      for (const subGrupo of subGrupos) {
+        await participanteGrupoEventoRepository.delete({
+          grupo_participantes_evento_id: subGrupo.id,
+          participante_id: participanteId,
+        });
+      }
+      
+      return true;
+    }
+    
+    return false;
   }
 
   static async delete(id: number, usuarioId: number): Promise<boolean> {
+    // Verificar se o grupo pertence ao usuário
+    const grupo = await this.findById(id, usuarioId);
+    if (!grupo) {
+      return false;
+    }
+
+    // Verificar participantes diretos
+    const participantesDiretos = await this.participanteGrupoRepository.count({
+      where: { grupo_id: id },
+    });
+
+    // Verificar sub-grupos (GrupoParticipantesEvento)
+    const grupoParticipantesRepository = AppDataSource.getRepository(GrupoParticipantesEvento);
+    const subGrupos = await grupoParticipantesRepository.find({
+      where: { grupo_id: id },
+      relations: ['participantes'],
+    });
+    const numSubGrupos = subGrupos.length;
+    const participantesEmSubGrupos = subGrupos.reduce((total, subGrupo) => {
+      return total + (subGrupo.participantes?.length || 0);
+    }, 0);
+
+    // Verificar despesas
+    const despesaRepository = AppDataSource.getRepository(Despesa);
+    const numDespesas = await despesaRepository.count({
+      where: { grupo_id: id },
+    });
+
+    // Se houver qualquer associação, lançar erro específico
+    if (participantesDiretos > 0 || participantesEmSubGrupos > 0 || numDespesas > 0) {
+      const mensagens: string[] = [];
+      if (participantesDiretos > 0) {
+        mensagens.push(`${participantesDiretos} participante(s) direto(s)`);
+      }
+      if (participantesEmSubGrupos > 0) {
+        mensagens.push(`${participantesEmSubGrupos} participante(s) em ${numSubGrupos} sub-grupo(s)`);
+      }
+      if (numDespesas > 0) {
+        mensagens.push(`${numDespesas} despesa(s)`);
+      }
+      const mensagemCompleta = `Não é possível excluir este evento pois ele possui: ${mensagens.join(', ')}. Remova primeiro os participantes e despesas antes de excluir o evento.`;
+      throw new Error(mensagemCompleta);
+    }
+
+    // Se não houver associações, deletar
     const result = await this.grupoRepository.delete({ id, usuario_id: usuarioId });
     return (result.affected ?? 0) > 0;
   }

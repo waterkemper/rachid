@@ -3,6 +3,7 @@ export interface Participante {
   nome: string;
   email?: string;
   chavePix?: string;
+  telefone?: string;
   criadoEm: string;
 }
 

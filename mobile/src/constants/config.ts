@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 
 // Para desenvolvimento em dispositivo físico/emulador, use o IP da sua máquina
-// Seu IP atual: 192.168.15.25 (descoberto via ipconfig)
+// Seu IP atual: 192.168.15.9 (descoberto via ipconfig)
 // Se estiver usando simulador iOS no mesmo Mac, pode usar localhost
 // Para Android ou dispositivo físico, use o IP da máquina
 export const API_URL = __DEV__ 

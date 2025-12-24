@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, FlatList, Alert } from 'react-native';
-import { Text, Card, TextInput, Button, Portal, Modal, ActivityIndicator, Chip, Searchbar } from 'react-native-paper';
-import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
+import { View, StyleSheet, ScrollView, FlatList, Alert, Platform, TouchableOpacity } from 'react-native';
+import { Text, Card, TextInput, Button, Portal, Modal, ActivityIndicator, Chip, Searchbar, Checkbox, Divider } from 'react-native-paper';
+import { RouteProp, useRoute, useNavigation, CommonActions, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { grupoApi, participanteApi, grupoParticipantesApi } from '../services/api';
 import { Participante, Grupo, GrupoParticipantesEvento } from '../../shared/types';
+import * as Contacts from 'expo-contacts';
 
 type AdicionarParticipantesEventoScreenRouteProp = RouteProp<RootStackParamList, 'AdicionarParticipantesEvento'>;
 type AdicionarParticipantesEventoScreenNavigationProp = StackNavigationProp<RootStackParamList>;
@@ -33,12 +34,28 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  
+  // Estados para importação de contatos
+  const [isModalContatosOpen, setIsModalContatosOpen] = useState(false);
+  const [contatos, setContatos] = useState<Contacts.Contact[]>([]);
+  const [contatosSelecionados, setContatosSelecionados] = useState<string[]>([]);
+  const [carregandoContatos, setCarregandoContatos] = useState(false);
+  const [buscaContatos, setBuscaContatos] = useState('');
 
   useEffect(() => {
     if (eventoId) {
       loadData();
     }
   }, [eventoId]);
+
+  // Recarregar dados quando a tela recebe foco (ao voltar de outras telas)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (eventoId) {
+        loadData();
+      }
+    }, [eventoId])
+  );
 
   const loadData = async () => {
     if (!eventoId) return;
@@ -112,7 +129,22 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
 
     try {
       await grupoApi.removerParticipante(eventoId, participanteId);
-      setParticipantesNoEvento(participantesNoEvento.filter(p => p.id !== participanteId));
+      // Atualizar apenas o estado local sem recarregar tudo para evitar scroll para o topo
+      setParticipantesNoEvento(prev => prev.filter(p => p.id !== participanteId));
+      
+      // Também remover de famílias se estiver em alguma
+      setFamiliasEvento(prev => prev.map(familia => {
+        if (familia.participantes) {
+          const participantesAtualizados = familia.participantes.filter(
+            p => p.participante_id !== participanteId
+          );
+          return {
+            ...familia,
+            participantes: participantesAtualizados
+          };
+        }
+        return familia;
+      }));
     } catch (error) {
       console.error('Erro ao remover participante:', error);
       Alert.alert('Erro', 'Não foi possível remover o participante');
@@ -167,8 +199,29 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
     }
   };
 
-  const abrirModalFamilia = (familia?: GrupoParticipantesEvento) => {
+  const abrirModalFamilia = async (familia?: GrupoParticipantesEvento) => {
     setErro('');
+    
+    // Recarregar participantes do evento para garantir que temos a lista mais atualizada
+    if (eventoId) {
+      try {
+        // Recarregar participantes disponíveis primeiro
+        const participantesData = await participanteApi.getAll();
+        setParticipantesDisponiveis(participantesData);
+        
+        // Depois recarregar o evento para pegar os participantes do evento
+        const eventoAtualizado = await grupoApi.getById(eventoId);
+        if (eventoAtualizado.participantes) {
+          const participantesIds = eventoAtualizado.participantes.map(p => p.participante_id);
+          const participantesAtualizados = participantesData.filter(p => participantesIds.includes(p.id));
+          setParticipantesNoEvento(participantesAtualizados);
+        }
+      } catch (error) {
+        console.error('Erro ao recarregar participantes:', error);
+        // Se der erro, usar o estado atual
+      }
+    }
+    
     if (familia) {
       setFamiliaEditando(familia);
       setFamiliaNome(familia.nome || '');
@@ -263,13 +316,168 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
      p.email?.toLowerCase().includes(busca.toLowerCase()))
   );
 
+  const abrirModalContatos = async () => {
+    try {
+      // Solicitar permissão para acessar contatos
+      const { status } = await Contacts.requestPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permissão Necessária',
+          'É necessário permitir o acesso aos contatos para importá-los.'
+        );
+        return;
+      }
+
+      setIsModalContatosOpen(true);
+      setCarregandoContatos(true);
+      
+      // Carregar contatos do dispositivo
+      const { data } = await Contacts.getContactsAsync({
+        fields: [
+          Contacts.Fields.Name,
+          Contacts.Fields.Emails,
+          Contacts.Fields.PhoneNumbers,
+        ],
+      });
+
+      // Filtrar apenas contatos que têm nome
+      const contatosComNome = data.filter(contact => contact.name);
+      setContatos(contatosComNome);
+      setContatosSelecionados([]);
+      setBuscaContatos('');
+    } catch (error) {
+      Alert.alert('Erro', 'Não foi possível carregar os contatos');
+      console.error('Erro ao carregar contatos:', error);
+    } finally {
+      setCarregandoContatos(false);
+    }
+  };
+
+  const toggleContatoSelecionado = (contactId: string) => {
+    setContatosSelecionados(prev =>
+      prev.includes(contactId)
+        ? prev.filter(id => id !== contactId)
+        : [...prev, contactId]
+    );
+  };
+
+  const importarContatosSelecionados = async () => {
+    if (contatosSelecionados.length === 0) {
+      Alert.alert('Atenção', 'Selecione pelo menos um contato para importar');
+      return;
+    }
+
+    try {
+      setSalvando(true);
+      setErro('');
+
+      const contatosParaImportar = contatos.filter(c => contatosSelecionados.includes(c.id || ''));
+      let sucessos = 0;
+      let erros = 0;
+
+      for (const contato of contatosParaImportar) {
+        try {
+          // Extrair email (primeiro email disponível)
+          const email = contato.emails?.[0]?.email || '';
+          
+          // Criar participante
+          const novoParticipante = await participanteApi.create({
+            nome: contato.name || 'Sem nome',
+            email: email || undefined,
+            chavePix: '',
+          });
+
+          // Adicionar ao evento
+          await adicionarParticipanteAoEvento(novoParticipante.id, novoParticipante);
+          sucessos++;
+        } catch (error) {
+          // Verificar se é erro de duplicação (participante já existe)
+          const errorMessage = (error as any)?.response?.data?.error || '';
+          if (errorMessage.includes('já existe') || errorMessage.includes('already exists')) {
+            // Tentar encontrar o participante existente e adicionar ao evento
+            try {
+              const participantes = await participanteApi.getAll();
+              const participanteExistente = participantes.find(
+                p => p.nome.toLowerCase() === (contato.name || '').toLowerCase() ||
+                     p.email?.toLowerCase() === contato.emails?.[0]?.email?.toLowerCase()
+              );
+              
+              if (participanteExistente) {
+                await adicionarParticipanteAoEvento(participanteExistente.id, participanteExistente);
+                sucessos++;
+              } else {
+                erros++;
+              }
+            } catch {
+              erros++;
+            }
+          } else {
+            erros++;
+          }
+        }
+      }
+
+      // Recarregar dados
+      await loadData();
+
+      // Mostrar resultado
+      if (erros === 0) {
+        Alert.alert('Sucesso', `${sucessos} contato(s) importado(s) com sucesso!`);
+      } else {
+        Alert.alert(
+          'Importação concluída',
+          `${sucessos} contato(s) importado(s). ${erros} contato(s) não puderam ser importados.`
+        );
+      }
+
+      setIsModalContatosOpen(false);
+      setContatosSelecionados([]);
+      setContatos([]);
+    } catch (error) {
+      Alert.alert('Erro', 'Erro ao importar contatos');
+      console.error('Erro ao importar contatos:', error);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const contatosFiltrados = contatos.filter(contato =>
+    contato.name?.toLowerCase().includes(buscaContatos.toLowerCase()) ||
+    contato.emails?.[0]?.email?.toLowerCase().includes(buscaContatos.toLowerCase())
+  );
+
   const handleProximo = () => {
     if (participantesNoEvento.length === 0) {
       setErro('Adicione pelo menos um participante ao evento');
       return;
     }
-    // Navegar de volta para a tela principal (despesas já estão na aba principal)
-    navigation.goBack();
+    
+    // Navegar para Main e depois para Despesas com o eventoId
+    // Usar reset para limpar o stack e ir direto para Main -> Despesas
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [
+          {
+            name: 'Main',
+            state: {
+              routes: [
+                { name: 'Eventos' },
+                { name: 'Participantes' },
+                { 
+                  name: 'Despesas', 
+                  params: { eventoId: eventoId } 
+                },
+                { name: 'Relatorios' },
+                { name: 'Conta' },
+              ],
+              index: 2, // Índice da tab Despesas
+            },
+          },
+        ],
+      })
+    );
   };
 
   if (carregando) {
@@ -301,6 +509,9 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
                 onChangeText={setBusca}
                 value={busca}
                 style={styles.searchbar}
+                inputStyle={styles.searchbarInput}
+                iconColor="rgba(255, 255, 255, 0.7)"
+                placeholderTextColor="rgba(255, 255, 255, 0.5)"
               />
 
               {participantesFiltrados.length > 0 && (
@@ -317,13 +528,24 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
                 </View>
               )}
 
-              <Button
-                mode="outlined"
-                onPress={() => setIsModalNovoParticipanteOpen(true)}
-                style={styles.button}
-              >
-                + Adicionar pessoa
-              </Button>
+              <View style={styles.buttonRow}>
+                <Button
+                  mode="outlined"
+                  onPress={() => setIsModalNovoParticipanteOpen(true)}
+                  style={[styles.button, styles.buttonHalf]}
+                  icon="account-plus"
+                >
+                  Adicionar pessoa
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={abrirModalContatos}
+                  style={[styles.button, styles.buttonHalf]}
+                  icon="contacts"
+                >
+                  Importar contatos
+                </Button>
+              </View>
             </Card.Content>
           </Card>
 
@@ -371,6 +593,7 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
                       key={participante.id}
                       onClose={() => removerParticipanteDoEvento(participante.id)}
                       style={styles.chipAdded}
+                      textStyle={styles.chipAddedText}
                     >
                       {participante.nome} {participante.email && `(${participante.email})`}
                     </Chip>
@@ -383,10 +606,17 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
           <Card style={styles.section}>
             <Card.Content>
               <View style={styles.sectionHeader}>
-                <Text variant="titleMedium" style={styles.sectionTitle}>
-                  Sub grupos / grupos do evento (opcional)
-                </Text>
-                <Button mode="outlined" onPress={() => abrirModalFamilia()} compact>
+                <View style={styles.sectionTitleContainer}>
+                  <Text variant="titleMedium" style={styles.sectionTitle}>
+                    Sub grupos / grupos do evento (opcional)
+                  </Text>
+                </View>
+                <Button 
+                  mode="outlined" 
+                  onPress={() => abrirModalFamilia()} 
+                  compact
+                  style={styles.buttonCriarSubgrupo}
+                >
                   + Criar sub grupo
                 </Button>
               </View>
@@ -446,7 +676,6 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
             <Button
               mode="contained"
               onPress={handleProximo}
-              disabled={participantesNoEvento.length === 0}
               style={styles.actionButton}
             >
               Próximo
@@ -455,13 +684,126 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
         </Card.Content>
       </Card>
 
+      {/* Modal de Seleção de Contatos */}
+      <Portal>
+        <Modal
+          visible={isModalContatosOpen}
+          onDismiss={() => setIsModalContatosOpen(false)}
+          contentContainerStyle={styles.modalContentContatos}
+        >
+          <Card style={styles.modalCardContatos}>
+            <Card.Title 
+              title="Importar Contatos" 
+              subtitle={`${contatosSelecionados.length} selecionado(s)`}
+              right={(props) => (
+                <Button
+                  {...props}
+                  icon="close"
+                  onPress={() => {
+                    setIsModalContatosOpen(false);
+                    setContatosSelecionados([]);
+                    setContatos([]);
+                  }}
+                  mode="text"
+                  compact
+                />
+              )}
+            />
+            <Card.Content>
+              <Searchbar
+                placeholder="Buscar contato..."
+                onChangeText={setBuscaContatos}
+                value={buscaContatos}
+                style={styles.searchbar}
+              />
+
+              {carregandoContatos ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" />
+                  <Text style={styles.loadingText}>Carregando contatos...</Text>
+                </View>
+              ) : contatosFiltrados.length === 0 ? (
+                <Text style={styles.emptyText}>Nenhum contato encontrado</Text>
+              ) : (
+                <ScrollView 
+                  style={styles.contatosListScroll} 
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={true}
+                >
+                  {contatosFiltrados.map((contato) => {
+                    const contatoId = contato.id || '';
+                    const isSelected = contatosSelecionados.includes(contatoId);
+                    const email = contato.emails?.[0]?.email || '';
+                    const telefone = contato.phoneNumbers?.[0]?.number || '';
+
+                    return (
+                      <View key={contatoId}>
+                        <TouchableOpacity
+                          style={styles.contatoItem}
+                          onPress={() => toggleContatoSelecionado(contatoId)}
+                          activeOpacity={0.7}
+                        >
+                          <Checkbox
+                            status={isSelected ? 'checked' : 'unchecked'}
+                            onPress={() => toggleContatoSelecionado(contatoId)}
+                          />
+                          <View style={styles.contatoInfo}>
+                            <Text variant="bodyLarge" style={styles.contatoNome}>
+                              {contato.name || 'Sem nome'}
+                            </Text>
+                            {email ? (
+                              <Text variant="bodySmall" style={styles.contatoDetalhe}>
+                                📧 {email}
+                              </Text>
+                            ) : null}
+                            {telefone ? (
+                              <Text variant="bodySmall" style={styles.contatoDetalhe}>
+                                📱 {telefone}
+                              </Text>
+                            ) : null}
+                          </View>
+                        </TouchableOpacity>
+                        <Divider />
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              )}
+
+              <View style={styles.modalActionsContatos}>
+                <Button
+                  mode="outlined"
+                  onPress={() => {
+                    setIsModalContatosOpen(false);
+                    setContatosSelecionados([]);
+                    setContatos([]);
+                  }}
+                  disabled={salvando}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={importarContatosSelecionados}
+                  disabled={contatosSelecionados.length === 0 || salvando}
+                  loading={salvando}
+                >
+                  Importar ({contatosSelecionados.length})
+                </Button>
+              </View>
+            </Card.Content>
+          </Card>
+        </Modal>
+      </Portal>
+
       <Portal>
         <Modal
           visible={isModalNovoParticipanteOpen}
           onDismiss={() => setIsModalNovoParticipanteOpen(false)}
           contentContainerStyle={styles.modalContent}
+          theme={{ colors: { backdrop: 'rgba(0, 0, 0, 0.7)' } }}
         >
-          <Card>
+          <Card style={styles.modalCard}>
             <Card.Title title="Novo Participante" />
             <Card.Content>
               {erro ? <Text style={styles.error}>{erro}</Text> : null}
@@ -521,8 +863,9 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
           visible={isModalFamiliaOpen}
           onDismiss={() => setIsModalFamiliaOpen(false)}
           contentContainerStyle={styles.modalContent}
+          theme={{ colors: { backdrop: 'rgba(0, 0, 0, 0.7)' } }}
         >
-          <Card>
+          <Card style={styles.modalCard}>
             <Card.Title title={familiaEditando ? 'Editar sub grupo' : 'Criar sub grupo'} />
             <Card.Content>
               {erro ? <Text style={styles.error}>{erro}</Text> : null}
@@ -602,37 +945,53 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   breadcrumb: {
-    color: '#666',
+    color: 'rgba(148, 163, 184, 0.55)',
     marginBottom: 8,
   },
   title: {
     fontWeight: 'bold',
     marginBottom: 4,
+    color: 'rgba(255, 255, 255, 0.92)',
   },
   subtitle: {
-    color: '#666',
+    color: 'rgba(226, 232, 240, 0.86)',
     marginBottom: 24,
   },
   section: {
     marginBottom: 16,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
   sectionTitle: {
     fontWeight: 'bold',
     marginBottom: 12,
+    color: 'rgba(255, 255, 255, 0.92)',
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  sectionTitleContainer: {
+    flex: 1,
+    minWidth: 200,
+  },
+  buttonCriarSubgrupo: {
+    flexShrink: 0,
   },
   helpText: {
-    color: '#666',
+    color: 'rgba(226, 232, 240, 0.86)',
     marginBottom: 12,
   },
   searchbar: {
     marginBottom: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    elevation: 0,
+  },
+  searchbarInput: {
+    color: 'rgba(255, 255, 255, 0.92)',
   },
   listaContainer: {
     flexDirection: 'row',
@@ -647,7 +1006,10 @@ const styles = StyleSheet.create({
   chipAdded: {
     marginRight: 8,
     marginBottom: 8,
-    backgroundColor: '#e3f2fd',
+    backgroundColor: '#6366f1',
+  },
+  chipAddedText: {
+    color: '#ffffff',
   },
   selectContainer: {
     flexDirection: 'row',
@@ -662,7 +1024,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   emptyText: {
-    color: '#666',
+    color: 'rgba(148, 163, 184, 0.55)',
     fontStyle: 'italic',
     textAlign: 'center',
     padding: 20,
@@ -672,10 +1034,10 @@ const styles = StyleSheet.create({
   },
   familiaCard: {
     marginBottom: 12,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
   familiaParticipantes: {
-    color: '#666',
+    color: 'rgba(226, 232, 240, 0.86)',
     marginTop: 4,
     marginBottom: 8,
   },
@@ -695,6 +1057,13 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     padding: 20,
+    maxHeight: '85%',
+    marginHorizontal: 20,
+    backgroundColor: '#0b1220',
+    borderRadius: 18,
+  },
+  modalCard: {
+    backgroundColor: '#0b1220',
   },
   input: {
     marginBottom: 16,
@@ -709,9 +1078,10 @@ const styles = StyleSheet.create({
     maxHeight: 200,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(148, 163, 184, 0.16)',
     borderRadius: 8,
     padding: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
   checkboxChip: {
     marginRight: 8,
@@ -721,6 +1091,64 @@ const styles = StyleSheet.create({
     color: '#c62828',
     marginBottom: 16,
     textAlign: 'center',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  buttonHalf: {
+    flex: 1,
+  },
+  modalContentContatos: {
+    padding: 20,
+    maxHeight: '85%',
+    marginHorizontal: 20,
+    backgroundColor: '#0b1220',
+    borderRadius: 18,
+  },
+  modalCardContatos: {
+    backgroundColor: '#0b1220',
+  },
+  contatosListScroll: {
+    maxHeight: 350,
+    marginVertical: 16,
+  },
+  contatoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  contatoInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  contatoNome: {
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  contatoDetalhe: {
+    color: '#888',
+    marginTop: 2,
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#888',
+  },
+  modalActionsContatos: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 16,
+    marginBottom: 0,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    gap: 8,
   },
 });
 

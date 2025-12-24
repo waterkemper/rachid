@@ -29,12 +29,12 @@ export class ParticipanteController {
 
   static async create(req: AuthRequest, res: Response) {
     try {
-      const { nome, email, chavePix } = req.body;
+      const { nome, email, chavePix, telefone } = req.body;
       const usuarioId = req.usuarioId!;
       if (!nome) {
         return res.status(400).json({ error: 'Nome é obrigatório' });
       }
-      const participante = await ParticipanteService.create({ nome, email, chavePix, usuario_id: usuarioId });
+      const participante = await ParticipanteService.create({ nome, email, chavePix, telefone, usuario_id: usuarioId });
       res.status(201).json(participante);
     } catch (error) {
       res.status(500).json({ error: 'Erro ao criar participante' });
@@ -44,9 +44,9 @@ export class ParticipanteController {
   static async update(req: AuthRequest, res: Response) {
     try {
       const id = parseInt(req.params.id);
-      const { nome, email, chavePix } = req.body;
+      const { nome, email, chavePix, telefone } = req.body;
       const usuarioId = req.usuarioId!;
-      const participante = await ParticipanteService.update(id, usuarioId, { nome, email, chavePix });
+      const participante = await ParticipanteService.update(id, usuarioId, { nome, email, chavePix, telefone });
       if (!participante) {
         return res.status(404).json({ error: 'Participante não encontrado' });
       }

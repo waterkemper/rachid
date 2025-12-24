@@ -25,6 +25,9 @@ export class Participante {
   @Column('varchar', { nullable: true })
   chavePix?: string;
 
+  @Column('varchar', { nullable: true })
+  telefone?: string;
+
   @CreateDateColumn()
   criadoEm!: Date;
 

@@ -1,0 +1,302 @@
+/* Mobile-first responsive tables */
+.totais-grupos-table-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.4) rgba(15, 23, 42, 0.08);
+  -ms-overflow-style: scrollbar;
+  scrollbar-gutter: stable;
+}
+
+.totais-grupos-table-wrapper::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  -webkit-appearance: none;
+}
+
+.totais-grupos-table-wrapper::-webkit-scrollbar:horizontal {
+  height: 10px;
+  display: block !important;
+}
+
+.totais-grupos-table-wrapper::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
+}
+
+.totais-grupos-table-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.5);
+  border-radius: 10px;
+  border: 2px solid rgba(15, 23, 42, 0.06);
+}
+
+.totais-grupos-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.7);
+}
+
+.totais-grupos-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px;
+}
+
+/* Desktop: show table */
+@media (min-width: 769px) {
+  .totais-grupos-table-wrapper {
+    display: block !important;
+  }
+  
+  .totais-grupos-cards {
+    display: none !important;
+  }
+}
+
+/* Mobile: hide table, show cards */
+@media (max-width: 768px) {
+  .totais-grupos-table-wrapper {
+    display: none !important;
+  }
+  
+  .totais-grupos-cards {
+    display: block !important;
+  }
+}
+
+.totais-grupos-table th,
+.totais-grupos-table td {
+  padding: 10px 8px;
+  white-space: nowrap;
+}
+
+.totais-grupos-table th {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.totais-grupos-table td {
+  font-size: 13px;
+}
+
+/* Mobile Card Styles */
+.totais-grupos-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.totais-grupo-card {
+  background: rgba(2, 6, 23, 0.18);
+  border: 1px solid rgba(148, 163, 184, 0.20);
+  border-radius: 12px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.totais-grupo-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(2, 6, 23, 0.25);
+}
+
+.totais-grupo-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.totais-grupo-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.totais-grupo-card-saldo {
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.totais-grupo-card-saldo.positive {
+  color: rgba(34, 197, 94, 0.9);
+}
+
+.totais-grupo-card-saldo.negative {
+  color: rgba(239, 68, 68, 0.9);
+}
+
+.totais-grupo-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.totais-grupo-card-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.totais-grupo-card-info-label {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.6);
+  font-weight: 500;
+}
+
+.totais-grupo-card-info-item > span:not(.totais-grupo-card-info-label) {
+  font-size: 14px;
+  color: rgba(226, 232, 240, 0.86);
+  word-break: break-word;
+}
+
+/* Tabela de participações - sempre com scroll horizontal no mobile */
+.participacoes-table-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.4) rgba(15, 23, 42, 0.08);
+  max-width: 100%;
+}
+
+.participacoes-table-wrapper::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  -webkit-appearance: none;
+}
+
+.participacoes-table-wrapper::-webkit-scrollbar:horizontal {
+  height: 10px;
+  display: block !important;
+}
+
+.participacoes-table-wrapper::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
+}
+
+.participacoes-table-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.5);
+  border-radius: 10px;
+  border: 2px solid rgba(15, 23, 42, 0.06);
+}
+
+.participacoes-table {
+  min-width: 500px;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.participacoes-table th,
+.participacoes-table td {
+  padding: 8px 6px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.participacoes-table th {
+  font-weight: 600;
+  text-align: center;
+}
+
+.participacoes-table td {
+  text-align: center;
+}
+
+.participacoes-table td:first-child {
+  text-align: left;
+  font-weight: 500;
+}
+
+/* Botões com ícones */
+.btn-icon {
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+}
+
+.btn-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+}
+
+.btn-with-icon svg {
+  font-size: 14px;
+}
+
+/* Header com botões */
+.totais-grupos-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.totais-grupos-header h2 {
+  margin: 0;
+  flex: 1;
+  min-width: 200px;
+}
+
+.grupos-familias-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.grupos-familias-header h3 {
+  margin: 0;
+  flex: 1;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .totais-grupos-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .totais-grupos-header h2 {
+    width: 100%;
+  }
+
+  .grupos-familias-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .grupos-familias-header h3 {
+    width: 100%;
+  }
+
+  .grupos-familias-header .btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .totais-grupo-card-header {
+    flex-direction: column;
+  }
+}
+

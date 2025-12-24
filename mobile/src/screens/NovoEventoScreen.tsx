@@ -50,6 +50,8 @@ const NovoEventoScreen: React.FC = () => {
         data: data,
       });
 
+      setCarregando(false);
+      
       navigation.navigate('AdicionarParticipantesEvento' as any, { 
         eventoId: evento.id,
         grupoMaior: grupoMaiorSelecionado,

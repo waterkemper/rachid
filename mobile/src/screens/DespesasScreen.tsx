@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity } from 'react-native';
 import { FAB, Card, Text, Button, ActivityIndicator, Portal, Modal, TextInput, Menu, Divider, Checkbox } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MainTabParamList } from '../navigation/AppNavigator';
 import { despesaApi, grupoApi, participanteApi } from '../services/api';
 import { Despesa, Grupo, Participante } from '../../shared/types';
 import { menuTheme } from '../theme';
+
+const STORAGE_KEY_SELECTED_EVENT = '@rachid:selectedEventId';
 
 type DespesasScreenRouteProp = RouteProp<MainTabParamList, 'Despesas'>;
 
@@ -37,6 +40,7 @@ const DespesasScreen: React.FC = () => {
   const [menuEventoVisible, setMenuEventoVisible] = useState(false);
   const [menuPagadorVisible, setMenuPagadorVisible] = useState(false);
   const [participantesSelecionados, setParticipantesSelecionados] = useState<number[]>([]);
+  const [participantesExpandido, setParticipantesExpandido] = useState(false);
 
   const formatCurrency = (value: number): string => {
     return new Intl.NumberFormat('pt-BR', {
@@ -58,11 +62,47 @@ const DespesasScreen: React.FC = () => {
   useEffect(() => {
     if (eventoIdFromRoute) {
       setGrupoFiltro(eventoIdFromRoute);
+      // Salvar evento selecionado
+      AsyncStorage.setItem(STORAGE_KEY_SELECTED_EVENT, eventoIdFromRoute.toString());
     }
   }, [eventoIdFromRoute]);
 
+  // Verificar evento selecionado quando a tela receber foco (sincronizar com Relatórios)
+  useFocusEffect(
+    React.useCallback(() => {
+      const loadSelectedEvent = async () => {
+        // Sempre verificar storage quando a tela recebe foco para sincronizar com outras tabs
+        if (grupos.length > 0) {
+          try {
+            const savedEventId = await AsyncStorage.getItem(STORAGE_KEY_SELECTED_EVENT);
+            if (savedEventId) {
+              const eventId = parseInt(savedEventId, 10);
+              // Verificar se o evento ainda existe na lista
+              const eventoExiste = grupos.some(g => g.id === eventId);
+              // Se não há eventoIdFromRoute ou se o evento salvo é diferente do filtro atual, atualizar
+              if (eventoExiste && (!eventoIdFromRoute || eventoIdFromRoute !== eventId)) {
+                if (grupoFiltro !== eventId) {
+                  setGrupoFiltro(eventId);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Erro ao carregar evento selecionado:', error);
+          }
+        }
+      };
+      loadSelectedEvent();
+    }, [eventoIdFromRoute, grupos.length, grupoFiltro])
+  );
+
   useEffect(() => {
     loadDespesas();
+    // Salvar evento selecionado sempre que mudar
+    if (grupoFiltro !== null) {
+      AsyncStorage.setItem(STORAGE_KEY_SELECTED_EVENT, grupoFiltro.toString());
+    } else {
+      AsyncStorage.removeItem(STORAGE_KEY_SELECTED_EVENT);
+    }
   }, [grupoFiltro]);
 
   const loadData = async () => {
@@ -149,6 +189,7 @@ const DespesasScreen: React.FC = () => {
       // Carregar participantes da despesa
       const participantesIds = despesa.participacoes?.map(p => p.participante_id) || [];
       setParticipantesSelecionados(participantesIds);
+      setParticipantesExpandido(true); // Expandir ao editar
     } else {
       setEditingDespesa(null);
       const grupoId = grupoFiltro ? Number(grupoFiltro) : 0;
@@ -166,6 +207,7 @@ const DespesasScreen: React.FC = () => {
         setParticipantesDoEvento([]);
         setParticipantesSelecionados([]);
       }
+      setParticipantesExpandido(false); // Colapsado por padrão ao criar
     }
     setIsModalOpen(true);
   };
@@ -175,6 +217,8 @@ const DespesasScreen: React.FC = () => {
     setEditingDespesa(null);
     setParticipantesDoEvento([]);
     setParticipantesSelecionados([]);
+    setParticipantesExpandido(false);
+    setError(null); // Limpar erro ao fechar modal
     setFormData({
       grupo_id: 0,
       descricao: '',
@@ -219,11 +263,15 @@ const DespesasScreen: React.FC = () => {
         return;
       }
       
+      // Limpar erro antes de fechar
+      setError(null);
       handleCloseModal();
       await loadDespesas();
     } catch (err: any) {
       const errorMessage = err?.response?.data?.error || 'Erro ao salvar despesa';
       setError(errorMessage);
+      // Não fechar o modal se houver erro para mostrar a mensagem
+      setIsModalOpen(true);
     } finally {
       setSalvando(false);
     }
@@ -313,33 +361,35 @@ const DespesasScreen: React.FC = () => {
       <Card style={styles.filterCard}>
         <Card.Content>
           <Text variant="titleSmall" style={styles.filterTitle}>Filtrar por evento:</Text>
-          <View style={styles.dropdownButton}>
-            <Menu
-              visible={menuFiltroVisible}
-              onDismiss={() => setMenuFiltroVisible(false)}
-              theme={menuTheme}
-              contentStyle={styles.menuContent}
-              anchor={
-                <TouchableOpacity
-                  onPress={() => setMenuFiltroVisible(true)}
-                  activeOpacity={0.7}
-                >
-                  <TextInput
-                    value={grupoFiltro ? grupos.find(g => g.id === grupoFiltro)?.nome || 'Selecione um evento' : 'Todos os eventos'}
-                    mode="outlined"
-                    editable={false}
-                    style={styles.dropdownInput}
-                    right={<TextInput.Icon icon="chevron-down" />}
-                    placeholder="Selecione um evento"
-                    pointerEvents="none"
-                  />
-                </TouchableOpacity>
-              }
-            >
+          <Menu
+            visible={menuFiltroVisible}
+            onDismiss={() => setMenuFiltroVisible(false)}
+            theme={menuTheme}
+            contentStyle={styles.menuContent}
+            anchor={
+              <TouchableOpacity
+                onPress={() => setMenuFiltroVisible(true)}
+                activeOpacity={0.7}
+                style={styles.dropdownButton}
+              >
+                <TextInput
+                  value={grupoFiltro ? grupos.find(g => g.id === grupoFiltro)?.nome || 'Selecione um evento' : 'Todos os eventos'}
+                  mode="outlined"
+                  editable={false}
+                  style={styles.dropdownInput}
+                  right={<TextInput.Icon icon="chevron-down" />}
+                  placeholder="Selecione um evento"
+                  pointerEvents="none"
+                />
+              </TouchableOpacity>
+            }
+          >
               <Menu.Item
-                onPress={() => {
+                onPress={async () => {
                   setGrupoFiltro(null);
                   setMenuFiltroVisible(false);
+                  // Remover evento selecionado do storage quando selecionar "Todos os eventos"
+                  await AsyncStorage.removeItem(STORAGE_KEY_SELECTED_EVENT);
                 }}
                 title="Todos os eventos"
                 leadingIcon={grupoFiltro === null ? 'check' : undefined}
@@ -348,22 +398,23 @@ const DespesasScreen: React.FC = () => {
               {grupos.map((grupo) => (
                 <Menu.Item
                   key={grupo.id}
-                  onPress={() => {
+                  onPress={async () => {
                     setGrupoFiltro(grupo.id);
                     setMenuFiltroVisible(false);
+                    // Salvar evento selecionado no storage
+                    await AsyncStorage.setItem(STORAGE_KEY_SELECTED_EVENT, grupo.id.toString());
                   }}
                   title={grupo.nome}
                   leadingIcon={grupoFiltro === grupo.id ? 'check' : undefined}
                 />
               ))}
-            </Menu>
-          </View>
+          </Menu>
           {grupoFiltro && despesas.length > 0 && (
-            <View style={styles.totalContainer}>
+            <View style={styles.totalRow}>
               <Text variant="bodySmall" style={styles.totalLabel}>
                 Total do evento:
               </Text>
-              <Text variant="titleMedium" style={styles.totalValue}>
+              <Text variant="bodyMedium" style={styles.totalValue}>
                 {formatCurrency(calcularTotalDespesas())}
               </Text>
             </View>
@@ -409,10 +460,15 @@ const DespesasScreen: React.FC = () => {
                   onPress={handleCloseModal}
                   mode="text"
                   compact
-                />
+                >
+                  {''}
+                </Button>
               )}
             />
             <Card.Content>
+              {error ? (
+                <Text style={styles.errorText}>{error}</Text>
+              ) : null}
               <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={true}>
                 <Text variant="bodyMedium" style={styles.label}>Evento *</Text>
                 {editingDespesa ? (
@@ -453,6 +509,7 @@ const DespesasScreen: React.FC = () => {
                             setFormData({ ...formData, grupo_id: grupo.id, participante_pagador_id: 0 });
                             // Por padrão, selecionar todos os participantes do evento
                             await loadParticipantesDoEvento(grupo.id, undefined, true);
+                            setParticipantesExpandido(false); // Colapsar ao mudar evento
                             setMenuEventoVisible(false);
                           }}
                           title={grupo.nome}
@@ -460,51 +517,6 @@ const DespesasScreen: React.FC = () => {
                         />
                       ))}
                   </Menu>
-                )}
-
-                <Text variant="bodyMedium" style={styles.label}>Participantes da Despesa *</Text>
-                {participantesDoEvento.length > 0 ? (
-                  <View style={styles.participantesContainer}>
-                    <ScrollView 
-                      style={styles.participantesScrollView}
-                      nestedScrollEnabled={true}
-                      showsVerticalScrollIndicator={true}
-                    >
-                      {participantesDoEvento.map((participante) => (
-                        <TouchableOpacity
-                          key={participante.id}
-                          style={styles.participanteItem}
-                          onPress={() => {
-                            const isSelected = participantesSelecionados.includes(participante.id);
-                            if (isSelected) {
-                              setParticipantesSelecionados(prev => prev.filter(id => id !== participante.id));
-                            } else {
-                              setParticipantesSelecionados(prev => [...prev, participante.id]);
-                            }
-                          }}
-                          disabled={salvando}
-                        >
-                          <Checkbox
-                            status={participantesSelecionados.includes(participante.id) ? 'checked' : 'unchecked'}
-                            onPress={() => {
-                              const isSelected = participantesSelecionados.includes(participante.id);
-                              if (isSelected) {
-                                setParticipantesSelecionados(prev => prev.filter(id => id !== participante.id));
-                              } else {
-                                setParticipantesSelecionados(prev => [...prev, participante.id]);
-                              }
-                            }}
-                            disabled={salvando}
-                          />
-                          <Text variant="bodyLarge" style={styles.participanteNome}>{participante.nome}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                ) : (
-                  <Text variant="bodySmall" style={styles.helpText}>
-                    {!formData.grupo_id ? 'Selecione um evento primeiro' : 'Nenhum participante no evento'}
-                  </Text>
                 )}
 
                 <TextInput
@@ -587,6 +599,91 @@ const DespesasScreen: React.FC = () => {
                   disabled={salvando}
                   placeholder="YYYY-MM-DD"
                 />
+
+                {/* Participantes da Despesa - Colapsado no final */}
+                <View style={styles.participantesSection}>
+                  <TouchableOpacity
+                    style={styles.participantesHeader}
+                    onPress={() => setParticipantesExpandido(!participantesExpandido)}
+                    disabled={!formData.grupo_id || participantesDoEvento.length === 0 || salvando}
+                  >
+                    <View style={styles.participantesHeaderLeft}>
+                      <Text variant="bodyMedium" style={styles.label}>
+                        Participantes da Despesa *
+                      </Text>
+                      {participantesSelecionados.length > 0 && (
+                        <Text variant="bodySmall" style={styles.participantesCount}>
+                          ({participantesSelecionados.length} selecionado{participantesSelecionados.length !== 1 ? 's' : ''})
+                        </Text>
+                      )}
+                    </View>
+                    {formData.grupo_id && participantesDoEvento.length > 0 && (
+                      <Button
+                        icon={participantesExpandido ? 'minus' : 'plus'}
+                        mode="text"
+                        compact
+                        onPress={() => setParticipantesExpandido(!participantesExpandido)}
+                        disabled={salvando}
+                      >
+                        {participantesExpandido ? 'Ocultar' : 'Mostrar'}
+                      </Button>
+                    )}
+                  </TouchableOpacity>
+
+                  {participantesExpandido && participantesDoEvento.length > 0 && (
+                    <View style={styles.participantesContainer}>
+                      <Text variant="bodySmall" style={styles.scrollHint}>
+                        {participantesDoEvento.length > 4 ? '↕ Role para ver mais' : ''}
+                      </Text>
+                      <ScrollView 
+                        style={styles.participantesScrollView}
+                        nestedScrollEnabled={true}
+                        showsVerticalScrollIndicator={true}
+                      >
+                        {participantesDoEvento.map((participante) => (
+                          <TouchableOpacity
+                            key={participante.id}
+                            style={styles.participanteItem}
+                            onPress={() => {
+                              const isSelected = participantesSelecionados.includes(participante.id);
+                              if (isSelected) {
+                                setParticipantesSelecionados(prev => prev.filter(id => id !== participante.id));
+                              } else {
+                                setParticipantesSelecionados(prev => [...prev, participante.id]);
+                              }
+                            }}
+                            disabled={salvando}
+                          >
+                            <Checkbox
+                              status={participantesSelecionados.includes(participante.id) ? 'checked' : 'unchecked'}
+                              onPress={() => {
+                                const isSelected = participantesSelecionados.includes(participante.id);
+                                if (isSelected) {
+                                  setParticipantesSelecionados(prev => prev.filter(id => id !== participante.id));
+                                } else {
+                                  setParticipantesSelecionados(prev => [...prev, participante.id]);
+                                }
+                              }}
+                              disabled={salvando}
+                            />
+                            <Text variant="bodyLarge" style={styles.participanteNome}>{participante.nome}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  {!formData.grupo_id && (
+                    <Text variant="bodySmall" style={styles.helpText}>
+                      Selecione um evento primeiro
+                    </Text>
+                  )}
+                  {formData.grupo_id && participantesDoEvento.length === 0 && (
+                    <Text variant="bodySmall" style={styles.helpText}>
+                      Nenhum participante no evento
+                    </Text>
+                  )}
+                </View>
               </ScrollView>
 
               <View style={styles.modalActions}>
@@ -624,7 +721,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   filterTitle: {
-    marginBottom: 8,
+    marginBottom: 4,
   },
   filterButtons: {
     flexDirection: 'row',
@@ -635,21 +732,21 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
   },
-  totalContainer: {
+  totalRow: {
     marginTop: 12,
-    padding: 12,
-    backgroundColor: '#e3f2fd',
-    borderRadius: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148, 163, 184, 0.16)',
   },
   totalLabel: {
-    color: '#1976d2',
+    color: 'rgba(226, 232, 240, 0.86)',
   },
   totalValue: {
     fontWeight: 'bold',
-    color: '#1976d2',
+    color: '#ef4444',
   },
   list: {
     padding: 16,
@@ -715,13 +812,13 @@ const styles = StyleSheet.create({
   },
   dropdownButton: {
     width: '100%',
-    marginBottom: 16,
+    marginBottom: 0,
   },
   dropdownButtonContent: {
     justifyContent: 'space-between',
   },
   dropdownInput: {
-    marginBottom: 16,
+    marginBottom: 0,
   },
   input: {
     marginBottom: 16,
@@ -745,8 +842,26 @@ const styles = StyleSheet.create({
     marginTop: 16,
     gap: 8,
   },
-  participantesContainer: {
+  participantesSection: {
+    marginTop: 8,
     marginBottom: 16,
+  },
+  participantesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingVertical: 8,
+  },
+  participantesHeaderLeft: {
+    flex: 1,
+  },
+  participantesCount: {
+    color: 'rgba(148, 163, 184, 0.7)',
+    marginTop: 2,
+  },
+  participantesContainer: {
+    marginTop: 8,
     maxHeight: 200,
     borderWidth: 1,
     borderColor: 'rgba(148, 163, 184, 0.16)',
@@ -756,6 +871,16 @@ const styles = StyleSheet.create({
   },
   participantesScrollView: {
     maxHeight: 200,
+  },
+  scrollHint: {
+    color: 'rgba(148, 163, 184, 0.6)',
+    textAlign: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    fontStyle: 'italic',
+    fontSize: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(148, 163, 184, 0.1)',
   },
   menuContent: {
     backgroundColor: '#0b1220',

@@ -17,12 +17,12 @@ export class ParticipanteService {
     });
   }
 
-  static async create(data: { nome: string; email?: string; chavePix?: string; usuario_id: number }): Promise<Participante> {
+  static async create(data: { nome: string; email?: string; chavePix?: string; telefone?: string; usuario_id: number }): Promise<Participante> {
     const participante = this.repository.create(data);
     return await this.repository.save(participante);
   }
 
-  static async update(id: number, usuarioId: number, data: { nome?: string; email?: string; chavePix?: string }): Promise<Participante | null> {
+  static async update(id: number, usuarioId: number, data: { nome?: string; email?: string; chavePix?: string; telefone?: string }): Promise<Participante | null> {
     const participante = await this.findById(id, usuarioId);
     if (!participante) return null;
 

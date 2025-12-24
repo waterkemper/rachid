@@ -1,0 +1,254 @@
+/* Mobile-first responsive table */
+.despesas-table-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.4) rgba(15, 23, 42, 0.08);
+  -ms-overflow-style: scrollbar;
+  scrollbar-gutter: stable;
+}
+
+.despesas-table-wrapper::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  -webkit-appearance: none;
+}
+
+.despesas-table-wrapper::-webkit-scrollbar:horizontal {
+  height: 10px;
+  display: block !important;
+}
+
+.despesas-table-wrapper::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
+}
+
+.despesas-table-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.5);
+  border-radius: 10px;
+  border: 2px solid rgba(15, 23, 42, 0.06);
+}
+
+.despesas-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.7);
+}
+
+.despesas-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 800px;
+}
+
+/* Desktop: show table, hide cards */
+@media (min-width: 769px) {
+  .despesas-table-wrapper {
+    display: block !important;
+  }
+  
+  .despesas-cards {
+    display: none !important;
+  }
+}
+
+/* Mobile: hide table, show cards */
+@media (max-width: 768px) {
+  .despesas-table-wrapper {
+    display: none !important;
+  }
+  
+  .despesas-cards {
+    display: block !important;
+  }
+}
+
+.despesas-table th,
+.despesas-table td {
+  padding: 10px 8px;
+  white-space: nowrap;
+}
+
+.despesas-table th {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.despesas-table td {
+  font-size: 13px;
+}
+
+/* Mobile Card Styles */
+.despesas-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.despesa-card {
+  background: rgba(2, 6, 23, 0.18);
+  border: 1px solid rgba(148, 163, 184, 0.20);
+  border-radius: 12px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.despesa-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(2, 6, 23, 0.25);
+}
+
+.despesa-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.despesa-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.despesa-card-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(34, 197, 94, 0.9);
+  white-space: nowrap;
+}
+
+.despesa-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.despesa-card-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.despesa-card-info-label {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.6);
+  font-weight: 500;
+}
+
+.despesa-card-info-item > span:not(.despesa-card-info-label) {
+  font-size: 14px;
+  color: rgba(226, 232, 240, 0.86);
+  word-break: break-word;
+}
+
+.despesa-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  flex-wrap: wrap;
+}
+
+.despesa-card-actions .btn {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-icon {
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+}
+
+/* Botões no topo */
+.despesas-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.despesas-header h2 {
+  margin: 0;
+  flex: 1;
+  min-width: 200px;
+}
+
+.despesas-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.despesas-header-actions .btn {
+  padding: 10px 14px;
+  font-size: 14px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.despesas-header-actions .btn svg {
+  font-size: 14px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .despesas-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .despesas-header h2 {
+    width: 100%;
+  }
+
+  .despesas-header-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .despesas-header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .despesa-card-header {
+    flex-direction: column;
+  }
+  
+  .despesa-card-actions {
+    flex-direction: column;
+  }
+  
+  .despesa-card-actions .btn {
+    width: 100%;
+  }
+}
+

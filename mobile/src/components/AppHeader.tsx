@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { customColors } from '../theme';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 type AppHeaderNavigationProp = StackNavigationProp<RootStackParamList>;
 
@@ -12,10 +13,15 @@ interface AppHeaderProps {
   title?: string;
   subtitle?: string;
   showBack?: boolean;
+  showHelp?: boolean;
 }
 
-const AppHeader: React.FC<AppHeaderProps> = ({ title, subtitle, showBack = false }) => {
+const AppHeader: React.FC<AppHeaderProps> = ({ title, subtitle, showBack = false, showHelp = true }) => {
   const navigation = useNavigation<AppHeaderNavigationProp>();
+
+  const handleHelpPress = () => {
+    navigation.navigate('Ajuda');
+  };
 
   return (
     <Appbar.Header style={styles.header}>
@@ -34,6 +40,12 @@ const AppHeader: React.FC<AppHeaderProps> = ({ title, subtitle, showBack = false
             {title}
           </Text>
         </View>
+      )}
+      {showHelp && !showBack && (
+        <Appbar.Action
+          icon={() => <MaterialCommunityIcons name="help-circle-outline" size={24} color={customColors.text} />}
+          onPress={handleHelpPress}
+        />
       )}
     </Appbar.Header>
   );

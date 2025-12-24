@@ -1,0 +1,183 @@
+/* Mobile-first responsive table */
+.participantes-table-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.4) rgba(15, 23, 42, 0.08);
+  -ms-overflow-style: scrollbar;
+  scrollbar-gutter: stable;
+}
+
+.participantes-table-wrapper::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  -webkit-appearance: none;
+}
+
+.participantes-table-wrapper::-webkit-scrollbar:horizontal {
+  height: 10px;
+  display: block !important;
+}
+
+.participantes-table-wrapper::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
+}
+
+.participantes-table-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.5);
+  border-radius: 10px;
+  border: 2px solid rgba(15, 23, 42, 0.06);
+}
+
+.participantes-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.7);
+}
+
+.participantes-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* Desktop: show table, hide cards */
+@media (min-width: 769px) {
+  .participantes-table-wrapper {
+    display: block !important;
+  }
+  
+  .participantes-cards {
+    display: none !important;
+  }
+  
+  .participantes-table {
+    min-width: 600px;
+  }
+}
+
+/* Mobile: hide table, show cards */
+@media (max-width: 768px) {
+  .participantes-table-wrapper {
+    display: none !important;
+  }
+  
+  .participantes-cards {
+    display: block !important;
+  }
+}
+
+.participantes-table th,
+.participantes-table td {
+  padding: 10px 8px;
+  white-space: nowrap;
+}
+
+.participantes-table th {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.participantes-table td {
+  font-size: 13px;
+}
+
+/* Mobile Card Styles */
+.participantes-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.participante-card {
+  background: rgba(2, 6, 23, 0.18);
+  border: 1px solid rgba(148, 163, 184, 0.20);
+  border-radius: 12px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.participante-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(2, 6, 23, 0.25);
+}
+
+.participante-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.participante-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.participante-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.btn-small {
+  padding: 8px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+}
+
+.participante-card-actions .btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+  min-width: auto;
+}
+
+.participante-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.participante-card-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.participante-card-info-label {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.6);
+  font-weight: 500;
+}
+
+.participante-card-info-item > span:not(.participante-card-info-label) {
+  font-size: 14px;
+  color: rgba(226, 232, 240, 0.86);
+  word-break: break-word;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .participante-card-header {
+    flex-direction: column;
+  }
+  
+  .participante-card-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  
+  .participante-card-actions .btn {
+    flex: 1;
+    min-width: 0;
+  }
+}
+

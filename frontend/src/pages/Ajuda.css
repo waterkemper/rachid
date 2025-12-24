@@ -1,0 +1,220 @@
+.ajuda-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 20px 40px;
+}
+
+.ajuda-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ajuda-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 16px;
+  padding: 20px;
+  transition: all 0.2s ease;
+}
+
+.ajuda-card:hover {
+  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ajuda-header-card {
+  text-align: center;
+}
+
+.ajuda-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.ajuda-icon-large {
+  font-size: 48px;
+  color: rgba(99, 102, 241, 0.9);
+  margin-bottom: 12px;
+}
+
+.ajuda-title {
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 28px;
+  font-weight: 700;
+  margin: 12px 0 8px;
+  text-align: center;
+}
+
+.ajuda-subtitle {
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 16px;
+  margin-top: 8px;
+  text-align: center;
+  line-height: 1.5;
+  max-width: 600px;
+}
+
+.ajuda-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ajuda-section-icon {
+  font-size: 24px;
+  color: rgba(99, 102, 241, 0.9);
+}
+
+.ajuda-section-icon.ajuda-warning {
+  color: rgba(251, 191, 36, 0.9);
+}
+
+.ajuda-section-icon.ajuda-secondary {
+  color: rgba(148, 163, 184, 0.8);
+}
+
+.ajuda-section-title {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.ajuda-divider {
+  height: 1px;
+  background: rgba(148, 163, 184, 0.16);
+  margin: 12px 0;
+}
+
+.ajuda-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ajuda-list-item {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.ajuda-list-icon {
+  font-size: 20px;
+  color: rgba(99, 102, 241, 0.7);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.ajuda-list-content {
+  flex: 1;
+}
+
+.ajuda-list-title {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.ajuda-list-description {
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ajuda-tips {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ajuda-tip-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.ajuda-tip-icon {
+  font-size: 20px;
+  color: rgba(34, 197, 94, 0.9);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.ajuda-tip-text {
+  flex: 1;
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ajuda-example-box {
+  background: rgba(2, 6, 23, 0.32);
+  padding: 16px;
+  border-radius: 12px;
+  margin-top: 8px;
+  border-left: 4px solid rgba(99, 102, 241, 0.9);
+}
+
+.ajuda-example-title {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+
+.ajuda-example-text {
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-line;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ajuda-container {
+    padding: 20px 16px 32px;
+  }
+
+  .ajuda-card {
+    padding: 16px;
+  }
+
+  .ajuda-title {
+    font-size: 24px;
+  }
+
+  .ajuda-subtitle {
+    font-size: 14px;
+  }
+
+  .ajuda-section-title {
+    font-size: 18px;
+  }
+
+  .ajuda-list-item {
+    gap: 12px;
+  }
+
+  .ajuda-list-icon {
+    font-size: 18px;
+  }
+
+  .ajuda-tip-item {
+    gap: 10px;
+  }
+
+  .ajuda-tip-icon {
+    font-size: 18px;
+  }
+}
+
