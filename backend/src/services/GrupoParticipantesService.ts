@@ -9,10 +9,10 @@ export class GrupoParticipantesService {
   private static grupoRepository = AppDataSource.getRepository(Grupo);
 
   static async findAllByEvento(eventoId: number, usuarioId: number): Promise<GrupoParticipantesEvento[]> {
-    // Verificar se o grupo (evento) pertence ao usuário
+    // Verificar se o grupo (evento) pertence ao usuï¿½rio
     const grupo = await this.grupoRepository.findOne({ where: { id: eventoId, usuario_id: usuarioId } });
     if (!grupo) {
-      throw new Error('Grupo não encontrado ou não pertence ao usuário');
+      throw new Error('Grupo nï¿½o encontrado ou nï¿½o pertence ao usuï¿½rio');
     }
 
     return await this.grupoParticipantesRepository.find({
@@ -41,10 +41,10 @@ export class GrupoParticipantesService {
     descricao?: string;
     usuario_id: number;
   }): Promise<GrupoParticipantesEvento> {
-    // Verificar se o grupo pertence ao usuário
+    // Verificar se o grupo pertence ao usuï¿½rio
     const grupo = await this.grupoRepository.findOne({ where: { id: data.grupo_id, usuario_id: data.usuario_id } });
     if (!grupo) {
-      throw new Error('Grupo não encontrado ou não pertence ao usuário');
+      throw new Error('Grupo nÃ£o encontrado ou nÃ£o pertence ao usuÃ¡rio');
     }
 
     const grupoParticipantes = this.grupoParticipantesRepository.create({
@@ -75,10 +75,10 @@ export class GrupoParticipantesService {
   }
 
   static async adicionarParticipante(grupoParticipantesId: number, participanteId: number, eventoId: number, usuarioId: number): Promise<boolean> {
-    // Verificar se o grupo (evento) pertence ao usuário
+    // Verificar se o grupo (evento) pertence ao usuï¿½rio
     const grupo = await this.grupoRepository.findOne({ where: { id: eventoId, usuario_id: usuarioId } });
     if (!grupo) {
-      throw new Error('Grupo não encontrado ou não pertence ao usuário');
+      throw new Error('Grupo nÃ£o encontrado ou nÃ£o pertence ao usuÃ¡rio');
     }
     const participanteJaEmGrupo = await this.participanteGrupoEventoRepository
       .createQueryBuilder('pge')
@@ -100,7 +100,7 @@ export class GrupoParticipantesService {
   }
 
   static async removerParticipante(grupoParticipantesId: number, participanteId: number, usuarioId: number): Promise<boolean> {
-    // Verificar se o grupo de participantes pertence ao usuário através do grupo
+    // Verificar se o grupo de participantes pertence ao usuÃ¡rio atravÃ©s do grupo
     const grupoParticipantes = await this.findById(grupoParticipantesId, usuarioId);
     if (!grupoParticipantes) {
       return false;
