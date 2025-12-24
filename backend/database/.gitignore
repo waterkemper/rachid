@@ -1,0 +1,5 @@
+# Arquivos exportados do banco de dados
+exported_*.sql
+*.backup
+*.dump
+

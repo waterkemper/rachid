@@ -48,19 +48,24 @@ Com o domínio `orachid.com.br`, recomendo:
    - Região: Escolher mais próxima (ex: South America)
    - Senha: Criar senha forte
 3. Aguardar criação (2-3 minutos)
-4. Copiar connection string:
+4. Configurar Connection Pooling (IMPORTANTE para Railway/Vercel):
    - Ir em Settings → Database
-   - Copiar "Connection string" (URI format)
-   - Formato: `postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres`
+   - Role até "Connection Pooling"
+   - Selecionar "Session mode"
+   - Copiar "Connection string" do Session Pooler
+   - Formato: `postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres`
+   - ⚠️ **Porta: 6543** (não 5432!) - necessário para plataformas IPv4-only como Railway
 
 **Variáveis a guardar:**
 ```
-DB_HOST=[host-do-supabase]
-DB_PORT=5432
-DB_USERNAME=postgres
+DB_HOST=aws-0-[REGION].pooler.supabase.com  # Host com "pooler" no nome
+DB_PORT=6543  # Porta do Session Pooler (não 5432!)
+DB_USERNAME=postgres.[PROJECT-REF]  # Username com project ref
 DB_PASSWORD=[sua-senha]
 DB_DATABASE=postgres
 ```
+
+**📖 Guia detalhado**: Veja `backend/database/SUPABASE_CONNECTION.md` para mais informações.
 
 #### 2. Configurar Backend no Railway
 
@@ -76,9 +81,9 @@ DB_DATABASE=postgres
    NODE_ENV=production
    PORT=3001
    
-   DB_HOST=[host-do-supabase]
-   DB_PORT=5432
-   DB_USERNAME=postgres
+   DB_HOST=[host-do-supabase-pooler]  # Use Session Pooler para IPv4!
+   DB_PORT=6543  # Porta do Session Pooler (não 5432!)
+   DB_USERNAME=postgres.[project-ref]  # Com project ref no username
    DB_PASSWORD=[senha-do-supabase]
    DB_DATABASE=postgres
    

@@ -21,9 +21,9 @@ No dashboard do Railway:
 NODE_ENV=production
 PORT=3001
 
-DB_HOST=[host-do-supabase]
-DB_PORT=5432
-DB_USERNAME=postgres
+DB_HOST=[host-do-supabase-pooler]  # Use Session Pooler para IPv4!
+DB_PORT=6543  # Porta do Session Pooler (não 5432!)
+DB_USERNAME=postgres.[project-ref]  # Com project ref no username
 DB_PASSWORD=[senha-do-supabase]
 DB_DATABASE=postgres
 
