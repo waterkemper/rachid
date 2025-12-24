@@ -35,7 +35,7 @@ export class GrupoParticipantesController {
       const usuarioId = req.usuarioId!;
 
       if (!nome) {
-        return res.status(400).json({ error: 'Nome é obrigatório' });
+        return res.status(400).json({ error: 'Nome é obrigatório.' });
       }
 
       const grupo = await GrupoParticipantesService.create({
