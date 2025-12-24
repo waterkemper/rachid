@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "npx tsc",
     "start": "node dist/server.js",
     "migrate": "tsx src/scripts/migrate-data.ts"
   },
@@ -21,7 +21,8 @@
     "dotenv": "^16.3.1",
     "jsonwebtoken": "^9.0.2",
     "bcrypt": "^5.1.1",
-    "cookie-parser": "^1.4.6"
+    "cookie-parser": "^1.4.6",
+    "typescript": "^5.3.3"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
@@ -31,8 +32,10 @@
     "@types/jsonwebtoken": "^9.0.5",
     "@types/bcrypt": "^5.0.2",
     "@types/cookie-parser": "^1.4.6",
-    "typescript": "^5.3.3",
     "tsx": "^4.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
 
