@@ -20,7 +20,7 @@ export class GrupoParticipantesController {
       const usuarioId = req.usuarioId!;
       const grupo = await GrupoParticipantesService.findById(id, usuarioId);
       if (!grupo) {
-        return res.status(404).json({ error: 'Grupo n„o encontrado' });
+        return res.status(404).json({ error: 'Grupo n√£o encontrado' });
       }
       res.json(grupo);
     } catch (error) {
@@ -35,7 +35,7 @@ export class GrupoParticipantesController {
       const usuarioId = req.usuarioId!;
 
       if (!nome) {
-        return res.status(400).json({ error: 'Nome È obrigatÛrio' });
+        return res.status(400).json({ error: 'Nome √© obrigat√≥rio' });
       }
 
       const grupo = await GrupoParticipantesService.create({
@@ -58,7 +58,7 @@ export class GrupoParticipantesController {
 
       const grupo = await GrupoParticipantesService.update(id, usuarioId, { nome, descricao });
       if (!grupo) {
-        return res.status(404).json({ error: 'Grupo n„o encontrado' });
+        return res.status(404).json({ error: 'Grupo n√£o encontrado' });
       }
       res.json(grupo);
     } catch (error) {
@@ -72,7 +72,7 @@ export class GrupoParticipantesController {
       const usuarioId = req.usuarioId!;
       const sucesso = await GrupoParticipantesService.delete(id, usuarioId);
       if (!sucesso) {
-        return res.status(404).json({ error: 'Grupo n„o encontrado' });
+        return res.status(404).json({ error: 'Grupo n√£o encontrado' });
       }
       res.status(204).send();
     } catch (error) {
@@ -88,12 +88,12 @@ export class GrupoParticipantesController {
       const usuarioId = req.usuarioId!;
 
       if (!participanteId) {
-        return res.status(400).json({ error: 'ID do participante È obrigatÛrio' });
+        return res.status(400).json({ error: 'ID do participante √© obrigat√≥rio' });
       }
 
       const sucesso = await GrupoParticipantesService.adicionarParticipante(grupoId, participanteId, eventoId, usuarioId);
       if (!sucesso) {
-        return res.status(400).json({ error: 'Participante j· est· em um grupo neste evento' });
+        return res.status(400).json({ error: 'Participante j√° est√° em um grupo neste evento' });
       }
 
       res.json({ message: 'Participante adicionado ao grupo' });
@@ -110,7 +110,7 @@ export class GrupoParticipantesController {
 
       const sucesso = await GrupoParticipantesService.removerParticipante(grupoId, parseInt(participanteId), usuarioId);
       if (!sucesso) {
-        return res.status(404).json({ error: 'Participante n„o est· neste grupo' });
+        return res.status(404).json({ error: 'Participante n√£o est√° neste grupo' });
       }
 
       res.json({ message: 'Participante removido do grupo' });

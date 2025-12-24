@@ -370,9 +370,33 @@ FRONTEND_URL=https://orachid.com.br
 ```
 
 **Gerar JWT_SECRET:**
+
+Você precisa de uma chave secreta forte e aleatória para assinar os tokens JWT. Aqui estão algumas formas de gerar:
+
+**Opção 1: Usando Node.js (Recomendado)**
 ```bash
 node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 ```
+
+**Opção 2: Usando PowerShell (Windows)**
+```powershell
+[Convert]::ToBase64String((1..64 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 }))
+```
+
+**Opção 3: Usando OpenSSL (se instalado)**
+```bash
+openssl rand -hex 64
+```
+
+**Opção 4: Online (use apenas se confiar no site)**
+- Acesse: https://generate-secret.vercel.app/64
+- Ou: https://www.allkeysgenerator.com/Random/Security-Encryption-Key-Generator.aspx
+
+**⚠️ Importante:**
+- Use uma chave de **pelo menos 32 caracteres** (recomendado: 64+)
+- **Nunca compartilhe** essa chave publicamente
+- **Guarde em local seguro** (variável de ambiente)
+- Use chaves **diferentes** para desenvolvimento e produção
 
 **Domínio Customizado:**
 1. Settings → Networking

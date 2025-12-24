@@ -270,7 +270,7 @@ export const formatarSugestoesPagamentoIndividual = (
       const pixFormatado = chavesPix.length === 1 
         ? chavesPix[0]
         : chavesPix.join(' ou ');
-      mensagem += `• *${deLimpo}* deve pagar *${valorFormatado}* para *${paraLimpo}* (${pixFormatado})\n`;
+      mensagem += `• *${deLimpo}* deve pagar *${valorFormatado}* para *${paraLimpo}* (pix ${pixFormatado})\n`;
     } else {
       mensagem += `• *${deLimpo}* deve pagar *${valorFormatado}* para *${paraLimpo}*\n`;
     }
@@ -318,7 +318,7 @@ export const formatarSugestoesPagamentoSubgrupos = (
       const pixFormatado = chavesPix.length === 1 
         ? chavesPix[0]
         : chavesPix.join(' ou ');
-      mensagem += `• *${deLimpo}* deve pagar *${valorFormatado}* para *${paraLimpo}* (${pixFormatado})\n`;
+      mensagem += `• *${deLimpo}* deve pagar *${valorFormatado}* para *${paraLimpo}* (pix ${pixFormatado})\n`;
     } else {
       mensagem += `• *${deLimpo}* deve pagar *${valorFormatado}* para *${paraLimpo}*\n`;
     }

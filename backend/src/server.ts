@@ -11,7 +11,14 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors({
   origin: [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
+    // Produção
+    'https://orachid.com.br',
+    'https://www.orachid.com.br',
+    'https://api.orachid.com.br',
+    process.env.FRONTEND_URL || 'https://orachid.com.br',
+    // Desenvolvimento
+    'http://localhost:3000',
+    'http://localhost:5173', // Vite dev
     'http://localhost:8081', // Expo dev web
     'exp://localhost:8081', // Expo dev
     /^exp:\/\/192\.168\.\d+\.\d+:8081$/, // Expo dev em rede local

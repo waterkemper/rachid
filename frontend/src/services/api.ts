@@ -10,8 +10,11 @@ import {
   Usuario,
 } from '../types';
 
+// URL da API: usa variável de ambiente em produção ou proxy em desenvolvimento
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : 'https://api.orachid.com.br');
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_URL ? `${API_URL}/api` : '/api', // Se API_URL estiver definida, usa ela, senão usa proxy do Vite
   withCredentials: true, // Importante para enviar cookies
 });
 
