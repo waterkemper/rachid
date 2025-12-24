@@ -105,15 +105,28 @@ const LoginScreen: React.FC = () => {
               {carregando ? 'Entrando...' : 'Entrar'}
             </Button>
 
-            <Button
-              mode="text"
-              onPress={() => navigation.navigate('Cadastro')}
-              disabled={carregando}
-              style={styles.linkButton}
-              textColor={customColors.textSecondary}
-            >
-              Não tem conta? Cadastre-se
-            </Button>
+            <View style={styles.linksContainer}>
+              <Button
+                mode="text"
+                onPress={() => navigation.navigate('RecuperarSenha')}
+                disabled={carregando}
+                style={styles.linkButton}
+                textColor={customColors.primary}
+                labelStyle={styles.linkButtonLabel}
+              >
+                Esqueci minha senha
+              </Button>
+
+              <Button
+                mode="text"
+                onPress={() => navigation.navigate('Cadastro')}
+                disabled={carregando}
+                style={styles.linkButton}
+                textColor={customColors.textSecondary}
+              >
+                Não tem conta? Cadastre-se
+              </Button>
+            </View>
           </Card.Content>
         </Card>
       </ScrollView>
@@ -175,8 +188,16 @@ const styles = StyleSheet.create({
   buttonContent: {
     paddingVertical: 12,
   },
-  linkButton: {
+  linksContainer: {
     marginTop: 8,
+    alignItems: 'center',
+  },
+  linkButton: {
+    marginTop: 4,
+  },
+  linkButtonLabel: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   errorContainer: {
     backgroundColor: 'rgba(239, 68, 68, 0.14)',

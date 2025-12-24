@@ -61,6 +61,37 @@ function Login() {
             {carregando ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
+        <div className="login-links">
+          <button
+            type="button"
+            className="btn btn-link"
+            onClick={() => navigate('/')}
+            style={{ marginTop: '16px', width: '100%', textAlign: 'center' }}
+          >
+            Voltar para a home
+          </button>
+          <div style={{ marginTop: '12px', textAlign: 'center', color: 'rgba(226, 232, 240, 0.7)', fontSize: '14px' }}>
+            Não tem uma conta?{' '}
+            <button
+              type="button"
+              className="btn btn-link"
+              onClick={() => navigate('/cadastro')}
+              style={{ padding: 0, textDecoration: 'underline', color: 'rgba(99, 102, 241, 0.9)' }}
+            >
+              Criar conta nova
+            </button>
+          </div>
+          <div style={{ marginTop: '12px', textAlign: 'center' }}>
+            <button
+              type="button"
+              className="btn btn-link"
+              onClick={() => navigate('/recuperar-senha')}
+              style={{ padding: 0, textDecoration: 'underline', color: 'rgba(99, 102, 241, 0.9)', fontSize: '14px' }}
+            >
+              Esqueci minha senha
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

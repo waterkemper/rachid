@@ -61,6 +61,19 @@ export const authApi = {
     const response = await api.post('/auth/create-user', data);
     return response.data.usuario;
   },
+
+  solicitarRecuperacaoSenha: async (email: string): Promise<void> => {
+    await api.post('/auth/solicitar-recuperacao-senha', { email });
+  },
+
+  validarTokenRecuperacao: async (token: string): Promise<boolean> => {
+    const response = await api.post('/auth/validar-token-recuperacao', { token });
+    return response.data.valido;
+  },
+
+  resetarSenha: async (token: string, senha: string): Promise<void> => {
+    await api.post('/auth/resetar-senha', { token, senha });
+  },
 };
 
 export const participanteApi = {
@@ -74,12 +87,12 @@ export const participanteApi = {
     return response.data;
   },
 
-  create: async (data: { nome: string; email?: string; chavePix?: string }): Promise<Participante> => {
+  create: async (data: { nome: string; email?: string; chavePix?: string; telefone?: string }): Promise<Participante> => {
     const response = await api.post('/participantes', data);
     return response.data;
   },
 
-  update: async (id: number, data: { nome?: string; email?: string; chavePix?: string }): Promise<Participante> => {
+  update: async (id: number, data: { nome?: string; email?: string; chavePix?: string; telefone?: string }): Promise<Participante> => {
     const response = await api.put(`/participantes/${id}`, data);
     return response.data;
   },

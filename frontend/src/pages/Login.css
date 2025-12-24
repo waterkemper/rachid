@@ -96,3 +96,20 @@
   cursor: not-allowed;
 }
 
+.login-links {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.login-links .btn-link {
+  color: rgba(226, 232, 240, 0.8);
+  font-size: 14px;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.login-links .btn-link:hover {
+  color: rgba(255, 255, 255, 0.95);
+}
+

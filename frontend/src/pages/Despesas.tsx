@@ -4,6 +4,8 @@ import { despesaApi, grupoApi, participanteApi } from '../services/api';
 import { Despesa, Grupo, Participante } from '../types';
 import Modal from '../components/Modal';
 import AdicionarParticipanteRapido from '../components/AdicionarParticipanteRapido';
+import { FaPlus, FaEdit, FaTrash, FaUserPlus, FaChartBar, FaUsers } from 'react-icons/fa';
+import './Despesas.css';
 
 const Despesas: React.FC = () => {
   const navigate = useNavigate();
@@ -18,6 +20,8 @@ const Despesas: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModalParticipanteRapidoOpen, setIsModalParticipanteRapidoOpen] = useState(false);
   const [editingDespesa, setEditingDespesa] = useState<Despesa | null>(null);
+  const [participantesSelecionados, setParticipantesSelecionados] = useState<number[]>([]);
+  const [participantesExpandido, setParticipantesExpandido] = useState(false);
   const [formData, setFormData] = useState({
     grupo_id: 0,
     descricao: '',
@@ -112,6 +116,10 @@ const Despesas: React.FC = () => {
       // Carregar participantes do evento da despesa sendo editada
       // Incluir o pagador atual caso ele não esteja mais no evento
       await loadParticipantesDoEvento(despesa.grupo_id, despesa.participante_pagador_id);
+      // Carregar participantes já selecionados da despesa
+      const participantesIds = despesa.participacoes?.map(p => p.participante_id) || [];
+      setParticipantesSelecionados(participantesIds);
+      setParticipantesExpandido(true); // Expandir ao editar
     } else {
       setEditingDespesa(null);
       const grupoId = filtroGrupo ? Number(filtroGrupo) : 0;
@@ -125,9 +133,18 @@ const Despesas: React.FC = () => {
       // Carregar participantes do evento selecionado (ou do filtro)
       if (grupoId > 0) {
         await loadParticipantesDoEvento(grupoId);
+        // Por padrão, selecionar todos os participantes do evento ao criar
+        const evento = await grupoApi.getById(grupoId);
+        if (evento.participantes) {
+          const participantesIds = evento.participantes.map(p => p.participante_id);
+          const participantesFiltrados = participantes.filter(p => participantesIds.includes(p.id));
+          setParticipantesSelecionados(participantesFiltrados.map(p => p.id));
+        }
       } else {
         setParticipantesDoEvento([]);
+        setParticipantesSelecionados([]);
       }
+      setParticipantesExpandido(false); // Colapsado por padrão ao criar
     }
     setIsModalOpen(true);
   };
@@ -136,6 +153,8 @@ const Despesas: React.FC = () => {
     setIsModalOpen(false);
     setEditingDespesa(null);
     setParticipantesDoEvento([]);
+    setParticipantesSelecionados([]);
+    setParticipantesExpandido(false);
     setFormData({
       grupo_id: 0,
       descricao: '',
@@ -148,13 +167,25 @@ const Despesas: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (participantesSelecionados.length === 0) {
+      setError('Selecione pelo menos um participante para a despesa');
+      return;
+    }
+
     try {
       setError(null);
+      const valorTotal = Number(String(formData.valorTotal).replace(',', '.'));
+      const valorPorParticipante = valorTotal / participantesSelecionados.length;
+      
       const despesaData: any = {
         grupo_id: formData.grupo_id,
         descricao: formData.descricao,
-        valorTotal: Number(String(formData.valorTotal).replace(',', '.')),
+        valorTotal: valorTotal,
         data: formData.data,
+        participacoes: participantesSelecionados.map(participanteId => ({
+          participante_id: participanteId,
+          valorDevePagar: valorPorParticipante,
+        })),
       };
       
       // Sempre enviar participante_pagador_id quando for edição
@@ -246,24 +277,24 @@ const Despesas: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+      <div className="despesas-header">
         <h2>Despesas</h2>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div className="despesas-header-actions">
           {filtroGrupo && (
             <>
               <button className="btn btn-secondary" onClick={() => navigate(`/participacoes?evento=${filtroGrupo}`)}>
-                Ver resultado
+                <FaChartBar /> <span>Ver resultado</span>
               </button>
               <button className="btn btn-secondary" onClick={() => navigate(`/totais-grupos?evento=${filtroGrupo}`)}>
-                Totais por grupo
+                <FaUsers /> <span>Totais por grupo</span>
               </button>
             </>
           )}
           <button className="btn btn-secondary" onClick={() => setIsModalParticipanteRapidoOpen(true)}>
-            + Participante Rápido
+            <FaUserPlus /> <span>Participante Rápido</span>
           </button>
           <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-            + Nova Despesa
+            <FaPlus /> <span>Nova Despesa</span>
           </button>
         </div>
       </div>
@@ -305,54 +336,109 @@ const Despesas: React.FC = () => {
       </div>
 
       <div className="card">
-        <table>
-          <thead>
-            <tr>
-              <th>Evento</th>
-              <th>Descrição</th>
-              <th>Valor</th>
-              <th>Pagador</th>
-              <th>Data</th>
-              <th>Participações</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {despesas.length === 0 ? (
+        {/* Desktop Table View */}
+        <div className="despesas-table-wrapper">
+          <table className="despesas-table">
+            <thead>
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '20px' }}>
-                  Nenhuma despesa cadastrada
-                </td>
+                <th>Evento</th>
+                <th>Descrição</th>
+                <th>Valor</th>
+                <th>Pagador</th>
+                <th>Data</th>
+                <th>Participações</th>
+                <th>Ações</th>
               </tr>
-            ) : (
-              despesas.map((despesa) => (
-                <tr key={despesa.id}>
-                  <td>{despesa.grupo?.nome || '-'}</td>
-                  <td>{despesa.descricao}</td>
-                  <td>R$ {despesa.valorTotal.toFixed(2)}</td>
-                  <td>{despesa.pagador?.nome || '-'}</td>
-                  <td>{formatDate(despesa.data)}</td>
-                  <td>{despesa.participacoes?.length || 0}</td>
-                  <td>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ marginRight: '10px' }}
-                      onClick={() => handleOpenModal(despesa)}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      className="btn btn-danger"
-                      onClick={() => handleDelete(despesa.id)}
-                    >
-                      Excluir
-                    </button>
+            </thead>
+            <tbody>
+              {despesas.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '20px' }}>
+                    Nenhuma despesa cadastrada
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                despesas.map((despesa) => (
+                  <tr key={despesa.id}>
+                    <td>{despesa.grupo?.nome || '-'}</td>
+                    <td>{despesa.descricao}</td>
+                    <td>{formatCurrency(despesa.valorTotal)}</td>
+                    <td>{despesa.pagador?.nome || '-'}</td>
+                    <td>{formatDate(despesa.data)}</td>
+                    <td>{despesa.participacoes?.length || 0}</td>
+                    <td>
+                      <button
+                        className="btn btn-secondary btn-icon"
+                        style={{ marginRight: '8px' }}
+                        onClick={() => handleOpenModal(despesa)}
+                        title="Editar"
+                      >
+                        <FaEdit />
+                      </button>
+                      <button
+                        className="btn btn-danger btn-icon"
+                        onClick={() => handleDelete(despesa.id)}
+                        title="Excluir"
+                      >
+                        <FaTrash />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="despesas-cards">
+          {despesas.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(226, 232, 240, 0.7)' }}>
+              Nenhuma despesa cadastrada
+            </div>
+          ) : (
+            despesas.map((despesa) => (
+              <div key={despesa.id} className="despesa-card">
+                <div className="despesa-card-header">
+                  <div className="despesa-card-title">{despesa.descricao}</div>
+                  <div className="despesa-card-value">{formatCurrency(despesa.valorTotal)}</div>
+                </div>
+                <div className="despesa-card-info">
+                  <div className="despesa-card-info-item">
+                    <span className="despesa-card-info-label">Evento</span>
+                    <span>{despesa.grupo?.nome || '-'}</span>
+                  </div>
+                  <div className="despesa-card-info-item">
+                    <span className="despesa-card-info-label">Pagador</span>
+                    <span>{despesa.pagador?.nome || '-'}</span>
+                  </div>
+                  <div className="despesa-card-info-item">
+                    <span className="despesa-card-info-label">Data</span>
+                    <span>{formatDate(despesa.data)}</span>
+                  </div>
+                  <div className="despesa-card-info-item">
+                    <span className="despesa-card-info-label">Participações</span>
+                    <span>{despesa.participacoes?.length || 0}</span>
+                  </div>
+                </div>
+                <div className="despesa-card-actions">
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => handleOpenModal(despesa)}
+                  >
+                    <FaEdit /> <span>Editar</span>
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => handleDelete(despesa.id)}
+                  >
+                    <FaTrash /> <span>Excluir</span>
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       <Modal
@@ -371,8 +457,16 @@ const Despesas: React.FC = () => {
                 // Carregar participantes do evento selecionado
                 if (grupoId > 0) {
                   await loadParticipantesDoEvento(grupoId);
+                  // Por padrão, selecionar todos os participantes do evento
+                  const evento = await grupoApi.getById(grupoId);
+                  if (evento.participantes) {
+                    const participantesIds = evento.participantes.map(p => p.participante_id);
+                    const participantesFiltrados = participantes.filter(p => participantesIds.includes(p.id));
+                    setParticipantesSelecionados(participantesFiltrados.map(p => p.id));
+                  }
                 } else {
                   setParticipantesDoEvento([]);
+                  setParticipantesSelecionados([]);
                 }
               }}
               required
@@ -453,16 +547,100 @@ const Despesas: React.FC = () => {
               required
             />
           </div>
-          <div className="form-group" style={{ padding: '15px', backgroundColor: '#e7f3ff', borderRadius: '4px', border: '1px solid #b3d9ff' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: '#004085' }}>
-              💡 <strong>Dica:</strong> Após criar a despesa, você pode definir quem participou de cada despesa na página de <strong>Participações</strong> usando a tabela matriz.
-            </p>
+          {/* Participantes da Despesa */}
+          <div className="form-group">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+              <label>Participantes da Despesa *</label>
+              {formData.grupo_id && participantesDoEvento.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ padding: '4px 8px', fontSize: '12px' }}
+                  onClick={() => setParticipantesExpandido(!participantesExpandido)}
+                >
+                  {participantesExpandido ? 'Ocultar' : 'Mostrar'}
+                </button>
+              )}
+            </div>
+            {participantesSelecionados.length > 0 && (
+              <div style={{ 
+                fontSize: '13px', 
+                color: 'rgba(226, 232, 240, 0.7)', 
+                marginBottom: '10px' 
+              }}>
+                ({participantesSelecionados.length} selecionado{participantesSelecionados.length !== 1 ? 's' : ''})
+              </div>
+            )}
+            {participantesExpandido && participantesDoEvento.length > 0 && (
+              <div style={{
+                maxHeight: '200px',
+                overflowY: 'auto',
+                border: '1px solid rgba(148, 163, 184, 0.20)',
+                borderRadius: '12px',
+                padding: '10px',
+                background: 'rgba(2, 6, 23, 0.18)',
+                marginBottom: '10px'
+              }}>
+                {participantesDoEvento.length > 4 && (
+                  <div style={{ 
+                    fontSize: '12px', 
+                    color: 'rgba(226, 232, 240, 0.6)', 
+                    marginBottom: '8px',
+                    textAlign: 'center'
+                  }}>
+                    ↕ Role para ver mais
+                  </div>
+                )}
+                {participantesDoEvento.map((participante) => {
+                  const isSelected = participantesSelecionados.includes(participante.id);
+                  return (
+                    <label
+                      key={participante.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '8px 6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {
+                          if (isSelected) {
+                            setParticipantesSelecionados(prev => prev.filter(id => id !== participante.id));
+                          } else {
+                            setParticipantesSelecionados(prev => [...prev, participante.id]);
+                          }
+                        }}
+                      />
+                      <span style={{ color: 'rgba(226, 232, 240, 0.92)' }}>{participante.nome}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            {!formData.grupo_id && (
+              <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.6)' }}>
+                Selecione um evento primeiro
+              </div>
+            )}
+            {formData.grupo_id && participantesDoEvento.length === 0 && (
+              <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.6)' }}>
+                Nenhum participante no evento
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
             <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
               Cancelar
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button 
+              type="submit" 
+              className="btn btn-primary"
+              disabled={participantesSelecionados.length === 0}
+            >
               Salvar
             </button>
           </div>

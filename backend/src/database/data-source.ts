@@ -11,6 +11,7 @@ import { ParticipanteGrupoEvento } from '../entities/ParticipanteGrupoEvento';
 import { GrupoMaior } from '../entities/GrupoMaior';
 import { GrupoMaiorGrupo } from '../entities/GrupoMaiorGrupo';
 import { GrupoMaiorParticipante } from '../entities/GrupoMaiorParticipante';
+import { PasswordResetToken } from '../entities/PasswordResetToken';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -33,6 +34,7 @@ export const AppDataSource = new DataSource({
     GrupoMaior,
     GrupoMaiorGrupo,
     GrupoMaiorParticipante,
+    PasswordResetToken,
   ],
   migrations: [],
   subscribers: [],

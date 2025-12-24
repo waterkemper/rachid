@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { relatorioApi, grupoApi, grupoParticipantesApi, participanteApi, despesaApi, participacaoApi } from '../services/api';
 import { Grupo, SaldoGrupo, GrupoParticipantesEvento, Participante, Despesa } from '../types';
 import Modal from '../components/Modal';
+import { FaPlus, FaEdit, FaTrash, FaUsers, FaArrowLeft } from 'react-icons/fa';
+import './TotaisGrupos.css';
 
 const TotaisGrupos: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -272,7 +274,7 @@ const TotaisGrupos: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <div className="totais-grupos-header">
         <h2>Totais por Grupo/Família</h2>
       </div>
 
@@ -324,13 +326,13 @@ const TotaisGrupos: React.FC = () => {
           <p style={{ marginBottom: '15px', color: '#666', fontSize: '14px' }}>
             Por padrão, todos os participantes consomem todas as despesas. Desmarque as participações que não se aplicam.
           </p>
-          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            <table>
+          <div className="participacoes-table-wrapper">
+            <table className="participacoes-table">
               <thead>
                 <tr>
                   <th>Despesa</th>
                   {participantesDisponiveis.map((participante) => (
-                    <th key={participante.id} style={{ textAlign: 'center', fontSize: '12px' }}>
+                    <th key={participante.id}>
                       {participante.nome}
                     </th>
                   ))}
@@ -339,18 +341,17 @@ const TotaisGrupos: React.FC = () => {
               <tbody>
                 {despesas.map((despesa) => (
                   <tr key={despesa.id}>
-                    <td style={{ fontWeight: '500' }}>
-                      {despesa.descricao}
-                      <br />
-                      <span style={{ fontSize: '12px', color: '#666' }}>
-                        R$ {despesa.valorTotal.toFixed(2)}
-                      </span>
+                    <td>
+                      <div style={{ fontWeight: '500' }}>{despesa.descricao}</div>
+                      <div style={{ fontSize: '11px', color: 'rgba(226, 232, 240, 0.6)', marginTop: '4px' }}>
+                        {formatCurrency(despesa.valorTotal)}
+                      </div>
                     </td>
                     {participantesDisponiveis.map((participante) => {
                       const key = `${despesa.id}-${participante.id}`;
                       const temParticipacao = participacoesMap.get(key) || false;
                       return (
-                        <td key={participante.id} style={{ textAlign: 'center' }}>
+                        <td key={participante.id}>
                           <input
                             type="checkbox"
                             checked={temParticipacao}
@@ -370,64 +371,68 @@ const TotaisGrupos: React.FC = () => {
 
       {grupoSelecionado && (
         <div className="card" style={{ marginBottom: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <div className="grupos-familias-header">
             <h3>Grupos/Famílias do Evento</h3>
-            <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-              + Novo Grupo
+            <button className="btn btn-primary btn-with-icon" onClick={() => handleOpenModal()}>
+              <FaPlus /> <span>Novo Grupo</span>
             </button>
           </div>
 
           {gruposParticipantes.length === 0 ? (
-            <p style={{ color: '#666' }}>Nenhum grupo cadastrado. Crie grupos para organizar os participantes.</p>
+            <p style={{ color: 'rgba(226, 232, 240, 0.7)' }}>Nenhum grupo cadastrado. Crie grupos para organizar os participantes.</p>
           ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Descrição</th>
-                  <th>Participantes</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gruposParticipantes.map((grupo) => (
-                  <tr key={grupo.id}>
-                    <td>{grupo.nome}</td>
-                    <td>{grupo.descricao || '-'}</td>
-                    <td>
-                      {grupo.participantes?.length || 0} {grupo.participantes && grupo.participantes.length > 0 && (
-                        <span style={{ fontSize: '12px', color: '#666' }}>
-                          ({grupo.participantes.map(p => p.participante?.nome).filter(Boolean).join(', ')})
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ marginRight: '5px', fontSize: '12px', padding: '5px 10px' }}
-                        onClick={() => handleOpenModal(grupo)}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ marginRight: '5px', fontSize: '12px', padding: '5px 10px' }}
-                        onClick={() => handleOpenModalParticipante(grupo)}
-                      >
-                        Participantes
-                      </button>
-                      <button
-                        className="btn btn-danger"
-                        style={{ fontSize: '12px', padding: '5px 10px' }}
-                        onClick={() => handleDelete(grupo.id)}
-                      >
-                        Excluir
-                      </button>
-                    </td>
+            <div className="totais-grupos-table-wrapper">
+              <table className="totais-grupos-table">
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Descrição</th>
+                    <th>Participantes</th>
+                    <th>Ações</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {gruposParticipantes.map((grupo) => (
+                    <tr key={grupo.id}>
+                      <td>{grupo.nome}</td>
+                      <td>{grupo.descricao || '-'}</td>
+                      <td>
+                        {grupo.participantes?.length || 0} {grupo.participantes && grupo.participantes.length > 0 && (
+                          <span style={{ fontSize: '12px', color: 'rgba(226, 232, 240, 0.6)' }}>
+                            ({grupo.participantes.map(p => p.participante?.nome).filter(Boolean).join(', ')})
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          <button
+                            className="btn btn-secondary btn-icon"
+                            onClick={() => handleOpenModal(grupo)}
+                            title="Editar"
+                          >
+                            <FaEdit />
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-icon"
+                            onClick={() => handleOpenModalParticipante(grupo)}
+                            title="Participantes"
+                          >
+                            <FaUsers />
+                          </button>
+                          <button
+                            className="btn btn-danger btn-icon"
+                            onClick={() => handleDelete(grupo.id)}
+                            title="Excluir"
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
@@ -435,40 +440,74 @@ const TotaisGrupos: React.FC = () => {
       {grupoSelecionado && saldosGrupos.length > 0 && (
         <div className="card">
           <h3 style={{ marginBottom: '20px' }}>Totais Agregados por Grupo</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Grupo/Família</th>
-                <th>Participantes</th>
-                <th>Total Pagou</th>
-                <th>Total Deve</th>
-                <th>Saldo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {saldosGrupos.map((saldo) => (
-                <tr key={saldo.grupoId}>
-                  <td style={{ fontWeight: '600' }}>{saldo.grupoNome}</td>
-                  <td>
-                    {saldo.participantes.map(p => p.participanteNome).join(', ')}
-                  </td>
-                  <td>{formatCurrency(saldo.totalPagou)}</td>
-                  <td>{formatCurrency(saldo.totalDeve)}</td>
-                  <td
-                    style={{
-                      backgroundColor: saldo.saldo >= 0 ? '#d4edda' : '#f8d7da',
-                      fontWeight: '600',
-                      color: saldo.saldo >= 0 ? '#155724' : '#721c24',
-                    }}
-                  >
+          
+          {/* Desktop Table View */}
+          <div className="totais-grupos-table-wrapper">
+            <table className="totais-grupos-table">
+              <thead>
+                <tr>
+                  <th>Grupo/Família</th>
+                  <th>Participantes</th>
+                  <th>Total Pagou</th>
+                  <th>Total Deve</th>
+                  <th>Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {saldosGrupos.map((saldo) => (
+                  <tr key={saldo.grupoId}>
+                    <td style={{ fontWeight: '600' }}>{saldo.grupoNome}</td>
+                    <td>
+                      {saldo.participantes.map(p => p.participanteNome).join(', ')}
+                    </td>
+                    <td>{formatCurrency(saldo.totalPagou)}</td>
+                    <td>{formatCurrency(saldo.totalDeve)}</td>
+                    <td
+                      style={{
+                        backgroundColor: saldo.saldo >= 0 ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                        fontWeight: '600',
+                        color: saldo.saldo >= 0 ? 'rgba(34, 197, 94, 0.9)' : 'rgba(239, 68, 68, 0.9)',
+                      }}
+                    >
+                      {formatCurrency(saldo.saldo)}
+                      {saldo.saldo > 0 && <span style={{ fontSize: '12px' }}> (recebe)</span>}
+                      {saldo.saldo < 0 && <span style={{ fontSize: '12px' }}> (deve pagar)</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="totais-grupos-cards">
+            {saldosGrupos.map((saldo) => (
+              <div key={saldo.grupoId} className="totais-grupo-card">
+                <div className="totais-grupo-card-header">
+                  <div className="totais-grupo-card-title">{saldo.grupoNome}</div>
+                  <div className={`totais-grupo-card-saldo ${saldo.saldo >= 0 ? 'positive' : 'negative'}`}>
                     {formatCurrency(saldo.saldo)}
                     {saldo.saldo > 0 && <span style={{ fontSize: '12px' }}> (recebe)</span>}
                     {saldo.saldo < 0 && <span style={{ fontSize: '12px' }}> (deve pagar)</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+                <div className="totais-grupo-card-info">
+                  <div className="totais-grupo-card-info-item">
+                    <span className="totais-grupo-card-info-label">Participantes</span>
+                    <span>{saldo.participantes.map(p => p.participanteNome).join(', ')}</span>
+                  </div>
+                  <div className="totais-grupo-card-info-item">
+                    <span className="totais-grupo-card-info-label">Total Pagou</span>
+                    <span>{formatCurrency(saldo.totalPagou)}</span>
+                  </div>
+                  <div className="totais-grupo-card-info-item">
+                    <span className="totais-grupo-card-info-label">Total Deve</span>
+                    <span>{formatCurrency(saldo.totalDeve)}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -509,11 +548,11 @@ const TotaisGrupos: React.FC = () => {
             />
           </div>
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-            <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
-              Cancelar
+            <button type="button" className="btn btn-secondary btn-with-icon" onClick={handleCloseModal}>
+              <FaArrowLeft /> <span>Cancelar</span>
             </button>
-            <button type="submit" className="btn btn-primary">
-              Salvar
+            <button type="submit" className="btn btn-primary btn-with-icon">
+              <FaPlus /> <span>Salvar</span>
             </button>
           </div>
         </form>

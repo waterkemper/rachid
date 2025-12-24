@@ -174,7 +174,7 @@ const Grupos: React.FC = () => {
     <div>
       <div className="grupos-header">
         <h2>Meus eventos</h2>
-        <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+        <button className="btn btn-primary" onClick={() => navigate('/novo-evento')}>
           + Novo Evento
         </button>
       </div>

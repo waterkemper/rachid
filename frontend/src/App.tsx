@@ -9,6 +9,8 @@ import { FaBars, FaTimes } from 'react-icons/fa';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Cadastro from './pages/Cadastro';
+import RecuperarSenha from './pages/RecuperarSenha';
+import ResetarSenha from './pages/ResetarSenha';
 import Participantes from './pages/Participantes';
 import Grupos from './pages/Grupos';
 import NovoEvento from './pages/NovoEvento';
@@ -18,6 +20,7 @@ import Participacoes from './pages/Participacoes';
 import TotaisGrupos from './pages/TotaisGrupos';
 import Relatorio from './pages/Relatorio';
 import Conta from './pages/Conta';
+import Ajuda from './pages/Ajuda';
 
 function Navbar() {
   const location = useLocation();
@@ -44,8 +47,13 @@ function Navbar() {
     navigate('/login');
   };
 
-  // Não mostrar navbar na tela de login,   cadastro ou home
-  if (location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/home' || location.pathname === '/') {
+  // Não mostrar navbar na tela de login, cadastro, recuperar senha, resetar senha ou home
+  if (location.pathname === '/login' || 
+      location.pathname === '/cadastro' || 
+      location.pathname === '/home' || 
+      location.pathname === '/' ||
+      location.pathname === '/recuperar-senha' ||
+      location.pathname === '/resetar-senha') {
     return null;
   }
 
@@ -120,6 +128,15 @@ function Navbar() {
                 Conta
               </Link>
             </li>
+            <li>
+              <Link 
+                to="/ajuda" 
+                className={isActive('/ajuda') ? 'active' : ''}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Ajuda
+              </Link>
+            </li>
           </ul>
           <div className="navbar-user">
             <span className="user-name">{usuario?.nome}</span>
@@ -155,7 +172,9 @@ function AppContent() {
       location.pathname === '/' ||
       location.pathname === '/home' ||
       location.pathname === '/login' ||
-      location.pathname === '/cadastro';
+      location.pathname === '/cadastro' ||
+      location.pathname === '/recuperar-senha' ||
+      location.pathname === '/resetar-senha';
 
     // Páginas com layout "full bleed" (fundo e card centralizado sem container)
     const isFullBleedPage =
@@ -169,6 +188,8 @@ function AppContent() {
         <Route path="/home" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/cadastro" element={<Cadastro />} />
+        <Route path="/recuperar-senha" element={<RecuperarSenha />} />
+        <Route path="/resetar-senha" element={<ResetarSenha />} />
         <Route
           path="/participantes"
           element={
@@ -238,6 +259,14 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Conta />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ajuda"
+          element={
+            <ProtectedRoute>
+              <Ajuda />
             </ProtectedRoute>
           }
         />

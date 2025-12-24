@@ -74,10 +74,25 @@
   margin-bottom: 10px;
 }
 
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 14px;
+  color: rgba(226, 232, 240, 0.6);
+  font-size: 14px;
+  pointer-events: none;
+  z-index: 1;
+}
+
 .search-input,
 .grupo-select {
   width: 100%;
-  padding: 12px;
+  padding: 12px 12px 12px 40px;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.20);
   background: rgba(2, 6, 23, 0.32);
@@ -85,6 +100,10 @@
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s, background 0.15s;
+}
+
+.grupo-select {
+  padding: 12px;
 }
 
 .search-input::placeholder {
@@ -126,6 +145,28 @@
   padding: 8px 10px;
   font-size: 12px;
   border-radius: 999px;
+}
+
+.btn-icon {
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+}
+
+.btn-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.btn-with-icon svg {
+  font-size: 14px;
 }
 
 .participantes-adicionados-section {
@@ -224,19 +265,35 @@
   }
 
   .participante-item {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
   }
 
-  .participante-item .btn {
-    width: 100%;
+  .participante-item span {
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+  }
+
+  .btn-icon {
+    flex-shrink: 0;
   }
 
   .form-actions {
     justify-content: stretch;
+    flex-direction: column;
   }
 
   .form-actions .btn {
     width: 100%;
+  }
+
+  .btn-with-icon {
+    width: 100%;
+  }
+
+  .adicionar-section h3 {
+    font-size: 15px;
   }
 }

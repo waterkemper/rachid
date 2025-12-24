@@ -106,6 +106,19 @@ export const authApi = {
     const response = await api.post('/auth/create-user', data);
     return response.data.usuario;
   },
+
+  solicitarRecuperacaoSenha: async (email: string): Promise<void> => {
+    await api.post('/auth/solicitar-recuperacao-senha', { email });
+  },
+
+  validarTokenRecuperacao: async (token: string): Promise<boolean> => {
+    const response = await api.post('/auth/validar-token-recuperacao', { token });
+    return response.data.valido;
+  },
+
+  resetarSenha: async (token: string, senha: string): Promise<void> => {
+    await api.post('/auth/resetar-senha', { token, senha });
+  },
 };
 
 export const participanteApi = {

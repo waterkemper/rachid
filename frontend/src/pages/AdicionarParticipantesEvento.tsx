@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { grupoApi, participanteApi, grupoParticipantesApi } from '../services/api';
 import { Participante, Grupo, GrupoParticipantesEvento } from '../types';
 import Modal from '../components/Modal';
+import { FaPlus, FaTrash, FaEdit, FaUserPlus, FaUsers, FaArrowLeft, FaArrowRight, FaSearch } from 'react-icons/fa';
 import './AdicionarParticipantesEvento.css';
 
 const AdicionarParticipantesEvento: React.FC = () => {
@@ -24,8 +25,13 @@ const AdicionarParticipantesEvento: React.FC = () => {
   const [novoParticipanteNome, setNovoParticipanteNome] = useState('');
   const [novoParticipanteEmail, setNovoParticipanteEmail] = useState('');
   const [novoParticipantePix, setNovoParticipantePix] = useState('');
+  const [novoParticipanteDdi, setNovoParticipanteDdi] = useState('+55');
+  const [novoParticipanteDdd, setNovoParticipanteDdd] = useState('');
+  const [novoParticipanteTelefone, setNovoParticipanteTelefone] = useState('');
+  const [novoTipoPix, setNovoTipoPix] = useState<'email' | 'telefone' | 'outro'>('outro');
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(true);
+  const [mensagemSucesso, setMensagemSucesso] = useState('');
 
   useEffect(() => {
     if (eventoId) {
@@ -126,17 +132,86 @@ const AdicionarParticipantesEvento: React.FC = () => {
     }
   };
 
+  // Função para determinar o tipo de PIX
+  const determinarTipoPix = (chavePix: string, email: string) => {
+    if (!chavePix) return 'outro';
+    if (chavePix === email && email) return 'email';
+    const telefoneLimpo = chavePix.replace(/\D/g, '');
+    if (telefoneLimpo.length >= 10) return 'telefone';
+    return 'outro';
+  };
+
+  // Função para atualizar PIX baseado no tipo selecionado
+  const handleNovoTipoPixChange = (tipo: 'email' | 'telefone' | 'outro') => {
+    setNovoTipoPix(tipo);
+    
+    if (tipo === 'email' && novoParticipanteEmail) {
+      setNovoParticipantePix(novoParticipanteEmail);
+    } else if (tipo === 'telefone') {
+      const telefoneCompleto = `${novoParticipanteDdi}${novoParticipanteDdd}${novoParticipanteTelefone}`;
+      const telefoneLimpo = telefoneCompleto.replace(/\D/g, '');
+      if (telefoneLimpo.length >= 10) {
+        setNovoParticipantePix(telefoneCompleto);
+      } else {
+        setNovoParticipantePix('');
+      }
+    }
+  };
+
+  // Função para atualizar telefone e PIX quando campos de telefone mudarem
+  const handleNovoTelefoneChange = (campo: 'ddi' | 'ddd' | 'telefone', valor: string) => {
+    if (campo === 'ddi') {
+      setNovoParticipanteDdi(valor);
+    } else if (campo === 'ddd') {
+      setNovoParticipanteDdd(valor.replace(/\D/g, '').substring(0, 2));
+    } else if (campo === 'telefone') {
+      setNovoParticipanteTelefone(valor.replace(/\D/g, '').substring(0, 9));
+    }
+    
+    // Se o tipo PIX for telefone, atualizar automaticamente
+    if (novoTipoPix === 'telefone') {
+      const ddi = campo === 'ddi' ? valor : novoParticipanteDdi;
+      const ddd = campo === 'ddd' ? valor.replace(/\D/g, '').substring(0, 2) : novoParticipanteDdd;
+      const telefone = campo === 'telefone' ? valor.replace(/\D/g, '').substring(0, 9) : novoParticipanteTelefone;
+      const telefoneCompleto = `${ddi}${ddd}${telefone}`;
+      const telefoneLimpo = telefoneCompleto.replace(/\D/g, '');
+      if (telefoneLimpo.length >= 10) {
+        setNovoParticipantePix(telefoneCompleto);
+      } else {
+        setNovoParticipantePix('');
+      }
+    }
+  };
+
+  // Função para atualizar email e PIX quando email mudar
+  const handleNovoEmailChange = (email: string) => {
+    setNovoParticipanteEmail(email);
+    // Se o tipo PIX for email, atualizar automaticamente
+    if (novoTipoPix === 'email') {
+      setNovoParticipantePix(email);
+    }
+  };
+
   const criarNovoParticipante = async () => {
     if (!novoParticipanteNome.trim()) {
-      setErro('Nome Ã© obrigatÃ³rio');
+      setErro('Nome é obrigatório');
       return;
     }
 
     try {
+      setErro('');
+      setMensagemSucesso('');
+      
+      // Montar telefone completo para salvar
+      const telefoneCompleto = novoParticipanteDdd && novoParticipanteTelefone 
+        ? `${novoParticipanteDdi}${novoParticipanteDdd}${novoParticipanteTelefone}` 
+        : novoParticipanteTelefone || '';
+
       const participante = await participanteApi.create({
         nome: novoParticipanteNome.trim(),
         email: novoParticipanteEmail.trim() || undefined,
         chavePix: novoParticipantePix.trim() || undefined,
+        telefone: telefoneCompleto || undefined,
       });
 
       setParticipantesDisponiveis((prev) =>
@@ -144,13 +219,24 @@ const AdicionarParticipantesEvento: React.FC = () => {
       );
       await adicionarParticipanteAoEvento(participante.id, participante);
 
+      // Limpar campos mas manter modal aberto
       setNovoParticipanteNome('');
       setNovoParticipanteEmail('');
       setNovoParticipantePix('');
-      setIsModalNovoParticipanteOpen(false);
-      setErro('');
+      setNovoParticipanteDdi('+55');
+      setNovoParticipanteDdd('');
+      setNovoParticipanteTelefone('');
+      setNovoTipoPix('outro');
+      setMensagemSucesso('Participante adicionado');
+      setBusca(''); // Limpar busca também
+      
+      // Limpar mensagem após 3 segundos
+      setTimeout(() => {
+        setMensagemSucesso('');
+      }, 3000);
     } catch (error: any) {
       setErro(error.response?.data?.error || 'Erro ao criar participante');
+      setMensagemSucesso('');
     }
   };
 
@@ -263,13 +349,23 @@ const AdicionarParticipantesEvento: React.FC = () => {
         <div className="adicionar-section">
           <h3>Adicionar pessoa</h3>
           <div className="search-box">
-            <input
-              type="text"
-              placeholder="Adicionar pessoa..."
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              className="search-input"
-            />
+            <div className="search-input-wrapper">
+              <FaSearch className="search-icon" />
+              <input
+                type="text"
+                placeholder="Adicionar pessoa..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && busca.trim() && participantesFiltrados.length === 0) {
+                    setNovoParticipanteNome(busca.trim());
+                    setIsModalNovoParticipanteOpen(true);
+                    setMensagemSucesso('');
+                  }
+                }}
+                className="search-input"
+              />
+            </div>
           </div>
 
           {participantesFiltrados.length > 0 && (
@@ -279,10 +375,11 @@ const AdicionarParticipantesEvento: React.FC = () => {
                   <span>{participante.nome} {participante.email && `(${participante.email})`}</span>
                   <button
                     type="button"
-                    className="btn btn-primary btn-small"
+                    className="btn btn-primary btn-icon"
                     onClick={() => adicionarParticipanteAoEvento(participante.id, participante)}
+                    title="Adicionar"
                   >
-                    Adicionar
+                    <FaPlus />
                   </button>
                 </div>
               ))}
@@ -291,11 +388,11 @@ const AdicionarParticipantesEvento: React.FC = () => {
 
           <button
             type="button"
-            className="btn btn-secondary"
+            className="btn btn-secondary btn-with-icon"
             onClick={() => setIsModalNovoParticipanteOpen(true)}
             style={{ marginTop: '10px' }}
           >
-            + Adicionar pessoa
+            <FaUserPlus /> <span>Adicionar pessoa</span>
           </button>
         </div>
 
@@ -335,10 +432,11 @@ const AdicionarParticipantesEvento: React.FC = () => {
                   <span>{participante.nome} {participante.email && `(${participante.email})`}</span>
                   <button
                     type="button"
-                    className="btn btn-danger btn-small"
+                    className="btn btn-danger btn-icon"
                     onClick={() => removerParticipanteDoEvento(participante.id)}
+                    title="Remover"
                   >
-                    Remover
+                    <FaTrash />
                   </button>
                 </div>
               ))}
@@ -347,10 +445,10 @@ const AdicionarParticipantesEvento: React.FC = () => {
         </div>
 
         <div className="adicionar-section">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <h3 style={{ margin: 0 }}>Sub grupos / grupos do evento (opcional)</h3>
-            <button type="button" className="btn btn-secondary" onClick={() => abrirModalFamilia()}>
-              + Criar sub grupo
+            <button type="button" className="btn btn-secondary btn-with-icon" onClick={() => abrirModalFamilia()}>
+              <FaUsers /> <span>Criar sub grupo</span>
             </button>
           </div>
           <p className="help-text" style={{ marginTop: '10px' }}>
@@ -373,11 +471,21 @@ const AdicionarParticipantesEvento: React.FC = () => {
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <button type="button" className="btn btn-secondary btn-small" onClick={() => abrirModalFamilia(f)}>
-                      Editar
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary btn-icon" 
+                      onClick={() => abrirModalFamilia(f)}
+                      title="Editar"
+                    >
+                      <FaEdit />
                     </button>
-                    <button type="button" className="btn btn-danger btn-small" onClick={() => excluirFamilia(f.id)}>
-                      Excluir
+                    <button 
+                      type="button" 
+                      className="btn btn-danger btn-icon" 
+                      onClick={() => excluirFamilia(f.id)}
+                      title="Excluir"
+                    >
+                      <FaTrash />
                     </button>
                   </div>
                 </div>
@@ -389,18 +497,18 @@ const AdicionarParticipantesEvento: React.FC = () => {
         <div className="form-actions">
           <button
             type="button"
-            className="btn btn-secondary"
+            className="btn btn-secondary btn-with-icon"
             onClick={() => navigate('/eventos')}
           >
-            Voltar
+            <FaArrowLeft /> <span>Voltar</span>
           </button>
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-primary btn-with-icon"
             onClick={handleProximo}
             disabled={participantesNoEvento.length === 0}
           >
-            Próximo
+            <span>Depesas</span> <FaArrowRight />
           </button>
         </div>
       </div>
@@ -412,10 +520,41 @@ const AdicionarParticipantesEvento: React.FC = () => {
           setNovoParticipanteNome('');
           setNovoParticipanteEmail('');
           setNovoParticipantePix('');
+          setNovoParticipanteDdi('+55');
+          setNovoParticipanteDdd('');
+          setNovoParticipanteTelefone('');
+          setNovoTipoPix('outro');
           setErro('');
+          setMensagemSucesso('');
         }}
         title="Novo Participante"
       >
+        {mensagemSucesso && (
+          <div style={{ 
+            padding: '12px', 
+            marginBottom: '16px', 
+            backgroundColor: 'rgba(34, 197, 94, 0.1)', 
+            border: '1px solid rgba(34, 197, 94, 0.3)', 
+            borderRadius: '8px',
+            color: '#22c55e',
+            textAlign: 'center'
+          }}>
+            {mensagemSucesso}
+          </div>
+        )}
+        {erro && (
+          <div style={{ 
+            padding: '12px', 
+            marginBottom: '16px', 
+            backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+            border: '1px solid rgba(239, 68, 68, 0.3)', 
+            borderRadius: '8px',
+            color: '#ef4444',
+            textAlign: 'center'
+          }}>
+            {erro}
+          </div>
+        )}
         <div className="form-group">
           <label>Nome *</label>
           <input
@@ -431,35 +570,113 @@ const AdicionarParticipantesEvento: React.FC = () => {
           <input
             type="email"
             value={novoParticipanteEmail}
-            onChange={(e) => setNovoParticipanteEmail(e.target.value)}
+            onChange={(e) => handleNovoEmailChange(e.target.value)}
             placeholder="email@exemplo.com"
           />
+        </div>
+        <div className="form-group">
+          <label>Telefone</label>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input
+              type="text"
+              value={novoParticipanteDdi}
+              onChange={(e) => handleNovoTelefoneChange('ddi', e.target.value)}
+              placeholder="+55"
+              style={{ width: '80px' }}
+              maxLength={4}
+            />
+            <input
+              type="text"
+              value={novoParticipanteDdd}
+              onChange={(e) => handleNovoTelefoneChange('ddd', e.target.value)}
+              placeholder="DD"
+              style={{ width: '60px' }}
+              maxLength={2}
+            />
+            <input
+              type="text"
+              value={novoParticipanteTelefone}
+              onChange={(e) => handleNovoTelefoneChange('telefone', e.target.value)}
+              placeholder="00000-0000"
+              style={{ flex: 1 }}
+              maxLength={9}
+            />
+          </div>
         </div>
         <div className="form-group">
           <label>PIX</label>
           <input
             type="text"
             value={novoParticipantePix}
-            onChange={(e) => setNovoParticipantePix(e.target.value)}
+            onChange={(e) => {
+              setNovoParticipantePix(e.target.value);
+              // Se o usuário editar manualmente, mudar para 'outro'
+              if (novoTipoPix !== 'outro') {
+                const novoTipo = determinarTipoPix(e.target.value, novoParticipanteEmail);
+                if (novoTipo !== novoTipoPix) {
+                  setNovoTipoPix('outro');
+                }
+              }
+            }}
             placeholder="Chave PIX"
           />
+        </div>
+        <div className="form-group">
+          <label style={{ marginBottom: '10px', display: 'block' }}>Tipo de Chave PIX:</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="novoTipoPix"
+                value="email"
+                checked={novoTipoPix === 'email'}
+                onChange={() => handleNovoTipoPixChange('email')}
+              />
+              <span>Usar Email como PIX</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="novoTipoPix"
+                value="telefone"
+                checked={novoTipoPix === 'telefone'}
+                onChange={() => handleNovoTipoPixChange('telefone')}
+              />
+              <span>Usar Telefone como PIX</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="novoTipoPix"
+                value="outro"
+                checked={novoTipoPix === 'outro'}
+                onChange={() => handleNovoTipoPixChange('outro')}
+              />
+              <span>Outro (CPF, chave aleatória, etc.)</span>
+            </label>
+          </div>
         </div>
         <div className="form-actions">
           <button
             type="button"
-            className="btn btn-secondary"
+            className="btn btn-secondary btn-with-icon"
             onClick={() => {
               setIsModalNovoParticipanteOpen(false);
               setNovoParticipanteNome('');
               setNovoParticipanteEmail('');
               setNovoParticipantePix('');
+              setNovoParticipanteDdi('+55');
+              setNovoParticipanteDdd('');
+              setNovoParticipanteTelefone('');
+              setNovoTipoPix('outro');
               setErro('');
+              setMensagemSucesso('');
             }}
           >
-            Cancelar
+            <FaArrowLeft /> <span>Cancelar</span>
           </button>
-          <button type="button" className="btn btn-primary" onClick={criarNovoParticipante}>
-            Criar e Adicionar
+          <button type="button" className="btn btn-primary btn-with-icon" onClick={criarNovoParticipante}>
+            <FaUserPlus /> <span>Adicionar</span>
           </button>
         </div>
       </Modal>
@@ -518,7 +735,7 @@ const AdicionarParticipantesEvento: React.FC = () => {
         <div className="form-actions">
           <button
             type="button"
-            className="btn btn-secondary"
+            className="btn btn-secondary btn-with-icon"
             onClick={() => {
               setIsModalFamiliaOpen(false);
               setFamiliaEditando(null);
@@ -526,10 +743,10 @@ const AdicionarParticipantesEvento: React.FC = () => {
               setFamiliaSelecionados([]);
             }}
           >
-            Cancelar
+            <FaArrowLeft /> <span>Cancelar</span>
           </button>
-          <button type="button" className="btn btn-primary" onClick={salvarFamilia}>
-            Salvar sub grupo
+          <button type="button" className="btn btn-primary btn-with-icon" onClick={salvarFamilia}>
+            <FaUsers /> <span>Salvar sub grupo</span>
           </button>
         </div>
       </Modal>

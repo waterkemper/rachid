@@ -16,6 +16,9 @@ const router = Router();
 router.post('/auth/login', AuthController.login);
 router.post('/auth/logout', AuthController.logout);
 router.post('/auth/create-user', AuthController.createUser);
+router.post('/auth/solicitar-recuperacao-senha', AuthController.solicitarRecuperacaoSenha);
+router.post('/auth/validar-token-recuperacao', AuthController.validarTokenRecuperacao);
+router.post('/auth/resetar-senha', AuthController.resetarSenha);
 
 // Rotas protegidas (requerem autenticação)
 router.get('/auth/me', authMiddleware, AuthController.me);

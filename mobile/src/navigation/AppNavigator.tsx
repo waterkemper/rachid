@@ -11,6 +11,8 @@ import { customColors } from '../theme';
 // Auth Screens
 import LoginScreen from '../screens/auth/LoginScreen';
 import CadastroScreen from '../screens/auth/CadastroScreen';
+import RecuperarSenhaScreen from '../screens/auth/RecuperarSenhaScreen';
+import ResetarSenhaScreen from '../screens/auth/ResetarSenhaScreen';
 
 // Main Screens
 import ParticipantesScreen from '../screens/ParticipantesScreen';
@@ -21,15 +23,19 @@ import NovoEventoScreen from '../screens/NovoEventoScreen';
 import ContaScreen from '../screens/ContaScreen';
 import AdicionarParticipantesEventoScreen from '../screens/AdicionarParticipantesEventoScreen';
 import GruposMaioresScreen from '../screens/GruposMaioresScreen';
+import AjudaScreen from '../screens/AjudaScreen';
 
 export type RootStackParamList = {
   Auth: undefined;
   Main: undefined;
   Login: undefined;
   Cadastro: undefined;
+  RecuperarSenha: undefined;
+  ResetarSenha: { token: string };
   NovoEvento: undefined;
   AdicionarParticipantesEvento: { eventoId: number; grupoMaior?: number | null };
   GruposMaiores: undefined;
+  Ajuda: undefined;
 };
 
 export type MainTabParamList = {
@@ -120,6 +126,8 @@ function AuthStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Cadastro" component={CadastroScreen} />
+      <Stack.Screen name="RecuperarSenha" component={RecuperarSenhaScreen} />
+      <Stack.Screen name="ResetarSenha" component={ResetarSenhaScreen} />
     </Stack.Navigator>
   );
 }
@@ -168,6 +176,14 @@ export default function AppNavigator() {
               options={{ 
                 headerShown: true,
                 header: () => <AppHeader title="Grupos Maiores" showBack />,
+              }}
+            />
+            <Stack.Screen 
+              name="Ajuda" 
+              component={AjudaScreen}
+              options={{ 
+                headerShown: true,
+                header: () => <AppHeader title="Ajuda" showBack showHelp={false} />,
               }}
             />
           </>
