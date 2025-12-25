@@ -36,14 +36,54 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-AppDataSource.initialize()
-  .then(() => {
-    console.log('Database connected');
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+// Health check com verificação de banco de dados
+app.get('/health/db', async (req, res) => {
+  try {
+    // Verificar se o DataSource está inicializado
+    if (!AppDataSource.isInitialized) {
+      return res.status(503).json({ 
+        status: 'error', 
+        database: 'not_initialized',
+        message: 'Database connection not initialized' 
+      });
+    }
+
+    // Tentar fazer uma query simples para verificar conexão
+    await AppDataSource.query('SELECT 1');
+    
+    res.json({ 
+      status: 'ok', 
+      database: 'connected',
+      timestamp: new Date().toISOString()
     });
-  })
-  .catch((error) => {
-    console.error('Error connecting to database:', error);
-  });
+  } catch (error: any) {
+    res.status(503).json({ 
+      status: 'error', 
+      database: 'disconnected',
+      message: error.message || 'Database connection failed',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Iniciar servidor mesmo se o banco falhar (para evitar 502)
+// O servidor pode funcionar parcialmente e tentar reconectar
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  
+  // Tentar conectar ao banco de dados
+  AppDataSource.initialize()
+    .then(() => {
+      console.log('✅ Database connected successfully');
+    })
+    .catch((error) => {
+      console.error('❌ Error connecting to database:', error);
+      console.error('Server is running but database is not connected');
+      console.error('Check your environment variables:');
+      console.error('- DB_HOST:', process.env.DB_HOST || 'NOT SET');
+      console.error('- DB_PORT:', process.env.DB_PORT || 'NOT SET');
+      console.error('- DB_USERNAME:', process.env.DB_USERNAME ? 'SET' : 'NOT SET');
+      console.error('- DB_DATABASE:', process.env.DB_DATABASE || 'NOT SET');
+    });
+});
 
