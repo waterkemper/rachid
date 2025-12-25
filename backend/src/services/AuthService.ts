@@ -50,7 +50,14 @@ export class AuthService {
       telefone: data.telefone,
     });
     
-    return await this.repository.save(usuario);
+    const usuarioSalvo = await this.repository.save(usuario);
+    
+    // Enviar email de boas-vindas (não bloquear se falhar)
+    EmailService.enviarEmailBoasVindas(usuarioSalvo.email, usuarioSalvo.nome).catch((error) => {
+      console.error('Erro ao enviar email de boas-vindas:', error);
+    });
+    
+    return usuarioSalvo;
   }
 
   static async findById(id: number): Promise<Usuario | null> {
@@ -117,6 +124,7 @@ export class AuthService {
     }
 
     // Se ainda não encontrou, criar novo usuário
+    const isNewUser = !usuario;
     if (!usuario) {
       usuario = this.repository.create({
         email,
@@ -126,6 +134,13 @@ export class AuthService {
         senha: undefined, // Usuários OAuth não têm senha
       });
       usuario = await this.repository.save(usuario);
+    }
+    
+    // Enviar email de boas-vindas para novos usuários Google (não bloquear se falhar)
+    if (isNewUser) {
+      EmailService.enviarEmailBoasVindasGoogle(usuario.email, usuario.nome).catch((error) => {
+        console.error('Erro ao enviar email de boas-vindas Google:', error);
+      });
     }
 
     // Gerar token JWT
@@ -163,8 +178,10 @@ export class AuthService {
     
     await this.tokenRepository.save(resetToken);
     
-    // Enviar email
-    await EmailService.enviarEmailRecuperacaoSenha(email, token);
+    // Enviar email (não bloquear se falhar)
+    EmailService.enviarEmailRecuperacaoSenha(usuario.email, usuario.nome, token).catch((error) => {
+      console.error('Erro ao enviar email de recuperação de senha:', error);
+    });
   }
 
   /**
@@ -212,6 +229,13 @@ export class AuthService {
       return false;
     }
 
+    // Buscar usuário para obter dados do email
+    const usuario = await this.findById(validacao.usuarioId);
+    
+    if (!usuario) {
+      return false;
+    }
+
     // Atualizar senha do usuário
     const senhaHash = await bcrypt.hash(novaSenha, 10);
     await this.repository.update(validacao.usuarioId, { senha: senhaHash });
@@ -219,6 +243,11 @@ export class AuthService {
     // Marcar token como usado
     resetToken.usado = true;
     await this.tokenRepository.save(resetToken);
+
+    // Enviar email de confirmação (não bloquear se falhar)
+    EmailService.enviarEmailSenhaAlterada(usuario.email, usuario.nome).catch((error) => {
+      console.error('Erro ao enviar email de confirmação de alteração de senha:', error);
+    });
 
     return true;
   }

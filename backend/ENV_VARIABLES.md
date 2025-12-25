@@ -30,6 +30,11 @@ JWT_SECRET=sua-chave-jwt-secreta-aqui
 
 # URL do Frontend
 FRONTEND_URL=https://orachid.com.br
+
+# SendGrid (E-mails Transacionais)
+SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+SENDGRID_FROM_EMAIL=noreply@orachid.com.br
+SENDGRID_FROM_NAME=Rachid
 ```
 
 ## Como Configurar no Railway
@@ -70,6 +75,20 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 ### FRONTEND_URL
 URL do seu frontend em produção: `https://orachid.com.br`
 
+### SENDGRID_API_KEY, SENDGRID_FROM_EMAIL, SENDGRID_FROM_NAME
+
+**Configuração do SendGrid:**
+1. Acesse [SendGrid](https://sendgrid.com) e crie uma conta (plano gratuito disponível)
+2. Vá em **Settings** → **API Keys**
+3. Crie uma nova API Key com permissões de "Mail Send"
+4. Copie a chave e configure como `SENDGRID_API_KEY`
+5. Vá em **Settings** → **Sender Authentication**
+6. Verifique um domínio ou e-mail único (Single Sender Verification)
+7. Use o e-mail verificado como `SENDGRID_FROM_EMAIL`
+8. `SENDGRID_FROM_NAME` é opcional (padrão: "Rachid")
+
+**Nota:** Em desenvolvimento, se `SENDGRID_API_KEY` não estiver configurado, os e-mails serão apenas logados no console.
+
 ## Desenvolvimento Local
 
 Para desenvolvimento local, crie um arquivo `.env` na pasta `backend/` (não commite este arquivo):
@@ -84,5 +103,10 @@ DB_PASSWORD=postgres
 DB_DATABASE=racha_contas
 JWT_SECRET=chave-secreta-para-desenvolvimento
 FRONTEND_URL=http://localhost:5173
+
+# SendGrid (Opcional em desenvolvimento - se não configurado, e-mails são apenas logados)
+# SENDGRID_API_KEY=sua-api-key-aqui
+# SENDGRID_FROM_EMAIL=noreply@seu-dominio.com
+# SENDGRID_FROM_NAME=Rachid
 ```
 
