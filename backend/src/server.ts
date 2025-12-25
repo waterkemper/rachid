@@ -80,10 +80,17 @@ app.listen(PORT, () => {
       console.error('❌ Error connecting to database:', error);
       console.error('Server is running but database is not connected');
       console.error('Check your environment variables:');
-      console.error('- DB_HOST:', process.env.DB_HOST || 'NOT SET');
-      console.error('- DB_PORT:', process.env.DB_PORT || 'NOT SET');
-      console.error('- DB_USERNAME:', process.env.DB_USERNAME ? 'SET' : 'NOT SET');
-      console.error('- DB_DATABASE:', process.env.DB_DATABASE || 'NOT SET');
+      if (process.env.DATABASE_URL) {
+        // Mascarar senha na URL
+        const maskedUrl = process.env.DATABASE_URL.replace(/:([^:@]+)@/, ':***@');
+        console.error('- DATABASE_URL:', maskedUrl);
+      } else {
+        console.error('- DATABASE_URL: NOT SET');
+        console.error('- DB_HOST:', process.env.DB_HOST || 'NOT SET');
+        console.error('- DB_PORT:', process.env.DB_PORT || 'NOT SET');
+        console.error('- DB_USERNAME:', process.env.DB_USERNAME ? 'SET' : 'NOT SET');
+        console.error('- DB_DATABASE:', process.env.DB_DATABASE || 'NOT SET');
+      }
     });
 });
 
