@@ -17,6 +17,10 @@ import { PasswordResetToken } from '../entities/PasswordResetToken';
 function getDataSourceConfig() {
   // Se DATABASE_URL estiver definida, usa ela
   if (process.env.DATABASE_URL) {
+    // Log para debug (mascarar senha)
+    const maskedUrl = process.env.DATABASE_URL.replace(/:([^:@]+)@/, ':***@');
+    console.log('Using DATABASE_URL:', maskedUrl);
+    
     return {
       type: 'postgres' as const,
       url: process.env.DATABASE_URL,
@@ -40,6 +44,8 @@ function getDataSourceConfig() {
       subscribers: [],
     };
   }
+  
+  console.log('DATABASE_URL not set, using individual variables');
 
   // Fallback para variáveis individuais (compatibilidade)
   return {
