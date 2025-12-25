@@ -4,6 +4,9 @@ exports.GrupoService = void 0;
 const data_source_1 = require("../database/data-source");
 const Grupo_1 = require("../entities/Grupo");
 const ParticipanteGrupo_1 = require("../entities/ParticipanteGrupo");
+const GrupoParticipantesEvento_1 = require("../entities/GrupoParticipantesEvento");
+const Despesa_1 = require("../entities/Despesa");
+const ParticipanteGrupoEvento_1 = require("../entities/ParticipanteGrupoEvento");
 class GrupoService {
     static async findAll(usuarioId) {
         return await this.grupoRepository.find({
@@ -66,13 +69,71 @@ class GrupoService {
         const grupo = await this.findById(grupoId, usuarioId);
         if (!grupo)
             return false;
+        // Remover participante do evento
         const result = await this.participanteGrupoRepository.delete({
             grupo_id: grupoId,
             participante_id: participanteId,
         });
-        return (result.affected ?? 0) > 0;
+        if ((result.affected ?? 0) > 0) {
+            // Remover também de todos os sub-grupos vinculados ao evento
+            const grupoParticipantesRepository = data_source_1.AppDataSource.getRepository(GrupoParticipantesEvento_1.GrupoParticipantesEvento);
+            const participanteGrupoEventoRepository = data_source_1.AppDataSource.getRepository(ParticipanteGrupoEvento_1.ParticipanteGrupoEvento);
+            // Buscar todos os sub-grupos do evento
+            const subGrupos = await grupoParticipantesRepository.find({
+                where: { grupo_id: grupoId },
+            });
+            // Remover o participante de cada sub-grupo
+            for (const subGrupo of subGrupos) {
+                await participanteGrupoEventoRepository.delete({
+                    grupo_participantes_evento_id: subGrupo.id,
+                    participante_id: participanteId,
+                });
+            }
+            return true;
+        }
+        return false;
     }
     static async delete(id, usuarioId) {
+        // Verificar se o grupo pertence ao usuário
+        const grupo = await this.findById(id, usuarioId);
+        if (!grupo) {
+            return false;
+        }
+        // Verificar participantes diretos
+        const participantesDiretos = await this.participanteGrupoRepository.count({
+            where: { grupo_id: id },
+        });
+        // Verificar sub-grupos (GrupoParticipantesEvento)
+        const grupoParticipantesRepository = data_source_1.AppDataSource.getRepository(GrupoParticipantesEvento_1.GrupoParticipantesEvento);
+        const subGrupos = await grupoParticipantesRepository.find({
+            where: { grupo_id: id },
+            relations: ['participantes'],
+        });
+        const numSubGrupos = subGrupos.length;
+        const participantesEmSubGrupos = subGrupos.reduce((total, subGrupo) => {
+            return total + (subGrupo.participantes?.length || 0);
+        }, 0);
+        // Verificar despesas
+        const despesaRepository = data_source_1.AppDataSource.getRepository(Despesa_1.Despesa);
+        const numDespesas = await despesaRepository.count({
+            where: { grupo_id: id },
+        });
+        // Se houver qualquer associação, lançar erro específico
+        if (participantesDiretos > 0 || participantesEmSubGrupos > 0 || numDespesas > 0) {
+            const mensagens = [];
+            if (participantesDiretos > 0) {
+                mensagens.push(`${participantesDiretos} participante(s) direto(s)`);
+            }
+            if (participantesEmSubGrupos > 0) {
+                mensagens.push(`${participantesEmSubGrupos} participante(s) em ${numSubGrupos} sub-grupo(s)`);
+            }
+            if (numDespesas > 0) {
+                mensagens.push(`${numDespesas} despesa(s)`);
+            }
+            const mensagemCompleta = `Não é possível excluir este evento pois ele possui: ${mensagens.join(', ')}. Remova primeiro os participantes e despesas antes de excluir o evento.`;
+            throw new Error(mensagemCompleta);
+        }
+        // Se não houver associações, deletar
         const result = await this.grupoRepository.delete({ id, usuario_id: usuarioId });
         return (result.affected ?? 0) > 0;
     }

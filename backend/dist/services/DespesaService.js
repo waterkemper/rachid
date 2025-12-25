@@ -36,7 +36,9 @@ class DespesaService {
         });
         const despesaSalva = await this.despesaRepository.save(despesa);
         if (data.participacoes && data.participacoes.length > 0) {
-            for (const participacaoData of data.participacoes) {
+            // Remover duplicatas baseado no participante_id (manter apenas a primeira ocorrência)
+            const participacoesUnicas = data.participacoes.filter((p, index, self) => index === self.findIndex(p2 => p2.participante_id === p.participante_id));
+            for (const participacaoData of participacoesUnicas) {
                 const participacao = this.participacaoRepository.create({
                     despesa_id: despesaSalva.id,
                     participante_id: participacaoData.participante_id,
@@ -100,15 +102,41 @@ class DespesaService {
             await this.despesaRepository.update({ id, usuario_id: usuarioId }, updateData);
             console.log('[DespesaService.update] Update direto executado com sucesso');
         }
-        if (data.participacoes) {
-            await this.participacaoRepository.delete({ despesa_id: id });
-            for (const participacaoData of data.participacoes) {
-                const participacao = this.participacaoRepository.create({
-                    despesa_id: id,
-                    participante_id: participacaoData.participante_id,
-                    valorDevePagar: participacaoData.valorDevePagar,
-                });
-                await this.participacaoRepository.save(participacao);
+        if (data.participacoes !== undefined) {
+            // Remover duplicatas baseado no participante_id (manter apenas a primeira ocorrência)
+            const participacoesUnicas = data.participacoes.filter((p, index, self) => index === self.findIndex(p2 => p2.participante_id === p.participante_id));
+            console.log('[DespesaService.update] Atualizando participações:', {
+                despesaId: id,
+                participacoesRecebidas: data.participacoes.length,
+                participacoesUnicas: participacoesUnicas.length,
+                participantesIds: participacoesUnicas.map(p => p.participante_id)
+            });
+            // Usar transação para garantir atomicidade
+            const queryRunner = data_source_1.AppDataSource.createQueryRunner();
+            await queryRunner.connect();
+            await queryRunner.startTransaction();
+            try {
+                // Deletar todas as participações existentes
+                await queryRunner.manager.delete(ParticipacaoDespesa_1.ParticipacaoDespesa, { despesa_id: id });
+                // Criar novas participações
+                for (const participacaoData of participacoesUnicas) {
+                    const participacao = queryRunner.manager.create(ParticipacaoDespesa_1.ParticipacaoDespesa, {
+                        despesa_id: id,
+                        participante_id: participacaoData.participante_id,
+                        valorDevePagar: participacaoData.valorDevePagar,
+                    });
+                    await queryRunner.manager.save(participacao);
+                }
+                await queryRunner.commitTransaction();
+                console.log('[DespesaService.update] Participações atualizadas com sucesso');
+            }
+            catch (err) {
+                await queryRunner.rollbackTransaction();
+                console.error('[DespesaService.update] Erro ao atualizar participações:', err);
+                throw err;
+            }
+            finally {
+                await queryRunner.release();
             }
         }
         else if (valorTotalFoiAlterado) {

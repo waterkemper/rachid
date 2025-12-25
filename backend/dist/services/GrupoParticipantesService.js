@@ -32,7 +32,7 @@ class GrupoParticipantesService {
         // Verificar se o grupo pertence ao usu�rio
         const grupo = await this.grupoRepository.findOne({ where: { id: data.grupo_id, usuario_id: data.usuario_id } });
         if (!grupo) {
-            throw new Error('Grupo n�o encontrado ou n�o pertence ao usu�rio');
+            throw new Error('Grupo não encontrado ou não pertence ao usuário');
         }
         const grupoParticipantes = this.grupoParticipantesRepository.create({
             grupo_id: data.grupo_id,
@@ -59,7 +59,7 @@ class GrupoParticipantesService {
         // Verificar se o grupo (evento) pertence ao usu�rio
         const grupo = await this.grupoRepository.findOne({ where: { id: eventoId, usuario_id: usuarioId } });
         if (!grupo) {
-            throw new Error('Grupo n�o encontrado ou n�o pertence ao usu�rio');
+            throw new Error('Grupo não encontrado ou não pertence ao usuário');
         }
         const participanteJaEmGrupo = await this.participanteGrupoEventoRepository
             .createQueryBuilder('pge')
@@ -78,7 +78,7 @@ class GrupoParticipantesService {
         return true;
     }
     static async removerParticipante(grupoParticipantesId, participanteId, usuarioId) {
-        // Verificar se o grupo de participantes pertence ao usu�rio atrav�s do grupo
+        // Verificar se o grupo de participantes pertence ao usuário através do grupo
         const grupoParticipantes = await this.findById(grupoParticipantesId, usuarioId);
         if (!grupoParticipantes) {
             return false;

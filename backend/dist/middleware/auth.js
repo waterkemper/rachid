@@ -6,7 +6,7 @@ function authMiddleware(req, res, next) {
     try {
         // Tentar obter token do cookie primeiro
         let token = req.cookies?.token;
-        // Se n�o tiver no cookie, tentar no header Authorization
+        // Se não tiver no cookie, tentar no header Authorization
         if (!token && req.headers.authorization) {
             const authHeader = req.headers.authorization;
             if (authHeader.startsWith('Bearer ')) {
@@ -14,7 +14,7 @@ function authMiddleware(req, res, next) {
             }
         }
         if (!token) {
-            return res.status(401).json({ error: 'Token n�o fornecido' });
+            return res.status(401).json({ error: 'Token não fornecido' });
         }
         try {
             const payload = (0, jwt_1.verifyToken)(token);
@@ -22,10 +22,10 @@ function authMiddleware(req, res, next) {
             next();
         }
         catch (error) {
-            return res.status(401).json({ error: 'Token inv�lido' });
+            return res.status(401).json({ error: 'Token inválido' });
         }
     }
     catch (error) {
-        return res.status(401).json({ error: 'Erro na autentica��o' });
+        return res.status(401).json({ error: 'Erro na autenticação' });
     }
 }

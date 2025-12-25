@@ -34,7 +34,7 @@ class RelatorioController {
             res.json(sugestoes);
         }
         catch (error) {
-            res.status(500).json({ error: 'Erro ao calcular sugest�es de pagamento' });
+            res.status(500).json({ error: 'Erro ao calcular sugestões de pagamento' });
         }
     }
     static async getSugestoesPagamentoEntreGrupos(req, res) {
@@ -46,7 +46,7 @@ class RelatorioController {
             res.json(sugestoes);
         }
         catch (error) {
-            res.status(500).json({ error: 'Erro ao calcular sugest�es de pagamento entre grupos' });
+            res.status(500).json({ error: 'Erro ao calcular sugestões de pagamento entre grupos' });
         }
     }
 }

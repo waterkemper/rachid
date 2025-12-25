@@ -81,12 +81,12 @@ export const authApi = {
 
 export const participanteApi = {
   getAll: async (): Promise<Participante[]> => {
-    const response = await api.get('/participantes');
+    const response = await api.get('/participantes', { params: { _t: Date.now() } });
     return response.data;
   },
 
   getById: async (id: number): Promise<Participante> => {
-    const response = await api.get(`/participantes/${id}`);
+    const response = await api.get(`/participantes/${id}`, { params: { _t: Date.now() } });
     return response.data;
   },
 
@@ -107,12 +107,12 @@ export const participanteApi = {
 
 export const grupoApi = {
   getAll: async (): Promise<Grupo[]> => {
-    const response = await api.get('/grupos');
+    const response = await api.get('/grupos', { params: { _t: Date.now() } });
     return response.data;
   },
 
   getById: async (id: number): Promise<Grupo> => {
-    const response = await api.get(`/grupos/${id}`);
+    const response = await api.get(`/grupos/${id}`, { params: { _t: Date.now() } });
     return response.data;
   },
 
@@ -157,7 +157,9 @@ export const grupoApi = {
 
 export const despesaApi = {
   getAll: async (grupoId?: number): Promise<Despesa[]> => {
-    const params = grupoId ? { grupoId } : {};
+    const params: any = grupoId ? { grupoId } : {};
+    // Adicionar timestamp para evitar cache do navegador
+    params._t = Date.now();
     const response = await api.get('/despesas', { params });
     const toNumber = (v: unknown): number => {
       if (typeof v === 'number') return v;
@@ -183,7 +185,7 @@ export const despesaApi = {
   },
 
   getById: async (id: number): Promise<Despesa> => {
-    const response = await api.get(`/despesas/${id}`);
+    const response = await api.get(`/despesas/${id}`, { params: { _t: Date.now() } });
     const toNumber = (v: unknown): number => {
       if (typeof v === 'number') return v;
       if (typeof v === 'string') {
@@ -278,22 +280,22 @@ export const despesaApi = {
 
 export const relatorioApi = {
   getSaldosGrupo: async (grupoId: number): Promise<SaldoParticipante[]> => {
-    const response = await api.get(`/grupos/${grupoId}/saldos`);
+    const response = await api.get(`/grupos/${grupoId}/saldos`, { params: { _t: Date.now() } });
     return response.data;
   },
 
   getSaldosPorGrupo: async (grupoId: number): Promise<SaldoGrupo[]> => {
-    const response = await api.get(`/grupos/${grupoId}/saldos-por-grupo`);
+    const response = await api.get(`/grupos/${grupoId}/saldos-por-grupo`, { params: { _t: Date.now() } });
     return response.data;
   },
 
   getSugestoesPagamento: async (grupoId: number): Promise<SugestaoPagamento[]> => {
-    const response = await api.get(`/grupos/${grupoId}/sugestoes-pagamento`);
+    const response = await api.get(`/grupos/${grupoId}/sugestoes-pagamento`, { params: { _t: Date.now() } });
     return response.data;
   },
 
   getSugestoesPagamentoGrupos: async (grupoId: number): Promise<SugestaoPagamento[]> => {
-    const response = await api.get(`/grupos/${grupoId}/sugestoes-pagamento-grupos`);
+    const response = await api.get(`/grupos/${grupoId}/sugestoes-pagamento-grupos`, { params: { _t: Date.now() } });
     return response.data;
   },
 };
@@ -310,12 +312,12 @@ export const participacaoApi = {
 
 export const grupoParticipantesApi = {
   getAll: async (eventoId: number): Promise<GrupoParticipantesEvento[]> => {
-    const response = await api.get(`/grupos/${eventoId}/grupos-participantes`);
+    const response = await api.get(`/grupos/${eventoId}/grupos-participantes`, { params: { _t: Date.now() } });
     return response.data;
   },
 
   getById: async (eventoId: number, id: number): Promise<GrupoParticipantesEvento> => {
-    const response = await api.get(`/grupos/${eventoId}/grupos-participantes/${id}`);
+    const response = await api.get(`/grupos/${eventoId}/grupos-participantes/${id}`, { params: { _t: Date.now() } });
     return response.data;
   },
 

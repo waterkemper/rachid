@@ -16,6 +16,9 @@ const router = (0, express_1.Router)();
 router.post('/auth/login', AuthController_1.AuthController.login);
 router.post('/auth/logout', AuthController_1.AuthController.logout);
 router.post('/auth/create-user', AuthController_1.AuthController.createUser);
+router.post('/auth/solicitar-recuperacao-senha', AuthController_1.AuthController.solicitarRecuperacaoSenha);
+router.post('/auth/validar-token-recuperacao', AuthController_1.AuthController.validarTokenRecuperacao);
+router.post('/auth/resetar-senha', AuthController_1.AuthController.resetarSenha);
 // Rotas protegidas (requerem autenticação)
 router.get('/auth/me', auth_1.authMiddleware, AuthController_1.AuthController.me);
 router.post('/analytics/event', auth_1.authMiddleware, AnalyticsController_1.AnalyticsController.track);

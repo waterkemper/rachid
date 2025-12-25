@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { grupoApi, participanteApi, grupoParticipantesApi } from '../services/api';
 import { Participante, Grupo, GrupoParticipantesEvento } from '../types';
 import Modal from '../components/Modal';
-import { FaPlus, FaTrash, FaEdit, FaUserPlus, FaUsers, FaArrowLeft, FaArrowRight, FaSearch } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaEdit, FaUserPlus, FaUsers, FaArrowLeft, FaArrowRight, FaSearch, FaChartBar, FaMoneyBillWave } from 'react-icons/fa';
 import './AdicionarParticipantesEvento.css';
 
 const AdicionarParticipantesEvento: React.FC = () => {
@@ -337,6 +337,22 @@ const AdicionarParticipantesEvento: React.FC = () => {
 
   return (
     <div className="adicionar-participantes-container">
+      {eventoId && (
+        <div className="despesas-header" style={{ marginBottom: '20px' }}>
+          <h2>Participantes do Evento</h2>
+          <div className="despesas-header-actions">
+            <button className="btn btn-secondary" onClick={() => navigate(`/despesas?evento=${eventoId}`)}>
+              <FaMoneyBillWave /> <span>Despesas</span>
+            </button>
+            <button className="btn btn-secondary" onClick={() => navigate(`/participacoes?evento=${eventoId}`)}>
+              <FaChartBar /> <span>Ver resultado</span>
+            </button>
+            <button className="btn btn-secondary" onClick={() => navigate(`/totais-grupos?evento=${eventoId}`)}>
+              <FaUsers /> <span>Totais por grupo</span>
+            </button>
+          </div>
+        </div>
+      )}
       <div className="adicionar-participantes-card">
         <div className="breadcrumb">
           <span>Evento</span> → <span>Participantes</span>

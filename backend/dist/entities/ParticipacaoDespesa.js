@@ -43,5 +43,6 @@ __decorate([
     __metadata("design:type", Number)
 ], ParticipacaoDespesa.prototype, "valorDevePagar", void 0);
 exports.ParticipacaoDespesa = ParticipacaoDespesa = __decorate([
-    (0, typeorm_1.Entity)('participacoes_despesa')
+    (0, typeorm_1.Entity)('participacoes_despesa'),
+    (0, typeorm_1.Unique)(['despesa_id', 'participante_id'])
 ], ParticipacaoDespesa);

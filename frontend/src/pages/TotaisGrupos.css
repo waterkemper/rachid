@@ -300,3 +300,60 @@
   }
 }
 
+/* Botões no topo - mesmo estilo de Despesas */
+.despesas-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.despesas-header h2 {
+  margin: 0;
+  flex: 1;
+  min-width: 200px;
+}
+
+.despesas-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.despesas-header-actions .btn {
+  padding: 10px 14px;
+  font-size: 14px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.despesas-header-actions .btn svg {
+  font-size: 14px;
+}
+
+/* Responsive adjustments para despesas-header */
+@media (max-width: 768px) {
+  .despesas-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .despesas-header h2 {
+    width: 100%;
+  }
+
+  .despesas-header-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .despesas-header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+

@@ -9,18 +9,18 @@ class ParticipacaoController {
             const { participanteId } = req.body;
             const usuarioId = req.usuarioId;
             if (!participanteId) {
-                return res.status(400).json({ error: 'ID do participante � obrigat�rio' });
+                return res.status(400).json({ error: 'ID do participante é obrigatório' });
             }
             const participacao = await ParticipacaoService_1.ParticipacaoService.toggleParticipacao(despesaId, participanteId, usuarioId);
             if (participacao) {
-                res.json({ message: 'Participa��o adicionada', participacao });
+                res.json({ message: 'Participação adicionada', participacao });
             }
             else {
-                res.json({ message: 'Participa��o removida' });
+                res.json({ message: 'Participação removida' });
             }
         }
         catch (error) {
-            res.status(500).json({ error: error.message || 'Erro ao atualizar participa��o' });
+            res.status(500).json({ error: error.message || 'Erro ao atualizar participação' });
         }
     }
     static async recalcular(req, res) {

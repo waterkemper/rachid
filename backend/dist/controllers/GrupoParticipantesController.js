@@ -20,7 +20,7 @@ class GrupoParticipantesController {
             const usuarioId = req.usuarioId;
             const grupo = await GrupoParticipantesService_1.GrupoParticipantesService.findById(id, usuarioId);
             if (!grupo) {
-                return res.status(404).json({ error: 'Grupo n�o encontrado' });
+                return res.status(404).json({ error: 'Grupo não encontrado' });
             }
             res.json(grupo);
         }
@@ -34,7 +34,7 @@ class GrupoParticipantesController {
             const { nome, descricao } = req.body;
             const usuarioId = req.usuarioId;
             if (!nome) {
-                return res.status(400).json({ error: 'Nome � obrigat�rio' });
+                return res.status(400).json({ error: 'Nome é obrigatório.' });
             }
             const grupo = await GrupoParticipantesService_1.GrupoParticipantesService.create({
                 grupo_id: eventoId,
@@ -55,7 +55,7 @@ class GrupoParticipantesController {
             const usuarioId = req.usuarioId;
             const grupo = await GrupoParticipantesService_1.GrupoParticipantesService.update(id, usuarioId, { nome, descricao });
             if (!grupo) {
-                return res.status(404).json({ error: 'Grupo n�o encontrado' });
+                return res.status(404).json({ error: 'Grupo não encontrado' });
             }
             res.json(grupo);
         }
@@ -69,7 +69,7 @@ class GrupoParticipantesController {
             const usuarioId = req.usuarioId;
             const sucesso = await GrupoParticipantesService_1.GrupoParticipantesService.delete(id, usuarioId);
             if (!sucesso) {
-                return res.status(404).json({ error: 'Grupo n�o encontrado' });
+                return res.status(404).json({ error: 'Grupo não encontrado' });
             }
             res.status(204).send();
         }
@@ -84,11 +84,11 @@ class GrupoParticipantesController {
             const { participanteId } = req.body;
             const usuarioId = req.usuarioId;
             if (!participanteId) {
-                return res.status(400).json({ error: 'ID do participante � obrigat�rio' });
+                return res.status(400).json({ error: 'ID do participante é obrigatório' });
             }
             const sucesso = await GrupoParticipantesService_1.GrupoParticipantesService.adicionarParticipante(grupoId, participanteId, eventoId, usuarioId);
             if (!sucesso) {
-                return res.status(400).json({ error: 'Participante j� est� em um grupo neste evento' });
+                return res.status(400).json({ error: 'Participante já está em um grupo neste evento' });
             }
             res.json({ message: 'Participante adicionado ao grupo' });
         }
@@ -103,7 +103,7 @@ class GrupoParticipantesController {
             const usuarioId = req.usuarioId;
             const sucesso = await GrupoParticipantesService_1.GrupoParticipantesService.removerParticipante(grupoId, parseInt(participanteId), usuarioId);
             if (!sucesso) {
-                return res.status(404).json({ error: 'Participante n�o est� neste grupo' });
+                return res.status(404).json({ error: 'Participante não está neste grupo' });
             }
             res.json({ message: 'Participante removido do grupo' });
         }

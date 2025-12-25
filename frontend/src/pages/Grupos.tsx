@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { usePageFocus } from '../hooks/usePageFocus';
 import { grupoApi, participanteApi, despesaApi } from '../services/api';
 import { Grupo, Participante } from '../types';
 import Modal from '../components/Modal';
@@ -33,6 +34,13 @@ const Grupos: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  const reloadData = useCallback(() => {
+    loadData();
+  }, []);
+
+  // Recarregar dados quando a página voltar ao foco
+  usePageFocus(reloadData, []);
 
   const loadData = async () => {
     try {

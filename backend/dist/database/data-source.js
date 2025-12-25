@@ -14,28 +14,64 @@ const ParticipanteGrupoEvento_1 = require("../entities/ParticipanteGrupoEvento")
 const GrupoMaior_1 = require("../entities/GrupoMaior");
 const GrupoMaiorGrupo_1 = require("../entities/GrupoMaiorGrupo");
 const GrupoMaiorParticipante_1 = require("../entities/GrupoMaiorParticipante");
-exports.AppDataSource = new typeorm_1.DataSource({
-    type: 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432'),
-    username: process.env.DB_USERNAME || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
-    database: process.env.DB_DATABASE || 'racha_contas',
-    synchronize: true,
-    logging: false,
-    entities: [
-        Usuario_1.Usuario,
-        Participante_1.Participante,
-        Grupo_1.Grupo,
-        Despesa_1.Despesa,
-        ParticipacaoDespesa_1.ParticipacaoDespesa,
-        ParticipanteGrupo_1.ParticipanteGrupo,
-        GrupoParticipantesEvento_1.GrupoParticipantesEvento,
-        ParticipanteGrupoEvento_1.ParticipanteGrupoEvento,
-        GrupoMaior_1.GrupoMaior,
-        GrupoMaiorGrupo_1.GrupoMaiorGrupo,
-        GrupoMaiorParticipante_1.GrupoMaiorParticipante,
-    ],
-    migrations: [],
-    subscribers: [],
-});
+const PasswordResetToken_1 = require("../entities/PasswordResetToken");
+// Suporta DATABASE_URL (formato URI) ou variáveis individuais
+function getDataSourceConfig() {
+    // Se DATABASE_URL estiver definida, usa ela
+    if (process.env.DATABASE_URL) {
+        // Log para debug (mascarar senha)
+        const maskedUrl = process.env.DATABASE_URL.replace(/:([^:@]+)@/, ':***@');
+        console.log('Using DATABASE_URL:', maskedUrl);
+        return {
+            type: 'postgres',
+            url: process.env.DATABASE_URL,
+            synchronize: process.env.NODE_ENV !== 'production',
+            logging: false,
+            entities: [
+                Usuario_1.Usuario,
+                Participante_1.Participante,
+                Grupo_1.Grupo,
+                Despesa_1.Despesa,
+                ParticipacaoDespesa_1.ParticipacaoDespesa,
+                ParticipanteGrupo_1.ParticipanteGrupo,
+                GrupoParticipantesEvento_1.GrupoParticipantesEvento,
+                ParticipanteGrupoEvento_1.ParticipanteGrupoEvento,
+                GrupoMaior_1.GrupoMaior,
+                GrupoMaiorGrupo_1.GrupoMaiorGrupo,
+                GrupoMaiorParticipante_1.GrupoMaiorParticipante,
+                PasswordResetToken_1.PasswordResetToken,
+            ],
+            migrations: [],
+            subscribers: [],
+        };
+    }
+    console.log('DATABASE_URL not set, using individual variables');
+    // Fallback para variáveis individuais (compatibilidade)
+    return {
+        type: 'postgres',
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT || '5432'),
+        username: process.env.DB_USERNAME || 'postgres',
+        password: process.env.DB_PASSWORD || 'postgres',
+        database: process.env.DB_DATABASE || 'racha_contas',
+        synchronize: process.env.NODE_ENV !== 'production',
+        logging: false,
+        entities: [
+            Usuario_1.Usuario,
+            Participante_1.Participante,
+            Grupo_1.Grupo,
+            Despesa_1.Despesa,
+            ParticipacaoDespesa_1.ParticipacaoDespesa,
+            ParticipanteGrupo_1.ParticipanteGrupo,
+            GrupoParticipantesEvento_1.GrupoParticipantesEvento,
+            ParticipanteGrupoEvento_1.ParticipanteGrupoEvento,
+            GrupoMaior_1.GrupoMaior,
+            GrupoMaiorGrupo_1.GrupoMaiorGrupo,
+            GrupoMaiorParticipante_1.GrupoMaiorParticipante,
+            PasswordResetToken_1.PasswordResetToken,
+        ],
+        migrations: [],
+        subscribers: [],
+    };
+}
+exports.AppDataSource = new typeorm_1.DataSource(getDataSourceConfig());

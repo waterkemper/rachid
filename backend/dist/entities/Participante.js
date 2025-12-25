@@ -40,6 +40,14 @@ __decorate([
     __metadata("design:type", String)
 ], Participante.prototype, "email", void 0);
 __decorate([
+    (0, typeorm_1.Column)('varchar', { nullable: true }),
+    __metadata("design:type", String)
+], Participante.prototype, "chavePix", void 0);
+__decorate([
+    (0, typeorm_1.Column)('varchar', { nullable: true }),
+    __metadata("design:type", String)
+], Participante.prototype, "telefone", void 0);
+__decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)
 ], Participante.prototype, "criadoEm", void 0);

@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { usePageFocus } from '../hooks/usePageFocus';
 import { relatorioApi, grupoApi, grupoParticipantesApi, participanteApi, despesaApi, participacaoApi } from '../services/api';
 import { Grupo, SaldoGrupo, GrupoParticipantesEvento, Participante, Despesa } from '../types';
 import Modal from '../components/Modal';
-import { FaPlus, FaEdit, FaTrash, FaUsers, FaArrowLeft } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaUsers, FaArrowLeft, FaChartBar, FaMoneyBillWave } from 'react-icons/fa';
 import './TotaisGrupos.css';
 
 const TotaisGrupos: React.FC = () => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [grupoSelecionado, setGrupoSelecionado] = useState<number | ''>('');
@@ -24,6 +26,7 @@ const TotaisGrupos: React.FC = () => {
   const [formData, setFormData] = useState({ nome: '', descricao: '' });
   const [, setParticipantes] = useState<Participante[]>([]);
   const [participantesDisponiveis, setParticipantesDisponiveis] = useState<Participante[]>([]);
+  const [inicializacaoFeita, setInicializacaoFeita] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     loadGrupos();
@@ -39,9 +42,20 @@ const TotaisGrupos: React.FC = () => {
 
   useEffect(() => {
     if (grupoSelecionado) {
+      // Resetar flag de inicialização quando mudar de grupo
+      setInicializacaoFeita(new Set());
       loadDadosGrupo(Number(grupoSelecionado));
     }
   }, [grupoSelecionado]);
+
+  const reloadDados = useCallback(() => {
+    if (grupoSelecionado) {
+      loadDadosGrupo(Number(grupoSelecionado));
+    }
+  }, [grupoSelecionado]);
+
+  // Recarregar dados quando a página voltar ao foco
+  usePageFocus(reloadDados, [grupoSelecionado]);
 
   const loadGrupos = async () => {
     try {
@@ -89,8 +103,11 @@ const TotaisGrupos: React.FC = () => {
       });
       setParticipacoesMap(map);
 
-      // Inicializar participações automaticamente (assumir que todos consumiram tudo)
-      await inicializarParticipacoes(grupoId, participantesNoEvento, despesasData);
+      // Inicializar participações automaticamente apenas uma vez por grupo
+      // (assumir que todos consumiram tudo na primeira vez que a página é carregada)
+      if (!inicializacaoFeita.has(grupoId)) {
+        await inicializarParticipacoes(grupoId, participantesNoEvento, despesasData);
+      }
     } catch (err) {
       setError('Erro ao carregar dados');
     } finally {
@@ -101,6 +118,18 @@ const TotaisGrupos: React.FC = () => {
   const inicializarParticipacoes = async (grupoId: number, participantesNoEvento: Participante[], despesasData: Despesa[]) => {
     if (participantesNoEvento.length === 0 || despesasData.length === 0) return;
 
+    // Verificar se já existem participações configuradas em pelo menos uma despesa
+    // Se já existem, significa que o usuário já configurou manualmente, então não inicializar automaticamente
+    const temParticipacoesConfiguradas = despesasData.some(despesa => 
+      despesa.participacoes && despesa.participacoes.length > 0
+    );
+    
+    if (temParticipacoesConfiguradas) {
+      // Já existem participações configuradas, não inicializar automaticamente
+      setInicializacaoFeita(prev => new Set(prev).add(grupoId));
+      return;
+    }
+
     setInicializando(true);
     try {
       let precisaRecarregar = false;
@@ -110,7 +139,7 @@ const TotaisGrupos: React.FC = () => {
         
         for (const participante of participantesNoEvento) {
           if (!participantesIdsComParticipacao.includes(participante.id)) {
-            // Criar participação automaticamente
+            // Criar participação automaticamente apenas se não houver nenhuma participação configurada
             try {
               await participacaoApi.toggle(despesa.id, participante.id);
               precisaRecarregar = true;
@@ -122,11 +151,18 @@ const TotaisGrupos: React.FC = () => {
       }
 
       if (precisaRecarregar) {
+        // Marcar como inicializado antes de recarregar para evitar loop infinito
+        setInicializacaoFeita(prev => new Set(prev).add(grupoId));
         // Recarregar dados após criar participações
         await loadDadosGrupo(grupoId);
+      } else {
+        // Se não precisou recarregar, marcar como inicializado mesmo assim
+        setInicializacaoFeita(prev => new Set(prev).add(grupoId));
       }
     } catch (err) {
       console.error('Erro ao inicializar participações:', err);
+      // Em caso de erro, marcar como inicializado para evitar tentativas infinitas
+      setInicializacaoFeita(prev => new Set(prev).add(grupoId));
     } finally {
       setInicializando(false);
     }
@@ -274,8 +310,23 @@ const TotaisGrupos: React.FC = () => {
 
   return (
     <div>
-      <div className="totais-grupos-header">
+      <div className="despesas-header">
         <h2>Totais por Grupo/Família</h2>
+        <div className="despesas-header-actions">
+          {grupoSelecionado && (
+            <>
+              <button className="btn btn-secondary" onClick={() => navigate(`/adicionar-participantes/${grupoSelecionado}`)}>
+                <FaUsers /> <span>Participantes</span>
+              </button>
+              <button className="btn btn-secondary" onClick={() => navigate(`/despesas?evento=${grupoSelecionado}`)}>
+                <FaMoneyBillWave /> <span>Despesas</span>
+              </button>
+              <button className="btn btn-secondary" onClick={() => navigate(`/participacoes?evento=${grupoSelecionado}`)}>
+                <FaChartBar /> <span>Ver resultado</span>
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

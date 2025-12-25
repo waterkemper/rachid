@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { despesaApi, grupoApi, participanteApi } from '../services/api';
+import { usePageFocus } from '../hooks/usePageFocus';
+import { despesaApi, grupoApi, participanteApi, participacaoApi } from '../services/api';
 import { Despesa, Grupo, Participante } from '../types';
 import Modal from '../components/Modal';
 import AdicionarParticipanteRapido from '../components/AdicionarParticipanteRapido';
@@ -42,10 +43,6 @@ const Despesas: React.FC = () => {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    loadDespesas();
-  }, [filtroGrupo]);
-
   const loadData = async () => {
     try {
       setLoading(true);
@@ -63,16 +60,23 @@ const Despesas: React.FC = () => {
     }
   };
 
-  const loadDespesas = async () => {
+  const loadDespesas = useCallback(async () => {
     try {
       const grupoId = filtroGrupo === '' ? undefined : filtroGrupo;
-      // Adicionar timestamp para evitar cache
+      // Sempre buscar dados frescos do servidor (sem cache)
       const data = await despesaApi.getAll(grupoId);
       setDespesas(data);
     } catch (err) {
       setError('Erro ao carregar despesas');
     }
-  };
+  }, [filtroGrupo]);
+
+  useEffect(() => {
+    loadDespesas();
+  }, [loadDespesas]);
+
+  // Recarregar dados quando a página voltar ao foco
+  usePageFocus(loadDespesas, [filtroGrupo]);
 
   const loadParticipantesDoEvento = async (eventoId: number, incluirPagadorAtual?: number) => {
     try {
@@ -235,15 +239,57 @@ const Despesas: React.FC = () => {
   };
 
   const handleParticipanteAdicionado = async (participanteId: number) => {
-    // Recarregar lista de participantes
-    await loadData();
-    // Se houver um evento selecionado no formulário, recarregar participantes do evento
-    if (formData.grupo_id > 0) {
-      await loadParticipantesDoEvento(formData.grupo_id);
-    }
-    // Atualizar o select de pagador se estiver aberto
-    if (isModalOpen && formData.participante_pagador_id === 0) {
-      setFormData({ ...formData, participante_pagador_id: participanteId });
+    try {
+      // Recarregar lista de participantes
+      await loadData();
+      
+      // Determinar qual evento usar (prioridade: filtroGrupo > formData.grupo_id)
+      const eventoId = filtroGrupo !== '' ? Number(filtroGrupo) : (formData.grupo_id > 0 ? formData.grupo_id : null);
+      
+      if (eventoId) {
+        // Adicionar participante ao evento
+        try {
+          await grupoApi.adicionarParticipante(eventoId, participanteId);
+          
+          // Recarregar despesas primeiro para ter a lista atualizada
+          await loadDespesas();
+          
+          // Adicionar participante a todas as despesas existentes do evento
+          const despesasAtualizadas = await despesaApi.getAll(eventoId);
+          for (const despesa of despesasAtualizadas) {
+            // Verificar se o participante já está na despesa
+            const jaTemParticipacao = despesa.participacoes?.some(p => p.participante_id === participanteId);
+            if (!jaTemParticipacao) {
+              try {
+                await participacaoApi.toggle(despesa.id, participanteId);
+              } catch (err) {
+                console.error(`Erro ao adicionar participante à despesa ${despesa.id}:`, err);
+              }
+            }
+          }
+          
+          // Recarregar despesas novamente após adicionar participações
+          await loadDespesas();
+        } catch (err: any) {
+          // Se já estiver no evento, não é erro crítico
+          if (err?.response?.status !== 400) {
+            console.error('Erro ao adicionar participante ao evento:', err);
+          }
+        }
+        
+        // Recarregar participantes do evento
+        await loadParticipantesDoEvento(eventoId);
+      } else if (formData.grupo_id > 0) {
+        // Se não houver filtroGrupo mas houver grupo no formulário, apenas recarregar
+        await loadParticipantesDoEvento(formData.grupo_id);
+      }
+      
+      // Atualizar o select de pagador se estiver aberto
+      if (isModalOpen && formData.participante_pagador_id === 0) {
+        setFormData({ ...formData, participante_pagador_id: participanteId });
+      }
+    } catch (err) {
+      console.error('Erro ao processar participante adicionado:', err);
     }
   };
 
@@ -293,6 +339,9 @@ const Despesas: React.FC = () => {
         <div className="despesas-header-actions">
           {filtroGrupo && (
             <>
+              <button className="btn btn-secondary" onClick={() => navigate(`/adicionar-participantes/${filtroGrupo}`)}>
+                <FaUsers /> <span>Participantes</span>
+              </button>
               <button className="btn btn-secondary" onClick={() => navigate(`/participacoes?evento=${filtroGrupo}`)}>
                 <FaChartBar /> <span>Ver resultado</span>
               </button>
@@ -313,37 +362,39 @@ const Despesas: React.FC = () => {
       {error && <div className="alert alert-error">{error}</div>}
 
       <div className="card" style={{ marginBottom: '20px' }}>
-        <div className="form-group">
-          <label>Filtrar por Evento</label>
-          <select
-            value={filtroGrupo}
-            onChange={(e) => setFiltroGrupo(e.target.value === '' ? '' : Number(e.target.value))}
-          >
-            <option value="">Todos os eventos</option>
-            {grupos.map((grupo) => (
-              <option key={grupo.id} value={grupo.id}>
-                {grupo.nome}
-              </option>
-            ))}
-          </select>
-        </div>
-        {filtroGrupo && despesas.length > 0 && (
-          <div style={{ 
-            marginTop: '12px', 
-            padding: '10px 14px', 
-            background: 'rgba(99, 102, 241, 0.12)', 
-            borderRadius: '10px',
-            border: '1px solid rgba(99, 102, 241, 0.20)',
-            display: 'inline-block'
-          }}>
-            <span style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.78)', marginRight: '8px' }}>
-              Total do evento:
-            </span>
-            <strong style={{ fontSize: '16px', color: 'rgba(255, 255, 255, 0.95)' }}>
-              {formatCurrency(calcularTotalDespesas())}
-            </strong>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '20px', flexWrap: 'wrap' }}>
+          <div className="form-group" style={{ flex: '1', minWidth: '200px', marginBottom: 0 }}>
+            <label>Filtrar por Evento</label>
+            <select
+              value={filtroGrupo}
+              onChange={(e) => setFiltroGrupo(e.target.value === '' ? '' : Number(e.target.value))}
+            >
+              <option value="">Todos os eventos</option>
+              {grupos.map((grupo) => (
+                <option key={grupo.id} value={grupo.id}>
+                  {grupo.nome}
+                </option>
+              ))}
+            </select>
           </div>
-        )}
+          {filtroGrupo && despesas.length > 0 && (
+            <div style={{ 
+              padding: '10px 14px', 
+              background: 'rgba(99, 102, 241, 0.12)', 
+              borderRadius: '10px',
+              border: '1px solid rgba(99, 102, 241, 0.20)',
+              display: 'inline-flex',
+              alignItems: 'center'
+            }}>
+              <span style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.78)', marginRight: '8px' }}>
+                Total do evento:
+              </span>
+              <strong style={{ fontSize: '16px', color: 'rgba(255, 255, 255, 0.95)' }}>
+                {formatCurrency(calcularTotalDespesas())}
+              </strong>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="card">
@@ -352,7 +403,6 @@ const Despesas: React.FC = () => {
           <table className="despesas-table">
             <thead>
               <tr>
-                <th>Evento</th>
                 <th>Descrição</th>
                 <th>Valor</th>
                 <th>Pagador</th>
@@ -364,35 +414,35 @@ const Despesas: React.FC = () => {
             <tbody>
               {despesas.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '20px' }}>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>
                     Nenhuma despesa cadastrada
                   </td>
                 </tr>
               ) : (
                 despesas.map((despesa) => (
                   <tr key={despesa.id}>
-                    <td>{despesa.grupo?.nome || '-'}</td>
                     <td>{despesa.descricao}</td>
                     <td>{formatCurrency(despesa.valorTotal)}</td>
                     <td>{despesa.pagador?.nome || '-'}</td>
                     <td>{formatDate(despesa.data)}</td>
                     <td>{despesa.participacoes?.length || 0}</td>
                     <td>
-                      <button
-                        className="btn btn-secondary btn-icon"
-                        style={{ marginRight: '8px' }}
-                        onClick={() => handleOpenModal(despesa)}
-                        title="Editar"
-                      >
-                        <FaEdit />
-                      </button>
-                      <button
-                        className="btn btn-danger btn-icon"
-                        onClick={() => handleDelete(despesa.id)}
-                        title="Excluir"
-                      >
-                        <FaTrash />
-                      </button>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
+                        <button
+                          className="btn btn-secondary btn-icon"
+                          onClick={() => handleOpenModal(despesa)}
+                          title="Editar"
+                        >
+                          <FaEdit />
+                        </button>
+                        <button
+                          className="btn btn-danger btn-icon"
+                          onClick={() => handleDelete(despesa.id)}
+                          title="Excluir"
+                        >
+                          <FaTrash />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -415,10 +465,6 @@ const Despesas: React.FC = () => {
                   <div className="despesa-card-value">{formatCurrency(despesa.valorTotal)}</div>
                 </div>
                 <div className="despesa-card-info">
-                  <div className="despesa-card-info-item">
-                    <span className="despesa-card-info-label">Evento</span>
-                    <span>{despesa.grupo?.nome || '-'}</span>
-                  </div>
                   <div className="despesa-card-info-item">
                     <span className="despesa-card-info-label">Pagador</span>
                     <span>{despesa.pagador?.nome || '-'}</span>

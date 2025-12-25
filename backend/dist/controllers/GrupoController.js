@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GrupoController = void 0;
 const GrupoService_1 = require("../services/GrupoService");
-const PlanService_1 = require("../services/PlanService");
 class GrupoController {
     static async getAll(req, res) {
         try {
@@ -108,6 +107,19 @@ class GrupoController {
             res.status(204).send();
         }
         catch (error) {
+            // Se o erro contém uma mensagem específica do serviço, usar ela
+            if (error?.message && error.message.includes('Não é possível excluir')) {
+                return res.status(400).json({
+                    error: error.message
+                });
+            }
+            // Verificar se é erro de constraint de foreign key (fallback)
+            if (error?.code === '23503' || error?.message?.includes('foreign key') || error?.message?.includes('constraint')) {
+                return res.status(400).json({
+                    error: 'Não é possível excluir este evento pois ele possui participantes ou despesas associadas. Remova primeiro os participantes e despesas antes de excluir o evento.'
+                });
+            }
+            console.error('Erro ao deletar grupo:', error);
             res.status(500).json({ error: 'Erro ao deletar grupo' });
         }
     }
@@ -115,14 +127,6 @@ class GrupoController {
         try {
             const usuarioId = req.usuarioId;
             const id = parseInt(req.params.id);
-            const isPro = await PlanService_1.PlanService.isPro(usuarioId);
-            if (!isPro) {
-                return res.status(402).json({
-                    error: 'Duplicar evento está disponível no plano Pro.',
-                    errorCode: 'PRO_REQUIRED',
-                    feature: 'duplicar_evento',
-                });
-            }
             const novoGrupo = await GrupoService_1.GrupoService.duplicar(id, usuarioId);
             if (!novoGrupo) {
                 return res.status(404).json({ error: 'Grupo não encontrado' });

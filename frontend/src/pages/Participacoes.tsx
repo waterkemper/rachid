@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { usePageFocus } from '../hooks/usePageFocus';
 import { grupoApi, despesaApi, grupoParticipantesApi, relatorioApi, participanteApi } from '../services/api';
 import { Grupo, Despesa, Participante, GrupoParticipantesEvento, SugestaoPagamento, SaldoParticipante } from '../types';
 import Modal from '../components/Modal';
 import { formatarSugestoesPagamento } from '../utils/whatsappFormatter';
+import { FaUsers, FaMoneyBillWave } from 'react-icons/fa';
 import './Participacoes.css';
 
 const Participacoes: React.FC = () => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [grupoSelecionado, setGrupoSelecionado] = useState<number | ''>('');
@@ -67,6 +70,16 @@ const Participacoes: React.FC = () => {
       loadRelatorio();
     }
   }, [grupoSelecionado, tipoRelatorio]);
+
+  const reloadRelatorio = useCallback(() => {
+    if (grupoSelecionado) {
+      loadRelatorio();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grupoSelecionado, tipoRelatorio]);
+
+  // Recarregar dados quando a página voltar ao foco
+  usePageFocus(reloadRelatorio, [grupoSelecionado, tipoRelatorio]);
 
   const loadGrupos = async () => {
     try {
@@ -245,8 +258,23 @@ const Participacoes: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+      <div className="despesas-header">
         <h2>Resultados</h2>
+        <div className="despesas-header-actions">
+          {grupoSelecionado && (
+            <>
+              <button className="btn btn-secondary" onClick={() => navigate(`/adicionar-participantes/${grupoSelecionado}`)}>
+                <FaUsers /> <span>Participantes</span>
+              </button>
+              <button className="btn btn-secondary" onClick={() => navigate(`/despesas?evento=${grupoSelecionado}`)}>
+                <FaMoneyBillWave /> <span>Despesas</span>
+              </button>
+              <button className="btn btn-secondary" onClick={() => navigate(`/totais-grupos?evento=${grupoSelecionado}`)}>
+                <FaUsers /> <span>Totais por grupo</span>
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
