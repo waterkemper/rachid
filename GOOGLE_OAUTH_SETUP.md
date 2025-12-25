@@ -20,10 +20,14 @@ Este documento descreve como configurar o login via Google OAuth no sistema Rach
    - **Name**: Rachid Web App
    - **Authorized JavaScript origins**: 
      - `http://localhost:5173` (desenvolvimento)
-     - `https://seu-dominio.com` (produção)
+     - `https://www.orachid.com.br` (produção - COM www)
+     - `https://orachid.com.br` (produção - SEM www, se necessário)
    - **Authorized redirect URIs**: 
      - `http://localhost:5173` (desenvolvimento)
-     - `https://seu-dominio.com` (produção)
+     - `https://www.orachid.com.br` (produção - COM www)
+     - `https://orachid.com.br` (produção - SEM www, se necessário)
+   
+   **IMPORTANTE**: O domínio deve corresponder EXATAMENTE ao que aparece na URL do navegador. Se você usa `www.orachid.com.br`, adicione com `www`. Se usa `orachid.com.br`, adicione sem `www`. É recomendado adicionar ambos para evitar problemas.
 
 7. Para Mobile, crie outro OAuth 2.0 Client ID:
    - **Application type**: Android ou iOS
@@ -140,6 +144,32 @@ CREATE INDEX IF NOT EXISTS idx_usuarios_auth_provider ON usuarios(auth_provider)
 6. Verifique se foi redirecionado corretamente
 
 ## Troubleshooting
+
+### Erro: "Error 400: origin_mismatch"
+
+Este é o erro mais comum e ocorre quando o domínio da aplicação não está autorizado no Google Cloud Console.
+
+**Sintomas:**
+- Erro `400: origin_mismatch` ao tentar fazer login com Google
+- A URL do erro mostra o domínio que está tentando acessar (ex: `https://www.orachid.com.br`)
+
+**Solução:**
+1. Acesse o [Google Cloud Console](https://console.cloud.google.com/)
+2. Vá em **APIs & Services** > **Credentials**
+3. Clique no OAuth 2.0 Client ID que você está usando
+4. Na seção **Authorized JavaScript origins**, adicione:
+   - `https://www.orachid.com.br` (se o erro mostra este domínio)
+   - `https://orachid.com.br` (versão sem www, para garantir)
+5. Na seção **Authorized redirect URIs**, adicione os mesmos domínios
+6. Clique em **Save**
+7. **Aguarde alguns minutos** para as mudanças propagarem (pode levar até 5 minutos)
+8. Tente fazer login novamente
+
+**Dicas importantes:**
+- O domínio deve corresponder EXATAMENTE ao que aparece na URL (incluindo `www` ou não)
+- Use sempre `https://` (não `http://`) para produção
+- Não adicione barra no final (`https://www.orachid.com.br/` está errado)
+- Se você usa tanto `www` quanto sem `www`, adicione ambos os domínios
 
 ### Erro: "GOOGLE_CLIENT_ID não configurado"
 - Verifique se a variável de ambiente está definida no `.env` do backend

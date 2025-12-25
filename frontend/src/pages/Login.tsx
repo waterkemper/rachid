@@ -10,8 +10,18 @@ function Login() {
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(false);
+  const [logoSrc, setLogoSrc] = React.useState<string | undefined>(undefined);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    // Tentar carregar o logo de forma assíncrona
+    import('../assets/logo.png')
+      .then((module) => setLogoSrc(module.default))
+      .catch(() => {
+        // Logo não encontrado - não faz nada, apenas não exibe
+      });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,6 +42,11 @@ function Login() {
   return (
     <div className="login-container">
       <div className="login-card">
+        {logoSrc && (
+          <div className="login-logo-container">
+            <img src={logoSrc} alt="Rachid Logo" className="login-logo" />
+          </div>
+        )}
         <h1>Rachid</h1>
         <h2>Login</h2>
         <form onSubmit={handleSubmit}>
