@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Image } from 'react-native';
 import { TextInput, Button, Text, Card, ActivityIndicator } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { authApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -17,6 +18,49 @@ const LoginScreen: React.FC = () => {
   const [carregando, setCarregando] = useState(false);
   const { login } = useAuth();
   const navigation = useNavigation<LoginScreenNavigationProp>();
+
+  useEffect(() => {
+    // Configurar Google Sign-In
+    GoogleSignin.configure({
+      // O webClientId será configurado via variável de ambiente ou constante
+      // Por enquanto, deixamos vazio - deve ser configurado no código ou .env
+      webClientId: '', // Deve ser configurado com o Client ID do Google Cloud Console
+    });
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    setErro('');
+    setCarregando(true);
+
+    try {
+      // Verificar se Google Play Services está disponível
+      await GoogleSignin.hasPlayServices();
+      
+      // Fazer login
+      const userInfo = await GoogleSignin.signIn();
+      
+      if (userInfo.idToken) {
+        const { usuario, token } = await authApi.loginWithGoogle(userInfo.idToken);
+        await login(usuario, token);
+      } else {
+        throw new Error('Token ID do Google não disponível');
+      }
+    } catch (error: any) {
+      console.error('❌ Erro no login Google:', error);
+      
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        setErro('Login cancelado');
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        setErro('Login em progresso');
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        setErro('Google Play Services não disponível');
+      } else {
+        setErro(error.response?.data?.error || error.message || 'Erro ao fazer login com Google');
+      }
+    } finally {
+      setCarregando(false);
+    }
+  };
 
   const handleSubmit = async () => {
     setErro('');
@@ -103,6 +147,24 @@ const LoginScreen: React.FC = () => {
               textColor="#ffffff"
             >
               {carregando ? 'Entrando...' : 'Entrar'}
+            </Button>
+
+            <View style={styles.dividerContainer}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>ou</Text>
+              <View style={styles.divider} />
+            </View>
+
+            <Button
+              mode="outlined"
+              onPress={handleGoogleSignIn}
+              disabled={carregando}
+              style={styles.googleButton}
+              contentStyle={styles.buttonContent}
+              icon="google"
+              textColor={customColors.text}
+            >
+              Entrar com Google
             </Button>
 
             <View style={styles.linksContainer}>
@@ -210,6 +272,27 @@ const styles = StyleSheet.create({
   error: {
     color: 'rgba(254, 226, 226, 0.98)',
     textAlign: 'center',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(148, 163, 184, 0.16)',
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    color: 'rgba(226, 232, 240, 0.7)',
+    fontSize: 14,
+  },
+  googleButton: {
+    marginTop: 10,
+    marginBottom: 16,
+    borderRadius: 999,
+    borderColor: 'rgba(148, 163, 184, 0.32)',
   },
 });
 

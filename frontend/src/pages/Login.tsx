@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google';
 import { authApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import './Login.css';
@@ -61,6 +62,34 @@ function Login() {
             {carregando ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
+        <div style={{ marginTop: '20px', marginBottom: '20px', textAlign: 'center' }}>
+          <div style={{ marginBottom: '12px', color: 'rgba(226, 232, 240, 0.7)', fontSize: '14px' }}>
+            ou
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <GoogleLogin
+              onSuccess={async (credentialResponse) => {
+                if (credentialResponse.credential) {
+                  setErro('');
+                  setCarregando(true);
+                  try {
+                    const usuario = await authApi.loginWithGoogle(credentialResponse.credential);
+                    login(usuario);
+                    navigate('/eventos');
+                  } catch (error: any) {
+                    setErro(error.response?.data?.error || 'Erro ao fazer login com Google');
+                  } finally {
+                    setCarregando(false);
+                  }
+                }
+              }}
+              onError={() => {
+                setErro('Erro ao fazer login com Google');
+              }}
+              useOneTap={false}
+            />
+          </div>
+        </div>
         <div className="login-links">
           <button
             type="button"

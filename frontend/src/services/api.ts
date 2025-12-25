@@ -45,6 +45,11 @@ export const authApi = {
     return response.data.usuario;
   },
 
+  loginWithGoogle: async (tokenId: string): Promise<Usuario> => {
+    const response = await api.post('/auth/google', { tokenId });
+    return response.data.usuario;
+  },
+
   logout: async (): Promise<void> => {
     await api.post('/auth/logout');
   },

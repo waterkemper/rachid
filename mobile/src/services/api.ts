@@ -83,6 +83,15 @@ export const authApi = {
     return { usuario: response.data.usuario, token: token || '' };
   },
 
+  loginWithGoogle: async (tokenId: string): Promise<{ usuario: Usuario; token: string }> => {
+    const response = await api.post('/auth/google', { tokenId });
+    const token = response.data.token;
+    if (token) {
+      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+    }
+    return { usuario: response.data.usuario, token: token || '' };
+  },
+
   logout: async (): Promise<void> => {
     try {
       await api.post('/auth/logout');

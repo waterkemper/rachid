@@ -14,6 +14,7 @@ const router = Router();
 
 // Rotas públicas (sem autenticação)
 router.post('/auth/login', AuthController.login);
+router.post('/auth/google', AuthController.googleLogin);
 router.post('/auth/logout', AuthController.logout);
 router.post('/auth/create-user', AuthController.createUser);
 router.post('/auth/solicitar-recuperacao-senha', AuthController.solicitarRecuperacaoSenha);

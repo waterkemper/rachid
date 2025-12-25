@@ -13,8 +13,14 @@ export class Usuario {
   @Column('varchar', { unique: true })
   email!: string;
 
-  @Column('varchar')
-  senha!: string;
+  @Column('varchar', { nullable: true })
+  senha?: string;
+
+  @Column('varchar', { nullable: true, unique: true })
+  google_id?: string;
+
+  @Column('varchar', { default: 'local' })
+  auth_provider!: string;
 
   @Column('varchar')
   nome!: string;

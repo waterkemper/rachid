@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
+import { OAuth2Client } from 'google-auth-library';
 import { AppDataSource } from '../database/data-source';
 import { Usuario } from '../entities/Usuario';
 import { PasswordResetToken } from '../entities/PasswordResetToken';
@@ -14,6 +15,11 @@ export class AuthService {
     const usuario = await this.repository.findOne({ where: { email } });
     
     if (!usuario) {
+      return null;
+    }
+
+    // Se usuário não tem senha (OAuth), não pode fazer login tradicional
+    if (!usuario.senha) {
       return null;
     }
 
@@ -53,6 +59,84 @@ export class AuthService {
 
   static async findByEmail(email: string): Promise<Usuario | null> {
     return await this.repository.findOne({ where: { email } });
+  }
+
+  static async findByGoogleId(googleId: string): Promise<Usuario | null> {
+    return await this.repository.findOne({ where: { google_id: googleId } });
+  }
+
+  /**
+   * Login via Google OAuth
+   * Valida o token ID do Google e cria/busca usuário
+   */
+  static async loginWithGoogle(tokenId: string): Promise<{ token: string; usuario: Omit<Usuario, 'senha'> }> {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    
+    if (!clientId) {
+      throw new Error('GOOGLE_CLIENT_ID não configurado');
+    }
+
+    const client = new OAuth2Client(clientId);
+
+    // Validar token com Google
+    let ticket;
+    try {
+      ticket = await client.verifyIdToken({
+        idToken: tokenId,
+        audience: clientId,
+      });
+    } catch (error) {
+      throw new Error('Token do Google inválido ou expirado');
+    }
+
+    const payload = ticket.getPayload();
+    
+    if (!payload) {
+      throw new Error('Não foi possível obter dados do Google');
+    }
+
+    const { sub: googleId, email, name } = payload;
+
+    if (!email || !googleId) {
+      throw new Error('Email ou Google ID não disponível no token');
+    }
+
+    // Buscar usuário por google_id
+    let usuario = await this.findByGoogleId(googleId);
+
+    // Se não encontrou por google_id, buscar por email
+    if (!usuario) {
+      usuario = await this.findByEmail(email);
+      
+      // Se encontrou por email mas não tem google_id, vincular
+      if (usuario && !usuario.google_id) {
+        usuario.google_id = googleId;
+        usuario.auth_provider = 'google';
+        usuario = await this.repository.save(usuario);
+      }
+    }
+
+    // Se ainda não encontrou, criar novo usuário
+    if (!usuario) {
+      usuario = this.repository.create({
+        email,
+        nome: name || email.split('@')[0],
+        google_id: googleId,
+        auth_provider: 'google',
+        senha: undefined, // Usuários OAuth não têm senha
+      });
+      usuario = await this.repository.save(usuario);
+    }
+
+    // Gerar token JWT
+    const token = generateToken({
+      usuarioId: usuario.id,
+      email: usuario.email,
+    });
+
+    const { senha: _, ...usuarioSemSenha } = usuario;
+    
+    return { token, usuario: usuarioSemSenha };
   }
 
   /**
