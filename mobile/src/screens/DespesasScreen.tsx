@@ -229,23 +229,30 @@ const DespesasScreen: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    if (salvando) {
+      return; // Prevenir múltiplos cliques
+    }
+
     if (participantesSelecionados.length === 0) {
       Alert.alert('Atenção', 'Selecione pelo menos um participante para a despesa');
       return;
     }
 
+    // Remover duplicatas dos participantes selecionados
+    const participantesUnicos = [...new Set(participantesSelecionados)];
+
     try {
       setSalvando(true);
       setError(null);
       const valorTotal = Number(String(formData.valorTotal).replace(',', '.'));
-      const valorPorParticipante = valorTotal / participantesSelecionados.length;
+      const valorPorParticipante = valorTotal / participantesUnicos.length;
       
       const despesaData: any = {
         grupo_id: formData.grupo_id,
         descricao: formData.descricao,
         valorTotal: valorTotal,
         data: formData.data,
-        participacoes: participantesSelecionados.map(participanteId => ({
+        participacoes: participantesUnicos.map(participanteId => ({
           participante_id: participanteId,
           valorDevePagar: valorPorParticipante,
         })),

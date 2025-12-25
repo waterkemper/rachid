@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS participacoes_despesa (
   participante_id INTEGER NOT NULL,
   valorDevePagar DECIMAL(10, 2) NOT NULL,
   CONSTRAINT fk_participacoes_despesa FOREIGN KEY (despesa_id) REFERENCES despesas(id) ON DELETE CASCADE,
-  CONSTRAINT fk_participacoes_participante FOREIGN KEY (participante_id) REFERENCES participantes(id) ON DELETE CASCADE
+  CONSTRAINT fk_participacoes_participante FOREIGN KEY (participante_id) REFERENCES participantes(id) ON DELETE CASCADE,
+  CONSTRAINT uk_participacoes_despesa_participante UNIQUE (despesa_id, participante_id)
 );
 
 -- Tabela de Participantes em Grupos (relação many-to-many)

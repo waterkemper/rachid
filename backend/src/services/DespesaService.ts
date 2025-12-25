@@ -55,7 +55,12 @@ export class DespesaService {
     const despesaSalva = await this.despesaRepository.save(despesa);
 
     if (data.participacoes && data.participacoes.length > 0) {
-      for (const participacaoData of data.participacoes) {
+      // Remover duplicatas baseado no participante_id (manter apenas a primeira ocorrência)
+      const participacoesUnicas = data.participacoes.filter((p, index, self) => 
+        index === self.findIndex(p2 => p2.participante_id === p.participante_id)
+      );
+
+      for (const participacaoData of participacoesUnicas) {
         const participacao = this.participacaoRepository.create({
           despesa_id: despesaSalva.id,
           participante_id: participacaoData.participante_id,
@@ -127,9 +132,14 @@ export class DespesaService {
     }
 
     if (data.participacoes) {
+      // Remover duplicatas baseado no participante_id (manter apenas a primeira ocorrência)
+      const participacoesUnicas = data.participacoes.filter((p, index, self) => 
+        index === self.findIndex(p2 => p2.participante_id === p.participante_id)
+      );
+
       await this.participacaoRepository.delete({ despesa_id: id });
 
-      for (const participacaoData of data.participacoes) {
+      for (const participacaoData of participacoesUnicas) {
         const participacao = this.participacaoRepository.create({
           despesa_id: id,
           participante_id: participacaoData.participante_id,

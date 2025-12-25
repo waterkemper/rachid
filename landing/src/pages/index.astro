@@ -1,0 +1,31 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Hero from '../components/Hero.astro';
+import Steps from '../components/Steps.astro';
+import Features from '../components/Features.astro';
+import CTA from '../components/CTA.astro';
+import '../styles/home.css';
+---
+
+<BaseLayout>
+  <div class="home-page">
+    <div class="home-bg" aria-hidden="true"></div>
+
+    <Header />
+
+    <main class="home-main">
+      <Hero />
+      <Steps />
+      <Features />
+      <CTA />
+
+      <footer class="home-footer">
+        <span>Rachid</span>
+        <span class="home-footer-sep">•</span>
+        <span>Divisão de despesas em grupo</span>
+      </footer>
+    </main>
+  </div>
+</BaseLayout>
+

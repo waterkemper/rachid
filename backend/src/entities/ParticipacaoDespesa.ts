@@ -1,8 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, Unique } from 'typeorm';
 import { Despesa } from './Despesa';
 import { Participante } from './Participante';
 
 @Entity('participacoes_despesa')
+@Unique(['despesa_id', 'participante_id'])
 export class ParticipacaoDespesa {
   @PrimaryGeneratedColumn()
   id!: number;

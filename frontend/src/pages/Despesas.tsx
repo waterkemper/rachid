@@ -30,6 +30,7 @@ const Despesas: React.FC = () => {
     data: new Date().toISOString().split('T')[0],
   });
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -167,22 +168,30 @@ const Despesas: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (saving) {
+      return; // Prevenir múltiplos cliques
+    }
+
     if (participantesSelecionados.length === 0) {
       setError('Selecione pelo menos um participante para a despesa');
       return;
     }
 
+    // Remover duplicatas dos participantes selecionados
+    const participantesUnicos = [...new Set(participantesSelecionados)];
+
     try {
+      setSaving(true);
       setError(null);
       const valorTotal = Number(String(formData.valorTotal).replace(',', '.'));
-      const valorPorParticipante = valorTotal / participantesSelecionados.length;
+      const valorPorParticipante = valorTotal / participantesUnicos.length;
       
       const despesaData: any = {
         grupo_id: formData.grupo_id,
         descricao: formData.descricao,
         valorTotal: valorTotal,
         data: formData.data,
-        participacoes: participantesSelecionados.map(participanteId => ({
+        participacoes: participantesUnicos.map(participanteId => ({
           participante_id: participanteId,
           valorDevePagar: valorPorParticipante,
         })),
@@ -208,6 +217,8 @@ const Despesas: React.FC = () => {
     } catch (err: any) {
       const errorMessage = err?.response?.data?.error || 'Erro ao salvar despesa';
       setError(errorMessage);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -639,9 +650,9 @@ const Despesas: React.FC = () => {
             <button 
               type="submit" 
               className="btn btn-primary"
-              disabled={participantesSelecionados.length === 0}
+              disabled={participantesSelecionados.length === 0 || saving}
             >
-              Salvar
+              {saving ? 'Salvando...' : 'Salvar'}
             </button>
           </div>
         </form>

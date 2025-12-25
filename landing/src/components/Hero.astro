@@ -1,0 +1,80 @@
+---
+const APP_URL = "https://app.orachid.com.br";
+---
+
+<section class="home-hero">
+  <div class="home-hero-left">
+    <h1 class="home-hero-title">Racha contas sem dor de cabeça</h1>
+    <p class="home-hero-subtitle">
+      Crie um evento, adicione quem participou, lance as despesas e veja quem paga ou recebe.
+      Um fluxo guiado feito para qualquer pessoa.
+    </p>
+
+    <div class="home-hero-cta">
+      <a href={`${APP_URL}/cadastro`} class="btn home-btn home-btn-primary">
+        Começar agora
+      </a>
+
+      <a href={`${APP_URL}/login`} class="btn home-btn home-btn-ghost">
+        Já tenho conta
+      </a>
+    </div>
+
+    <div class="home-pills" aria-label="Destaques">
+      <div class="home-pill">Sem planilhas</div>
+      <div class="home-pill">Cálculo automático</div>
+      <div class="home-pill">Grupos e famílias</div>
+      <div class="home-pill">Consumo por padrão</div>
+    </div>
+  </div>
+
+  <div class="home-hero-right">
+    <div class="home-preview">
+      <div class="home-preview-header">
+        <div class="home-preview-title">Seu evento em poucos cliques</div>
+        <div class="home-preview-sub">Exemplo: "Churrasco do sábado"</div>
+      </div>
+
+      <div class="home-preview-steps">
+        <div class="home-preview-step">
+          <div class="home-preview-dot">1</div>
+          <div class="home-preview-step-content">
+            <div class="home-preview-step-title">Criar evento</div>
+            <div class="home-preview-step-desc">Nome + data</div>
+          </div>
+        </div>
+
+        <div class="home-preview-step">
+          <div class="home-preview-dot">2</div>
+          <div class="home-preview-step-content">
+            <div class="home-preview-step-title">Adicionar participantes</div>
+            <div class="home-preview-step-desc">Pessoas, grupos e grupos maiores</div>
+          </div>
+        </div>
+
+        <div class="home-preview-step">
+          <div class="home-preview-dot">3</div>
+          <div class="home-preview-step-content">
+            <div class="home-preview-step-title">Lançar despesas</div>
+            <div class="home-preview-step-desc">Quem pagou + valor</div>
+          </div>
+        </div>
+
+        <div class="home-preview-step">
+          <div class="home-preview-dot">4</div>
+          <div class="home-preview-step-content">
+            <div class="home-preview-step-title">Ver totais</div>
+            <div class="home-preview-step-desc">Desmarque só as exceções</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-preview-footer">
+        <div class="home-preview-note">
+          Dica: por padrão, o sistema assume que <strong>todo mundo consumiu tudo</strong>.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
