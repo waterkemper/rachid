@@ -138,5 +138,36 @@ export class GrupoController {
       res.status(500).json({ error: 'Erro ao duplicar grupo' });
     }
   }
+
+  static async gerarLink(req: AuthRequest, res: Response) {
+    try {
+      const usuarioId = req.usuarioId!;
+      const id = parseInt(req.params.id);
+
+      const token = await GrupoService.gerarShareToken(id, usuarioId);
+      res.json({ token, link: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/evento/${token}` });
+    } catch (error: any) {
+      if (error.message?.includes('não encontrado')) {
+        return res.status(404).json({ error: error.message });
+      }
+      res.status(500).json({ error: 'Erro ao gerar link de compartilhamento' });
+    }
+  }
+
+  static async obterLink(req: AuthRequest, res: Response) {
+    try {
+      const usuarioId = req.usuarioId!;
+      const id = parseInt(req.params.id);
+
+      const token = await GrupoService.obterShareToken(id, usuarioId);
+      if (!token) {
+        return res.json({ token: null, link: null });
+      }
+
+      res.json({ token, link: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/evento/${token}` });
+    } catch (error) {
+      res.status(500).json({ error: 'Erro ao obter link de compartilhamento' });
+    }
+  }
 }
 

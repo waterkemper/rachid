@@ -27,6 +27,9 @@ export class Grupo {
   @CreateDateColumn()
   criadoEm!: Date;
 
+  @Column({ type: 'varchar', nullable: true, unique: true })
+  shareToken?: string;
+
   @OneToMany(() => Despesa, despesa => despesa.grupo)
   despesas!: Despesa[];
 

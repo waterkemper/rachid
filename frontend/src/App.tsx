@@ -11,6 +11,7 @@ import Home from './pages/Home';
 import Cadastro from './pages/Cadastro';
 import RecuperarSenha from './pages/RecuperarSenha';
 import ResetarSenha from './pages/ResetarSenha';
+import EventoPublico from './pages/EventoPublico';
 import Participantes from './pages/Participantes';
 import Grupos from './pages/Grupos';
 import NovoEvento from './pages/NovoEvento';
@@ -47,13 +48,14 @@ function Navbar() {
     navigate('/login');
   };
 
-  // Não mostrar navbar na tela de login, cadastro, recuperar senha, resetar senha ou home
+  // Não mostrar navbar na tela de login, cadastro, recuperar senha, resetar senha, home ou evento público
   if (location.pathname === '/login' || 
       location.pathname === '/cadastro' || 
       location.pathname === '/home' || 
       location.pathname === '/' ||
       location.pathname === '/recuperar-senha' ||
-      location.pathname === '/resetar-senha') {
+      location.pathname === '/resetar-senha' ||
+      location.pathname.startsWith('/evento/')) {
     return null;
   }
 
@@ -174,13 +176,15 @@ function AppContent() {
       location.pathname === '/login' ||
       location.pathname === '/cadastro' ||
       location.pathname === '/recuperar-senha' ||
-      location.pathname === '/resetar-senha';
+      location.pathname === '/resetar-senha' ||
+      location.pathname.startsWith('/evento/');
 
     // Páginas com layout "full bleed" (fundo e card centralizado sem container)
     const isFullBleedPage =
       isPublicPage ||
       location.pathname === '/novo-evento' ||
-      location.pathname.startsWith('/adicionar-participantes');
+      location.pathname.startsWith('/adicionar-participantes') ||
+      location.pathname.startsWith('/evento/');
 
     const routes = (
       <Routes>
@@ -190,6 +194,7 @@ function AppContent() {
         <Route path="/cadastro" element={<Cadastro />} />
         <Route path="/recuperar-senha" element={<RecuperarSenha />} />
         <Route path="/resetar-senha" element={<ResetarSenha />} />
+        <Route path="/evento/:token" element={<EventoPublico />} />
         <Route
           path="/participantes"
           element={

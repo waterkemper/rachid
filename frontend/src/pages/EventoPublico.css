@@ -1,0 +1,478 @@
+.evento-publico-container {
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 500px at 15% 10%, rgba(99, 102, 241, 0.28), transparent 60%),
+    radial-gradient(700px 450px at 85% 20%, rgba(34, 197, 94, 0.18), transparent 55%),
+    radial-gradient(800px 500px at 50% 100%, rgba(59, 130, 246, 0.18), transparent 60%),
+    linear-gradient(135deg, #0b1220 0%, #111b33 35%, #0b1220 100%);
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.evento-publico-card {
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(10px);
+  max-width: 1120px;
+  width: 100%;
+  padding: 40px;
+  margin: 20px;
+}
+
+.evento-publico-header {
+  text-align: center;
+  margin-bottom: 40px;
+  padding-bottom: 30px;
+  border-bottom: 2px solid rgba(148, 163, 184, 0.2);
+}
+
+.evento-publico-header h3 {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.evento-publico-header h1 {
+  font-size: 2.5rem;
+  margin: 0 0 15px 0;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.evento-publico-header-inline {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.evento-publico-header-inline h1 {
+  font-size: 2.5rem;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.evento-publico-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.evento-publico-header-meta span {
+  color: rgba(226, 232, 240, 0.7);
+  font-size: 0.95rem;
+}
+
+.evento-publico-total-inline {
+  padding: 6px 12px;
+  background: rgba(99, 102, 241, 0.12);
+  border-radius: 8px;
+  border: 1px solid rgba(99, 102, 241, 0.20);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.evento-publico-descricao {
+  font-size: 1.1rem;
+  color: rgba(226, 232, 240, 0.7);
+  margin: 15px 0;
+}
+
+.evento-publico-meta {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.evento-publico-meta span {
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 0.95rem;
+}
+
+.evento-publico-total {
+  margin-top: 20px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border-radius: 10px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  display: inline-block;
+}
+
+.evento-publico-total-label {
+  font-size: 14px;
+  color: #6b7280;
+  margin-right: 10px;
+}
+
+.evento-publico-total-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #6366f1;
+}
+
+.evento-publico-cta {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 30px;
+  border-radius: 12px;
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.evento-publico-cta h2 {
+  margin: 0 0 10px 0;
+  font-size: 1.5rem;
+}
+
+.evento-publico-cta p {
+  margin: 0 0 20px 0;
+  opacity: 0.9;
+  font-size: 1rem;
+}
+
+.btn-large {
+  padding: 15px 40px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-large:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.evento-publico-section {
+  margin-bottom: 30px;
+}
+
+.evento-publico-section h3 {
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+  color: rgba(255, 255, 255, 0.95);
+  border-bottom: 2px solid rgba(148, 163, 184, 0.2);
+  padding-bottom: 10px;
+}
+
+.evento-publico-participantes {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.evento-publico-participantes li {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.evento-publico-sugestoes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.evento-publico-sugestao {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  border-left: 4px solid rgba(99, 102, 241, 0.5);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.evento-publico-sugestao:hover {
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.evento-publico-sugestao-texto {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.evento-publico-sugestao-de {
+  font-weight: 600;
+  color: rgba(239, 68, 68, 0.9);
+}
+
+.evento-publico-sugestao-arrow {
+  color: rgba(226, 232, 240, 0.6);
+  font-size: 1.2rem;
+}
+
+.evento-publico-sugestao-para {
+  font-weight: 600;
+  color: rgba(34, 197, 94, 0.9);
+}
+
+.evento-publico-sugestao-valor {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1976d2;
+}
+
+.evento-publico-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+
+.evento-publico-table thead {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.evento-publico-table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  border-bottom: 2px solid rgba(148, 163, 184, 0.2);
+}
+
+.evento-publico-table td {
+  padding: 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.evento-publico-col-receita {
+  color: rgba(34, 197, 94, 0.9) !important;
+  font-weight: 600;
+}
+
+.evento-publico-col-despesa {
+  color: rgba(239, 68, 68, 0.9) !important;
+  font-weight: 600;
+}
+
+.evento-publico-table th.evento-publico-col-receita {
+  color: rgba(34, 197, 94, 0.9);
+}
+
+.evento-publico-table th.evento-publico-col-despesa {
+  color: rgba(239, 68, 68, 0.9);
+}
+
+.evento-publico-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.badge-success {
+  background: rgba(34, 197, 94, 0.16);
+  color: rgba(34, 197, 94, 0.9);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+}
+
+.badge-danger {
+  background: rgba(239, 68, 68, 0.16);
+  color: rgba(239, 68, 68, 0.9);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+}
+
+.evento-publico-footer {
+  text-align: center;
+  margin-top: 40px;
+  padding-top: 30px;
+  border-top: 2px solid rgba(148, 163, 184, 0.2);
+}
+
+/* Detalhamento de Despesas */
+.evento-publico-detalhamento {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.evento-publico-despesa-item {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-left: 4px solid #6366f1;
+}
+
+.evento-publico-despesa-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.evento-publico-despesa-nome {
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.evento-publico-despesa-valor {
+  font-size: 18px;
+  font-weight: 700;
+  color: #6366f1;
+}
+
+.evento-publico-despesa-detalhes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 8px;
+}
+
+.evento-publico-despesa-detalhe {
+  display: flex;
+  gap: 8px;
+  font-size: 14px;
+  color: rgba(226, 232, 240, 0.8);
+}
+
+.evento-publico-despesa-label {
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.7);
+  min-width: 120px;
+}
+
+.evento-publico-despesa-destaque {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+@media (max-width: 768px) {
+  .evento-publico-card {
+    padding: 20px;
+  }
+
+  .evento-publico-header h1 {
+    font-size: 1.8rem;
+  }
+
+  .evento-publico-meta {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .evento-publico-table {
+    font-size: 0.875rem;
+  }
+
+  .evento-publico-table th,
+  .evento-publico-table td {
+    padding: 8px;
+  }
+
+  .evento-publico-participantes {
+    grid-template-columns: 1fr;
+  }
+
+  .evento-publico-header-inline {
+    text-align: center;
+  }
+
+  .evento-publico-header-meta {
+    justify-content: center;
+  }
+}
+
+/* Detalhamento de Despesas */
+.evento-publico-detalhamento {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.evento-publico-despesa-item {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-left: 4px solid #6366f1;
+}
+
+.evento-publico-despesa-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.evento-publico-despesa-nome {
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.evento-publico-despesa-valor {
+  font-size: 18px;
+  font-weight: 700;
+  color: #6366f1;
+}
+
+.evento-publico-despesa-detalhes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 8px;
+}
+
+.evento-publico-despesa-detalhe {
+  display: flex;
+  gap: 8px;
+  font-size: 14px;
+  color: rgba(226, 232, 240, 0.8);
+}
+
+.evento-publico-despesa-label {
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.7);
+  min-width: 120px;
+}
+
+.evento-publico-despesa-destaque {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+@media (max-width: 768px) {
+  .evento-publico-despesa-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .evento-publico-despesa-detalhe {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .evento-publico-despesa-label {
+    min-width: auto;
+  }
+}
+

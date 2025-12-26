@@ -2,6 +2,83 @@
   color: rgba(226, 232, 240, 0.78);
 }
 
+/* Detalhamento de Despesas */
+.evento-publico-detalhamento {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.evento-publico-despesa-item {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-left: 4px solid #6366f1;
+}
+
+.evento-publico-despesa-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.evento-publico-despesa-nome {
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.evento-publico-despesa-valor {
+  font-size: 18px;
+  font-weight: 700;
+  color: #6366f1;
+}
+
+.evento-publico-despesa-detalhes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 8px;
+}
+
+.evento-publico-despesa-detalhe {
+  display: flex;
+  gap: 8px;
+  font-size: 14px;
+  color: rgba(226, 232, 240, 0.8);
+}
+
+.evento-publico-despesa-label {
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.7);
+  min-width: 120px;
+}
+
+.evento-publico-despesa-destaque {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+@media (max-width: 768px) {
+  .evento-publico-despesa-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .evento-publico-despesa-detalhe {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .evento-publico-despesa-label {
+    min-width: auto;
+  }
+}
+
 .participacoesActions {
   display: flex;
   gap: 10px;

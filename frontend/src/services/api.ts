@@ -158,6 +158,16 @@ export const grupoApi = {
     const response = await api.post(`/grupos/${id}/duplicar`);
     return response.data;
   },
+
+  gerarLink: async (id: number): Promise<{ token: string; link: string }> => {
+    const response = await api.post(`/grupos/${id}/gerar-link`);
+    return response.data;
+  },
+
+  obterLink: async (id: number): Promise<{ token: string | null; link: string | null }> => {
+    const response = await api.get(`/grupos/${id}/link`);
+    return response.data;
+  },
 };
 
 export const despesaApi = {
@@ -441,6 +451,52 @@ export const grupoMaiorApi = {
 export const analyticsApi = {
   track: async (event: string, props?: Record<string, any>): Promise<void> => {
     await api.post('/analytics/event', { event, props });
+  },
+};
+
+export interface EventoPublico {
+  id: number;
+  nome: string;
+  descricao?: string;
+  data: string;
+  participantes: Array<{
+    id: number;
+    nome: string;
+    email?: string;
+    chavePix?: string;
+  }>;
+  totalDespesas: number;
+}
+
+export const publicEventoApi = {
+  getByToken: async (token: string): Promise<EventoPublico> => {
+    const response = await api.get(`/public/eventos/${token}`);
+    return response.data;
+  },
+
+  getSaldos: async (token: string): Promise<SaldoParticipante[]> => {
+    const response = await api.get(`/public/eventos/${token}/saldos`);
+    return response.data;
+  },
+
+  getSugestoes: async (token: string): Promise<SugestaoPagamento[]> => {
+    const response = await api.get(`/public/eventos/${token}/sugestoes`);
+    return response.data;
+  },
+
+  getSaldosPorGrupo: async (token: string): Promise<SaldoGrupo[]> => {
+    const response = await api.get(`/public/eventos/${token}/saldos-por-grupo`);
+    return response.data;
+  },
+
+  getDespesas: async (token: string): Promise<Despesa[]> => {
+    const response = await api.get(`/public/eventos/${token}/despesas`);
+    return response.data;
+  },
+
+  reivindicar: async (token: string, email: string): Promise<{ message: string; transferidos: number }> => {
+    const response = await api.post(`/public/eventos/${token}/reivindicar`, { email });
+    return response.data;
   },
 };
 
