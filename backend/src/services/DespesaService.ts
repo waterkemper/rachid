@@ -242,11 +242,6 @@ export class DespesaService {
     if (data.participante_pagador_id !== undefined && data.participante_pagador_id !== null) {
       const novoPagadorId = Number(data.participante_pagador_id);
       if (novoPagadorId !== despesa.participante_pagador_id) {
-        console.log('[DespesaService.update] Atualizando pagador:', {
-          despesaId: id,
-          pagadorAntigo: despesa.participante_pagador_id,
-          pagadorNovo: novoPagadorId,
-        });
         updateData.participante_pagador_id = novoPagadorId;
         historicoAlteracoes.push({
           campo_alterado: 'participante_pagador_id',
@@ -272,18 +267,67 @@ export class DespesaService {
     // Adicionar updatedBy e updatedAt
     updateData.updated_by = usuarioId;
 
+    // Verificar se um pagador está sendo definido pela primeira vez em uma despesa placeholder
+    const pagadorSendoDefinido = data.participante_pagador_id !== undefined && 
+                                  data.participante_pagador_id !== null && 
+                                  !despesa.participante_pagador_id;
+    const despesaNaoTemParticipacoes = !despesa.participacoes || despesa.participacoes.length === 0;
+
     // Usar update() para forçar atualização direta no banco
     if (Object.keys(updateData).length > 0) {
-      console.log('[DespesaService.update] Dados para update direto:', updateData);
       await this.despesaRepository.update(
         { id },
         updateData
       );
-      console.log('[DespesaService.update] Update direto executado com sucesso');
 
       // Registrar histórico apenas se houver alterações
       if (historicoAlteracoes.length > 0) {
         await this.registrarHistorico(id, usuarioId, historicoAlteracoes);
+      }
+    }
+
+    // Se um pagador foi definido pela primeira vez e a despesa não tinha participações,
+    // criar automaticamente participações para todos os participantes do evento
+    let participacoesCriadasAutomaticamente = false;
+    if (pagadorSendoDefinido && despesaNaoTemParticipacoes && data.participacoes === undefined) {
+      const grupo = await this.grupoRepository.findOne({
+        where: { id: despesa.grupo_id },
+        relations: ['participantes', 'participantes.participante'],
+      });
+
+      if (grupo && grupo.participantes && grupo.participantes.length > 0) {
+        const participantesGrupo = (grupo.participantes || []) as ParticipanteGrupo[];
+        const participantesValidos = participantesGrupo.filter(pg => pg.participante_id);
+
+        if (participantesValidos.length > 0) {
+          const queryRunner = AppDataSource.createQueryRunner();
+          await queryRunner.connect();
+          await queryRunner.startTransaction();
+
+          try {
+            // Criar participações para todos os participantes do evento
+            for (const pg of participantesValidos) {
+              const participacao = queryRunner.manager.create(ParticipacaoDespesa, {
+                despesa_id: id,
+                participante_id: pg.participante_id,
+                valorDevePagar: 0,
+              });
+              await queryRunner.manager.save(participacao);
+            }
+
+            await queryRunner.commitTransaction();
+            participacoesCriadasAutomaticamente = true;
+
+            // Recalcular valores para distribuir igualmente
+            await ParticipacaoService.recalcularValores(id, grupo.usuario_id || usuarioId);
+          } catch (err) {
+            await queryRunner.rollbackTransaction();
+            console.error('[DespesaService.update] Erro ao criar participações automaticamente:', err);
+            // Não lançar erro para não quebrar o fluxo
+          } finally {
+            await queryRunner.release();
+          }
+        }
       }
     }
 
@@ -292,13 +336,6 @@ export class DespesaService {
       const participacoesUnicas = data.participacoes.filter((p, index, self) => 
         index === self.findIndex(p2 => p2.participante_id === p.participante_id)
       );
-
-      console.log('[DespesaService.update] Atualizando participações:', {
-        despesaId: id,
-        participacoesRecebidas: data.participacoes.length,
-        participacoesUnicas: participacoesUnicas.length,
-        participantesIds: participacoesUnicas.map(p => p.participante_id)
-      });
 
       // Usar transação para garantir atomicidade
       const queryRunner = AppDataSource.createQueryRunner();
@@ -320,7 +357,6 @@ export class DespesaService {
         }
 
         await queryRunner.commitTransaction();
-        console.log('[DespesaService.update] Participações atualizadas com sucesso');
       } catch (err) {
         await queryRunner.rollbackTransaction();
         console.error('[DespesaService.update] Erro ao atualizar participações:', err);
@@ -328,8 +364,9 @@ export class DespesaService {
       } finally {
         await queryRunner.release();
       }
-    } else if (valorTotalFoiAlterado) {
+    } else if (valorTotalFoiAlterado && !participacoesCriadasAutomaticamente) {
       // Se o valor total foi alterado mas não as participações, recalcula os valores automaticamente
+      // (mas não se já criamos participações automaticamente, pois já recalculamos)
       await ParticipacaoService.recalcularValores(id, usuarioId);
     }
 
@@ -343,12 +380,6 @@ export class DespesaService {
       .leftJoinAndSelect('participacoes.participante', 'participante')
       .where('despesa.id = :id', { id })
       .getOne();
-    
-    console.log('[DespesaService.update] Despesa recarregada:', {
-      id: despesaAtualizada?.id,
-      participante_pagador_id: despesaAtualizada?.participante_pagador_id,
-      pagador: despesaAtualizada?.pagador?.nome,
-    });
     
     return despesaAtualizada;
   }
@@ -375,7 +406,6 @@ export class DespesaService {
       }));
 
       await DespesaHistoricoService.createMultiple(historicoData);
-      console.log('[DespesaService.registrarHistorico] Histórico registrado:', historicoData.length, 'alterações');
     } catch (error) {
       console.error('[DespesaService.registrarHistorico] Erro ao registrar histórico:', error);
       // Não lançar erro para não quebrar o fluxo de atualização
@@ -391,6 +421,67 @@ export class DespesaService {
 
     const result = await this.despesaRepository.delete({ id });
     return (result.affected ?? 0) > 0;
+  }
+
+  /**
+   * Sincroniza as participações de todas as despesas de um grupo para incluir todos os participantes atuais do evento
+   * Esta função garante que todas as despesas tenham participações para todos os participantes do evento
+   */
+  static async sincronizarParticipacoesDespesas(grupoId: number): Promise<void> {
+    // Buscar grupo com todos os participantes
+    const grupo = await this.grupoRepository.findOne({
+      where: { id: grupoId },
+      relations: ['participantes', 'participantes.participante'],
+    });
+
+    if (!grupo || !grupo.participantes || grupo.participantes.length === 0) {
+      return; // Não há participantes para sincronizar
+    }
+
+    // Buscar todas as despesas do grupo
+    const despesas = await this.despesaRepository.find({
+      where: { grupo_id: grupoId },
+      relations: ['participacoes'],
+    });
+
+    if (despesas.length === 0) {
+      return; // Não há despesas para sincronizar
+    }
+
+    // Obter IDs de todos os participantes do evento
+    const participantesIds = grupo.participantes
+      .filter(pg => pg.participante_id)
+      .map(pg => pg.participante_id);
+
+    // Para cada despesa, garantir que todos os participantes tenham participação
+    for (const despesa of despesas) {
+      // Obter IDs de participantes que já têm participação nesta despesa
+      const participantesComParticipacao = new Set(
+        (despesa.participacoes || []).map(p => p.participante_id)
+      );
+
+      // Identificar participantes que precisam ser adicionados
+      const participantesParaAdicionar = participantesIds.filter(
+        participanteId => !participantesComParticipacao.has(participanteId)
+      );
+
+      // Adicionar participações para os participantes que faltam
+      if (participantesParaAdicionar.length > 0) {
+        for (const participanteId of participantesParaAdicionar) {
+          const participacao = this.participacaoRepository.create({
+            despesa_id: despesa.id,
+            participante_id: participanteId,
+            valorDevePagar: 0,
+          });
+          await this.participacaoRepository.save(participacao);
+        }
+
+        // Se a despesa tem um valor definido (não é placeholder), recalcular os valores
+        if (despesa.participante_pagador_id && Number(despesa.valorTotal) > 0) {
+          await ParticipacaoService.recalcularValores(despesa.id, grupo.usuario_id);
+        }
+      }
+    }
   }
 }
 

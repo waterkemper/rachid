@@ -26,7 +26,7 @@ function getDataSourceConfig() {
         return {
             type: 'postgres',
             url: process.env.DATABASE_URL,
-            synchronize: process.env.NODE_ENV !== 'production',
+            synchronize: false, // Desabilitado - migrations são aplicadas manualmente
             logging: false,
             entities: [
                 Usuario_1.Usuario,
@@ -56,7 +56,7 @@ function getDataSourceConfig() {
         username: process.env.DB_USERNAME || 'postgres',
         password: process.env.DB_PASSWORD || 'postgres',
         database: process.env.DB_DATABASE || 'racha_contas',
-        synchronize: process.env.NODE_ENV !== 'production',
+        synchronize: false, // Desabilitado - migrations são aplicadas manualmente via SQL
         logging: false,
         entities: [
             Usuario_1.Usuario,
@@ -71,6 +71,7 @@ function getDataSourceConfig() {
             GrupoMaiorGrupo_1.GrupoMaiorGrupo,
             GrupoMaiorParticipante_1.GrupoMaiorParticipante,
             PasswordResetToken_1.PasswordResetToken,
+            DespesaHistorico_1.DespesaHistorico,
         ],
         migrations: [],
         subscribers: [],

@@ -6,23 +6,48 @@ const Despesa_1 = require("../entities/Despesa");
 const Participante_1 = require("../entities/Participante");
 const Grupo_1 = require("../entities/Grupo");
 const GrupoParticipantesEvento_1 = require("../entities/GrupoParticipantesEvento");
+const GrupoService_1 = require("./GrupoService");
+const typeorm_1 = require("typeorm");
 class CalculadoraService {
     static async calcularSaldosGrupo(grupoId, usuarioId) {
         const despesaRepository = data_source_1.AppDataSource.getRepository(Despesa_1.Despesa);
         const participanteRepository = data_source_1.AppDataSource.getRepository(Participante_1.Participante);
         const grupoRepository = data_source_1.AppDataSource.getRepository(Grupo_1.Grupo);
-        // Verificar se o grupo pertence ao usu�rio
-        const grupo = await grupoRepository.findOne({ where: { id: grupoId, usuario_id: usuarioId } });
-        if (!grupo) {
-            throw new Error('Grupo n�o encontrado ou n�o pertence ao usu�rio');
+        // Verificar se o usuário tem acesso ao grupo (é dono ou participante)
+        const hasAccess = await GrupoService_1.GrupoService.isUserGroupMember(usuarioId, grupoId);
+        if (!hasAccess) {
+            throw new Error('Grupo não encontrado ou usuário não tem acesso');
         }
+        // Buscar grupo com participantes (para obter todos os participantes do evento)
+        const grupo = await grupoRepository.findOne({
+            where: { id: grupoId },
+            relations: ['participantes', 'participantes.participante'],
+        });
+        if (!grupo) {
+            throw new Error('Grupo não encontrado');
+        }
+        // Buscar despesas do grupo (sem filtrar por usuario_id para permitir colaboração)
         const despesas = await despesaRepository.find({
-            where: { grupo_id: grupoId, usuario_id: usuarioId },
+            where: { grupo_id: grupoId },
             relations: ['pagador', 'participacoes', 'participacoes.participante'],
         });
-        const participantes = await participanteRepository.find({
-            where: { usuario_id: usuarioId },
-        });
+        // Buscar TODOS os participantes do evento (não apenas os do usuário logado)
+        // Extrair IDs únicos dos participantes do evento
+        const participantesIdsDoEvento = new Set();
+        if (grupo.participantes) {
+            grupo.participantes.forEach(pg => {
+                if (pg.participante_id) {
+                    participantesIdsDoEvento.add(pg.participante_id);
+                }
+            });
+        }
+        // Buscar participantes do evento (sem filtrar por usuario_id)
+        const participantesIdsArray = Array.from(participantesIdsDoEvento);
+        const participantes = participantesIdsArray.length > 0
+            ? await participanteRepository.find({
+                where: { id: (0, typeorm_1.In)(participantesIdsArray) },
+            })
+            : [];
         const saldos = new Map();
         participantes.forEach(participante => {
             saldos.set(participante.id, {
@@ -61,30 +86,34 @@ class CalculadoraService {
         const grupoParticipantesRepository = data_source_1.AppDataSource.getRepository(GrupoParticipantesEvento_1.GrupoParticipantesEvento);
         const despesaRepository = data_source_1.AppDataSource.getRepository(Despesa_1.Despesa);
         const grupoRepository = data_source_1.AppDataSource.getRepository(Grupo_1.Grupo);
-        // Verificar se o grupo pertence ao usu�rio e buscar com participantes
+        // Verificar se o usuário tem acesso ao grupo (é dono ou participante)
+        const hasAccess = await GrupoService_1.GrupoService.isUserGroupMember(usuarioId, grupoId);
+        if (!hasAccess) {
+            throw new Error('Grupo não encontrado ou usuário não tem acesso');
+        }
         const grupo = await grupoRepository.findOne({
-            where: { id: grupoId, usuario_id: usuarioId },
+            where: { id: grupoId },
             relations: ['participantes', 'participantes.participante'],
         });
         if (!grupo) {
-            throw new Error('Grupo n�o encontrado ou n�o pertence ao usu�rio');
+            throw new Error('Grupo não encontrado ou não pertence ao usuário');
         }
         const gruposParticipantes = await grupoParticipantesRepository.find({
             where: { grupo_id: grupoId },
             relations: ['participantes', 'participantes.participante'],
         });
         const despesas = await despesaRepository.find({
-            where: { grupo_id: grupoId, usuario_id: usuarioId },
+            where: { grupo_id: grupoId },
             relations: ['pagador', 'participacoes', 'participacoes.participante'],
         });
-        // Identificar participantes que est�o em grupos
+        // Identificar participantes que estão em grupos
         const participantesEmGrupos = new Set();
         gruposParticipantes.forEach(gp => {
             gp.participantes.forEach(p => {
                 participantesEmGrupos.add(p.participante_id);
             });
         });
-        // Identificar participantes do evento que n�o est�o em nenhum grupo
+        // Identificar participantes do evento que não estão em nenhum grupo
         const participantesSolitarios = grupo.participantes
             .filter(pg => !participantesEmGrupos.has(pg.participante_id))
             .map(pg => pg.participante);
@@ -120,10 +149,10 @@ class CalculadoraService {
             saldoGrupo.saldo = saldoGrupo.totalPagou - saldoGrupo.totalDeve;
             saldosGrupos.push(saldoGrupo);
         }
-        // Criar grupos virtuais para participantes solit�rios
+        // Criar grupos virtuais para participantes solitários
         for (const participante of participantesSolitarios) {
             const saldoGrupo = {
-                grupoId: -participante.id, // ID negativo para indicar que � um grupo virtual
+                grupoId: -participante.id, // ID negativo para indicar que é um grupo virtual
                 grupoNome: participante.nome, // Nome do participante como nome do grupo
                 participantes: [{
                         participanteId: participante.id,

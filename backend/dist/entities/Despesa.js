@@ -67,7 +67,7 @@ __decorate([
     __metadata("design:type", Date)
 ], Despesa.prototype, "criadoEm", void 0);
 __decorate([
-    (0, typeorm_1.UpdateDateColumn)(),
+    (0, typeorm_1.UpdateDateColumn)({ name: 'updated_at' }),
     __metadata("design:type", Date)
 ], Despesa.prototype, "updatedAt", void 0);
 __decorate([

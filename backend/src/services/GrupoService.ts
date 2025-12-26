@@ -316,6 +316,16 @@ export class GrupoService {
       participante_id: participanteId,
     });
     await this.participanteGrupoRepository.save(participanteGrupo);
+
+    // Sincronizar participações nas despesas para incluir o novo participante
+    // Esta função adiciona apenas participantes que faltam, então é segura chamar múltiplas vezes
+    try {
+      await DespesaService.sincronizarParticipacoesDespesas(grupoId);
+    } catch (err) {
+      console.error('[GrupoService.adicionarParticipante] Erro ao sincronizar participações nas despesas:', err);
+      // Não falhar a adição do participante se a sincronização falhar
+    }
+
     return true;
   }
 
@@ -523,6 +533,18 @@ export class GrupoService {
       }
     }
 
+    // Buscar participantes do evento para incluir nas despesas placeholder
+    const grupoComParticipantes = await this.findById(grupoSalvo.id, data.usuario_id);
+    const participantesDoEvento = grupoComParticipantes?.participantes || [];
+    
+    // Preparar participações para as despesas placeholder (se houver participantes)
+    const participacoesPlaceholder = participantesDoEvento
+      .filter(pg => pg.participante_id)
+      .map(pg => ({
+        participante_id: pg.participante_id,
+        valorDevePagar: 0, // Será recalculado quando um valor for definido
+      }));
+
     // Criar despesas placeholder para cada despesa do template
     for (const descricaoDespesa of template.despesas) {
       await DespesaService.create({
@@ -531,7 +553,7 @@ export class GrupoService {
         valorTotal: 0,
         // participante_pagador_id não fornecido (null) para placeholder
         data: data.data || new Date(),
-        participacoes: [], // Sem participações para placeholders
+        participacoes: participacoesPlaceholder.length > 0 ? participacoesPlaceholder : [], // Incluir participantes se houver
         usuario_id: data.usuario_id,
       });
     }

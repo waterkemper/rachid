@@ -21,7 +21,7 @@ class DespesaService {
                 despesas = await this.despesaRepository.find({
                     where: { grupo_id: grupoId },
                     relations: ['pagador', 'grupo', 'participacoes', 'participacoes.participante'],
-                    order: { data: 'DESC' },
+                    order: { data: 'DESC', id: 'DESC' },
                 });
             }
             else {
@@ -29,7 +29,7 @@ class DespesaService {
                 despesas = await this.despesaRepository.find({
                     where: { grupo_id: grupoId, usuario_id: usuarioId },
                     relations: ['pagador', 'grupo', 'participacoes', 'participacoes.participante'],
-                    order: { data: 'DESC' },
+                    order: { data: 'DESC', id: 'DESC' },
                 });
             }
         }
@@ -38,7 +38,7 @@ class DespesaService {
             despesas = await this.despesaRepository.find({
                 where: { usuario_id: usuarioId },
                 relations: ['pagador', 'grupo', 'participacoes', 'participacoes.participante'],
-                order: { data: 'DESC' },
+                order: { data: 'DESC', id: 'DESC' },
             });
         }
         return despesas;
@@ -123,15 +123,23 @@ class DespesaService {
             // Por padrão: assumir que todos os participantes do evento participaram desta despesa
             // Mas apenas se houver um pagador definido (não é placeholder)
             if (data.participante_pagador_id) {
+                // Buscar grupo sem filtrar por usuario_id para permitir colaboração
                 const grupo = await this.grupoRepository.findOne({
-                    where: { id: data.grupo_id, usuario_id: data.usuario_id },
-                    relations: ['participantes'],
+                    where: { id: data.grupo_id },
+                    relations: ['participantes', 'participantes.participante'],
                 });
                 if (!grupo) {
-                    throw new Error('Grupo não encontrado ou não pertence ao usuário');
+                    throw new Error('Grupo não encontrado');
+                }
+                // Verificar se usuário tem permissão para criar despesa neste grupo
+                const canCreate = await this.isUserGroupMember(data.usuario_id, data.grupo_id);
+                if (!canCreate && grupo.usuario_id !== data.usuario_id) {
+                    throw new Error('Usuário não tem permissão para criar despesa neste grupo');
                 }
                 const participantesGrupo = (grupo.participantes || []);
-                for (const pg of participantesGrupo) {
+                // Filtrar participantes válidos (não nulos)
+                const participantesValidos = participantesGrupo.filter(pg => pg.participante_id);
+                for (const pg of participantesValidos) {
                     const participacao = this.participacaoRepository.create({
                         despesa_id: despesaSalva.id,
                         participante_id: pg.participante_id,
@@ -140,7 +148,8 @@ class DespesaService {
                     await this.participacaoRepository.save(participacao);
                 }
                 // Distribuir valores igualmente (com ajuste de arredondamento)
-                await ParticipacaoService_1.ParticipacaoService.recalcularValores(despesaSalva.id, data.usuario_id);
+                // Usar o usuario_id do grupo ou do criador da despesa para recalcular
+                await ParticipacaoService_1.ParticipacaoService.recalcularValores(despesaSalva.id, grupo.usuario_id || data.usuario_id);
             }
             // Se não houver pagador (placeholder), não criar participações
         }
@@ -209,6 +218,11 @@ class DespesaService {
         }
         // Adicionar updatedBy e updatedAt
         updateData.updated_by = usuarioId;
+        // Verificar se um pagador está sendo definido pela primeira vez em uma despesa placeholder
+        const pagadorSendoDefinido = data.participante_pagador_id !== undefined &&
+            data.participante_pagador_id !== null &&
+            !despesa.participante_pagador_id;
+        const despesaNaoTemParticipacoes = !despesa.participacoes || despesa.participacoes.length === 0;
         // Usar update() para forçar atualização direta no banco
         if (Object.keys(updateData).length > 0) {
             console.log('[DespesaService.update] Dados para update direto:', updateData);
@@ -217,6 +231,48 @@ class DespesaService {
             // Registrar histórico apenas se houver alterações
             if (historicoAlteracoes.length > 0) {
                 await this.registrarHistorico(id, usuarioId, historicoAlteracoes);
+            }
+        }
+        // Se um pagador foi definido pela primeira vez e a despesa não tinha participações,
+        // criar automaticamente participações para todos os participantes do evento
+        let participacoesCriadasAutomaticamente = false;
+        if (pagadorSendoDefinido && despesaNaoTemParticipacoes && data.participacoes === undefined) {
+            const grupo = await this.grupoRepository.findOne({
+                where: { id: despesa.grupo_id },
+                relations: ['participantes', 'participantes.participante'],
+            });
+            if (grupo && grupo.participantes && grupo.participantes.length > 0) {
+                const participantesGrupo = (grupo.participantes || []);
+                const participantesValidos = participantesGrupo.filter(pg => pg.participante_id);
+                if (participantesValidos.length > 0) {
+                    const queryRunner = data_source_1.AppDataSource.createQueryRunner();
+                    await queryRunner.connect();
+                    await queryRunner.startTransaction();
+                    try {
+                        // Criar participações para todos os participantes do evento
+                        for (const pg of participantesValidos) {
+                            const participacao = queryRunner.manager.create(ParticipacaoDespesa_1.ParticipacaoDespesa, {
+                                despesa_id: id,
+                                participante_id: pg.participante_id,
+                                valorDevePagar: 0,
+                            });
+                            await queryRunner.manager.save(participacao);
+                        }
+                        await queryRunner.commitTransaction();
+                        console.log('[DespesaService.update] Participações criadas automaticamente para', participantesValidos.length, 'participantes');
+                        participacoesCriadasAutomaticamente = true;
+                        // Recalcular valores para distribuir igualmente
+                        await ParticipacaoService_1.ParticipacaoService.recalcularValores(id, grupo.usuario_id || usuarioId);
+                    }
+                    catch (err) {
+                        await queryRunner.rollbackTransaction();
+                        console.error('[DespesaService.update] Erro ao criar participações automaticamente:', err);
+                        // Não lançar erro para não quebrar o fluxo
+                    }
+                    finally {
+                        await queryRunner.release();
+                    }
+                }
             }
         }
         if (data.participacoes !== undefined) {
@@ -256,8 +312,9 @@ class DespesaService {
                 await queryRunner.release();
             }
         }
-        else if (valorTotalFoiAlterado) {
+        else if (valorTotalFoiAlterado && !participacoesCriadasAutomaticamente) {
             // Se o valor total foi alterado mas não as participações, recalcula os valores automaticamente
+            // (mas não se já criamos participações automaticamente, pois já recalculamos)
             await ParticipacaoService_1.ParticipacaoService.recalcularValores(id, usuarioId);
         }
         // Recarregar a despesa com todas as relações atualizadas

@@ -37,8 +37,9 @@ class ParticipacaoService {
         }
     }
     static async recalcularValores(despesaId, usuarioId) {
+        // Buscar despesa sem filtrar por usuario_id para permitir colaboração
         const despesa = await this.despesaRepository.findOne({
-            where: { id: despesaId, usuario_id: usuarioId },
+            where: { id: despesaId },
             relations: ['participacoes'],
         });
         if (!despesa)
