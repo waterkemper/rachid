@@ -4,6 +4,8 @@ import { ParticipanteGrupo } from '../entities/ParticipanteGrupo';
 import { GrupoParticipantesEvento } from '../entities/GrupoParticipantesEvento';
 import { Despesa } from '../entities/Despesa';
 import { ParticipanteGrupoEvento } from '../entities/ParticipanteGrupoEvento';
+import { TemplateService } from './TemplateService';
+import { DespesaService } from './DespesaService';
 
 export class GrupoService {
   private static grupoRepository = AppDataSource.getRepository(Grupo);
@@ -268,6 +270,57 @@ export class GrupoService {
     }
 
     return grupo.shareToken || null;
+  }
+
+  static async createFromTemplate(data: {
+    templateId: string;
+    nome?: string;
+    descricao?: string;
+    data?: Date;
+    participanteIds?: number[];
+    usuario_id: number;
+  }): Promise<Grupo> {
+    // Buscar template
+    const template = TemplateService.getById(data.templateId);
+    if (!template) {
+      throw new Error('Template não encontrado');
+    }
+
+    // Criar evento com nome/descrição do template (ou usar valores fornecidos)
+    const grupo = this.grupoRepository.create({
+      nome: data.nome || template.nome,
+      descricao: data.descricao || template.descricao,
+      data: data.data || new Date(),
+      usuario_id: data.usuario_id,
+    });
+    const grupoSalvo = await this.grupoRepository.save(grupo);
+
+    // Adicionar participantes se fornecidos
+    if (data.participanteIds && data.participanteIds.length > 0) {
+      for (const participanteId of data.participanteIds) {
+        const participanteGrupo = this.participanteGrupoRepository.create({
+          grupo_id: grupoSalvo.id,
+          participante_id: participanteId,
+        });
+        await this.participanteGrupoRepository.save(participanteGrupo);
+      }
+    }
+
+    // Criar despesas placeholder para cada despesa do template
+    for (const descricaoDespesa of template.despesas) {
+      await DespesaService.create({
+        grupo_id: grupoSalvo.id,
+        descricao: descricaoDespesa,
+        valorTotal: 0,
+        // participante_pagador_id não fornecido (null) para placeholder
+        data: data.data || new Date(),
+        participacoes: [], // Sem participações para placeholders
+        usuario_id: data.usuario_id,
+      });
+    }
+
+    // Retornar grupo completo
+    return await this.findById(grupoSalvo.id, data.usuario_id) || grupoSalvo;
   }
 }
 

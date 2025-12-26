@@ -115,7 +115,7 @@ const Despesas: React.FC = () => {
         grupo_id: despesa.grupo_id,
         descricao: despesa.descricao,
         valorTotal: despesa.valorTotal.toString(),
-        participante_pagador_id: despesa.participante_pagador_id,
+        participante_pagador_id: despesa.participante_pagador_id || 0,
         data: despesa.data.split('T')[0],
       });
       // Carregar participantes do evento da despesa sendo editada
@@ -608,16 +608,41 @@ const Despesas: React.FC = () => {
           <div className="form-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
               <label>Participantes da Despesa *</label>
-              {formData.grupo_id && participantesDoEvento.length > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ padding: '4px 8px', fontSize: '12px' }}
-                  onClick={() => setParticipantesExpandido(!participantesExpandido)}
-                >
-                  {participantesExpandido ? 'Ocultar' : 'Mostrar'}
-                </button>
-              )}
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {formData.grupo_id && participantesDoEvento.length > 0 && participantesExpandido && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '4px 8px', fontSize: '12px' }}
+                    onClick={() => {
+                      const todosSelecionados = participantesDoEvento.every(p => 
+                        participantesSelecionados.includes(p.id)
+                      );
+                      if (todosSelecionados) {
+                        // Desmarcar todos
+                        setParticipantesSelecionados([]);
+                      } else {
+                        // Marcar todos
+                        setParticipantesSelecionados(participantesDoEvento.map(p => p.id));
+                      }
+                    }}
+                  >
+                    {participantesDoEvento.every(p => participantesSelecionados.includes(p.id)) 
+                      ? 'Desmarcar todos' 
+                      : 'Marcar todos'}
+                  </button>
+                )}
+                {formData.grupo_id && participantesDoEvento.length > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '4px 8px', fontSize: '12px' }}
+                    onClick={() => setParticipantesExpandido(!participantesExpandido)}
+                  >
+                    {participantesExpandido ? 'Ocultar' : 'Mostrar'}
+                  </button>
+                )}
+              </div>
             </div>
             {participantesSelecionados.length > 0 && (
               <div style={{ 

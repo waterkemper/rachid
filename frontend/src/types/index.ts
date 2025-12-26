@@ -28,7 +28,7 @@ export interface Despesa {
   grupo_id: number;
   descricao: string;
   valorTotal: number;
-  participante_pagador_id: number;
+  participante_pagador_id?: number;
   data: string;
   criadoEm: string;
   grupo?: Grupo;
@@ -95,5 +95,12 @@ export interface Usuario {
   criadoEm: string;
   plano?: 'FREE' | 'PRO';
   planoValidoAte?: string | null;
+}
+
+export interface EventTemplate {
+  id: string;
+  nome: string;
+  descricao: string;
+  despesas: string[];
 }
 

@@ -8,6 +8,7 @@ import {
   GrupoParticipantesEvento,
   SaldoGrupo,
   Usuario,
+  EventTemplate,
 } from '../types';
 
 // URL da API: usa variável de ambiente em produção ou proxy em desenvolvimento
@@ -126,6 +127,7 @@ export const grupoApi = {
     descricao?: string;
     data?: string;
     participanteIds?: number[];
+    templateId?: string;
   }): Promise<Grupo> => {
     const response = await api.post('/grupos', data);
     return response.data;
@@ -496,6 +498,18 @@ export const publicEventoApi = {
 
   reivindicar: async (token: string, email: string): Promise<{ message: string; transferidos: number }> => {
     const response = await api.post(`/public/eventos/${token}/reivindicar`, { email });
+    return response.data;
+  },
+};
+
+export const templateApi = {
+  getAll: async (): Promise<EventTemplate[]> => {
+    const response = await api.get('/templates');
+    return response.data;
+  },
+
+  getById: async (id: string): Promise<EventTemplate> => {
+    const response = await api.get(`/templates/${id}`);
     return response.data;
   },
 };

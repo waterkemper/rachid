@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { grupoApi, participanteApi, grupoParticipantesApi } from '../services/api';
+import { grupoApi, participanteApi, grupoParticipantesApi, despesaApi, participacaoApi } from '../services/api';
 import { Participante, Grupo, GrupoParticipantesEvento } from '../types';
 import Modal from '../components/Modal';
 import { FaPlus, FaTrash, FaEdit, FaUserPlus, FaUsers, FaArrowLeft, FaArrowRight, FaSearch, FaChartBar, FaMoneyBillWave } from 'react-icons/fa';
@@ -98,6 +98,25 @@ const AdicionarParticipantesEvento: React.FC = () => {
       } else {
         // fallback: se nÃ£o achou no state, recarrega o evento para sincronizar
         await loadData();
+      }
+
+      // Adicionar participante a todas as despesas existentes do evento
+      try {
+        const despesas = await despesaApi.getAll(Number(eventoId));
+        for (const despesa of despesas) {
+          // Verificar se o participante já está na despesa
+          const jaTemParticipacao = despesa.participacoes?.some(p => p.participante_id === participanteId);
+          if (!jaTemParticipacao) {
+            try {
+              await participacaoApi.toggle(despesa.id, participanteId);
+            } catch (err) {
+              console.error(`Erro ao adicionar participante à despesa ${despesa.id}:`, err);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao adicionar participante às despesas:', err);
+        // Não bloquear o fluxo se houver erro ao adicionar às despesas
       }
     } catch (error) {
       console.error('Erro ao adicionar participante:', error);
