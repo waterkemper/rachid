@@ -4,7 +4,7 @@ import { usePageFocus } from '../hooks/usePageFocus';
 import { grupoApi, participanteApi, despesaApi } from '../services/api';
 import { Grupo, Participante } from '../types';
 import Modal from '../components/Modal';
-import { FaEdit, FaUsers, FaMoneyBillWave, FaChartBar, FaCopy, FaTrash } from 'react-icons/fa';
+import { FaEdit, FaUsers, FaMoneyBillWave, FaChartBar, FaCopy, FaTrash, FaShare } from 'react-icons/fa';
 import './Grupos.css';
 
 const Grupos: React.FC = () => {
@@ -17,6 +17,11 @@ const Grupos: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [totaisDespesas, setTotaisDespesas] = useState<Map<number, number>>(new Map());
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [shareLinkLoading, setShareLinkLoading] = useState(false);
+  const [shareLinkError, setShareLinkError] = useState<string | null>(null);
+  const [currentShareGrupoId, setCurrentShareGrupoId] = useState<number | null>(null);
 
   const formatarData = (dataStr: string): string => {
     const dataParte = dataStr.split('T')[0];
@@ -150,6 +155,47 @@ const Grupos: React.FC = () => {
     } catch (err: any) {
       const payload = err?.response?.data;
       setError(payload?.error || 'Erro ao duplicar evento');
+    }
+  };
+
+  const handleCompartilhar = async (id: number) => {
+    setCurrentShareGrupoId(id);
+    setShareLinkError(null);
+    setShareLinkLoading(true);
+    setIsShareModalOpen(true);
+
+    try {
+      // Primeiro tenta obter link existente
+      const linkData = await grupoApi.obterLink(id);
+      if (linkData.link) {
+        setShareLink(linkData.link);
+      } else {
+        // Se não existe, gera um novo
+        const newLinkData = await grupoApi.gerarLink(id);
+        setShareLink(newLinkData.link);
+      }
+    } catch (err: any) {
+      setShareLinkError(err.response?.data?.error || 'Erro ao gerar link de compartilhamento');
+    } finally {
+      setShareLinkLoading(false);
+    }
+  };
+
+  const handleCloseShareModal = () => {
+    setIsShareModalOpen(false);
+    setShareLink(null);
+    setShareLinkError(null);
+    setCurrentShareGrupoId(null);
+  };
+
+  const handleCopiarLink = async () => {
+    if (shareLink) {
+      try {
+        await navigator.clipboard.writeText(shareLink);
+        alert('Link copiado para a área de transferência!');
+      } catch (err) {
+        setShareLinkError('Erro ao copiar link');
+      }
     }
   };
 
@@ -319,6 +365,13 @@ const Grupos: React.FC = () => {
                       <FaCopy />
                     </button>
                     <button
+                      className="btn btn-secondary"
+                      onClick={() => handleCompartilhar(grupo.id)}
+                      title="Compartilhar evento"
+                    >
+                      <FaShare />
+                    </button>
+                    <button
                       className="btn btn-danger"
                       onClick={() => handleDelete(grupo.id)}
                       title="Excluir evento"
@@ -448,6 +501,51 @@ const Grupos: React.FC = () => {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={isShareModalOpen}
+        onClose={handleCloseShareModal}
+        title="Compartilhar Evento"
+      >
+        <div>
+          {shareLinkLoading ? (
+            <div style={{ textAlign: 'center', padding: '20px' }}>Gerando link...</div>
+          ) : shareLinkError ? (
+            <div className="alert alert-error">{shareLinkError}</div>
+          ) : shareLink ? (
+            <>
+              <p style={{ marginBottom: '15px', color: '#666' }}>
+                Compartilhe este link para que outras pessoas possam visualizar o evento sem precisar criar conta:
+              </p>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                <input
+                  type="text"
+                  value={shareLink}
+                  readOnly
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontFamily: 'monospace',
+                    fontSize: '14px',
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleCopiarLink}
+                >
+                  Copiar
+                </button>
+              </div>
+              <p style={{ fontSize: '14px', color: '#666', marginTop: '15px' }}>
+                Quando alguém criar uma conta usando o email cadastrado como participante, a participação será automaticamente transferida para a conta deles.
+              </p>
+            </>
+          ) : null}
+        </div>
       </Modal>
     </div>
   );

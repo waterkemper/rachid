@@ -7,6 +7,7 @@ import { ParticipacaoController } from '../controllers/ParticipacaoController';
 import { GrupoParticipantesController } from '../controllers/GrupoParticipantesController';
 import { GrupoMaiorController } from '../controllers/GrupoMaiorController';
 import { AuthController } from '../controllers/AuthController';
+import { PublicEventoController } from '../controllers/PublicEventoController';
 import { authMiddleware } from '../middleware/auth';
 import { AnalyticsController } from '../controllers/AnalyticsController';
 
@@ -20,6 +21,13 @@ router.post('/auth/create-user', AuthController.createUser);
 router.post('/auth/solicitar-recuperacao-senha', AuthController.solicitarRecuperacaoSenha);
 router.post('/auth/validar-token-recuperacao', AuthController.validarTokenRecuperacao);
 router.post('/auth/resetar-senha', AuthController.resetarSenha);
+
+// Rotas públicas de eventos (sem autenticação)
+router.get('/public/eventos/:token', PublicEventoController.getByToken);
+router.get('/public/eventos/:token/saldos', PublicEventoController.getSaldosByToken);
+router.get('/public/eventos/:token/saldos-por-grupo', PublicEventoController.getSaldosPorGrupoByToken);
+router.get('/public/eventos/:token/sugestoes', PublicEventoController.getSugestoesByToken);
+router.get('/public/eventos/:token/despesas', PublicEventoController.getDespesasByToken);
 
 // Rotas protegidas (requerem autenticação)
 router.get('/auth/me', authMiddleware, AuthController.me);
@@ -39,6 +47,8 @@ router.delete('/grupos/:id', authMiddleware, GrupoController.delete);
 router.post('/grupos/:id/duplicar', authMiddleware, GrupoController.duplicar);
 router.post('/grupos/:id/participantes', authMiddleware, GrupoController.adicionarParticipante);
 router.delete('/grupos/:id/participantes', authMiddleware, GrupoController.removerParticipante);
+router.post('/grupos/:id/gerar-link', authMiddleware, GrupoController.gerarLink);
+router.get('/grupos/:id/link', authMiddleware, GrupoController.obterLink);
 
 router.get('/despesas', authMiddleware, DespesaController.getAll);
 router.get('/despesas/:id', authMiddleware, DespesaController.getById);
@@ -73,6 +83,9 @@ router.delete('/grupos-maiores/:id/grupos', authMiddleware, GrupoMaiorController
 router.post('/grupos-maiores/:id/participantes', authMiddleware, GrupoMaiorController.adicionarParticipante);
 router.delete('/grupos-maiores/:id/participantes/:participanteId', authMiddleware, GrupoMaiorController.removerParticipante);
 router.get('/grupos-maiores/:id/participantes', authMiddleware, GrupoMaiorController.obterTodosParticipantes);
+
+// Rota pública para reivindicar participação (requer autenticação após cadastro)
+router.post('/public/eventos/:token/reivindicar', authMiddleware, PublicEventoController.reivindicarParticipacao);
 
 export default router;
 

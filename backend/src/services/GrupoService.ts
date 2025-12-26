@@ -185,5 +185,30 @@ export class GrupoService {
 
     return await this.findById(novo.id, usuarioId);
   }
+
+  static async gerarShareToken(grupoId: number, usuarioId: number): Promise<string> {
+    const grupo = await this.findById(grupoId, usuarioId);
+    if (!grupo) {
+      throw new Error('Grupo não encontrado ou não pertence ao usuário');
+    }
+
+    // Gerar UUID v4
+    const { randomUUID } = require('crypto');
+    const token = randomUUID();
+
+    grupo.shareToken = token;
+    await this.grupoRepository.save(grupo);
+
+    return token;
+  }
+
+  static async obterShareToken(grupoId: number, usuarioId: number): Promise<string | null> {
+    const grupo = await this.findById(grupoId, usuarioId);
+    if (!grupo) {
+      return null;
+    }
+
+    return grupo.shareToken || null;
+  }
 }
 

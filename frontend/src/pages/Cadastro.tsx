@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { authApi } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { authApi, publicEventoApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import logoUrl from '../assets/logo.png';
 import './Cadastro.css';
@@ -17,6 +17,7 @@ const Cadastro: React.FC = () => {
 
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +58,22 @@ const Cadastro: React.FC = () => {
       // Login automático
       const usuario = await authApi.login(email.trim(), senha);
       login(usuario);
+
+      // Verificar se há token de reivindicação na URL
+      const token = searchParams.get('token');
+      if (token) {
+        try {
+          const resultado = await publicEventoApi.reivindicar(token, email.trim());
+          if (resultado.transferidos > 0) {
+            // Redirecionar para eventos com mensagem de sucesso
+            navigate('/eventos?reivindicado=true');
+            return;
+          }
+        } catch (err) {
+          // Se falhar a reivindicação, continua normalmente
+          console.error('Erro ao reivindicar participação:', err);
+        }
+      }
 
       // Redirecionar para criar evento
       navigate('/novo-evento');

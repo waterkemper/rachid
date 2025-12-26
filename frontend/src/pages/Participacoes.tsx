@@ -229,7 +229,7 @@ const Participacoes: React.FC = () => {
       participantesParaFormatar = participantesAtualizados;
       setParticipantes(participantesAtualizados);
 
-      const mensagem = formatarSugestoesPagamento(
+      let mensagem = formatarSugestoesPagamento(
         evento,
         sugestoes,
         despesasParaFormatar,
@@ -237,6 +237,24 @@ const Participacoes: React.FC = () => {
         subgruposParaFormatar.length > 0 ? subgruposParaFormatar : undefined,
         true
       );
+
+      // Obter ou gerar link de compartilhamento
+      try {
+        let linkData = await grupoApi.obterLink(Number(grupoSelecionado));
+        if (!linkData.link) {
+          // Se não existe, gera um novo
+          linkData = await grupoApi.gerarLink(Number(grupoSelecionado));
+        }
+        
+        if (linkData.link) {
+          mensagem += '\n\n🔗 *Visualize este evento online:*\n';
+          mensagem += linkData.link;
+          mensagem += '\n\n(Você pode visualizar o resumo e seus saldos sem precisar criar conta)';
+        }
+      } catch (err) {
+        // Se falhar ao obter link, continua sem adicionar
+        console.error('Erro ao obter link de compartilhamento:', err);
+      }
 
       setMensagemWhatsApp(mensagem);
     } catch (err) {
@@ -459,22 +477,84 @@ const Participacoes: React.FC = () => {
               </p>
             ) : (
               <>
-                {sugestoes.map((sugestao, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      padding: '12px',
-                      borderBottom: '1px solid rgba(148, 163, 184, 0.2)'
-                    }}
-                  >
-                    <div style={{ fontSize: '16px', color: 'rgba(255, 255, 255, 0.92)', marginBottom: '4px' }}>
-                      {sugestao.de} → {sugestao.para}
+                {sugestoes.map((sugestao, index) => {
+                  // Buscar chave PIX do recebedor
+                  const obterChavesPix = (nomeRecebedor: string): string[] => {
+                    // Primeiro, verificar se é um subgrupo (GrupoParticipantesEvento)
+                    if (subgrupos && subgrupos.length > 0) {
+                      const grupoNomeNormalizado = nomeRecebedor.trim().toLowerCase();
+                      let subgrupo = subgrupos.find(sg => {
+                        if (!sg.nome) return false;
+                        return sg.nome.trim().toLowerCase() === grupoNomeNormalizado;
+                      });
+                      
+                      if (!subgrupo) {
+                        subgrupo = subgrupos.find(sg => {
+                          if (!sg.nome) return false;
+                          const nomeSubgrupoNormalizado = sg.nome.trim().toLowerCase();
+                          return nomeSubgrupoNormalizado.includes(grupoNomeNormalizado) ||
+                                 grupoNomeNormalizado.includes(nomeSubgrupoNormalizado);
+                        });
+                      }
+                      
+                      if (subgrupo && subgrupo.participantes) {
+                        const pixKeys: string[] = [];
+                        subgrupo.participantes.forEach(p => {
+                          const participante = participantes.find(part => part.id === p.participante_id);
+                          if (participante?.chavePix && participante.chavePix.trim()) {
+                            pixKeys.push(participante.chavePix.trim());
+                          }
+                        });
+                        if (pixKeys.length > 0) return pixKeys;
+                      }
+                    }
+                    
+                    // Verificar se é um grupo em saldosGrupos
+                    const grupo = saldosGrupos.find(g => g.grupoNome === nomeRecebedor);
+                    if (grupo) {
+                      const pixKeys: string[] = [];
+                      grupo.participantes.forEach(p => {
+                        const participante = participantes.find(part => part.id === p.participanteId);
+                        if (participante?.chavePix && participante.chavePix.trim()) {
+                          pixKeys.push(participante.chavePix.trim());
+                        }
+                      });
+                      if (pixKeys.length > 0) return pixKeys;
+                    }
+                    
+                    // Verificar se é um participante individual
+                    const participante = participantes.find(p => p.nome === nomeRecebedor);
+                    if (participante?.chavePix && participante.chavePix.trim()) {
+                      return [participante.chavePix.trim()];
+                    }
+                    
+                    return [];
+                  };
+
+                  const chavesPix = obterChavesPix(sugestao.para);
+                  
+                  return (
+                    <div
+                      key={index}
+                      style={{
+                        padding: '12px',
+                        borderBottom: '1px solid rgba(148, 163, 184, 0.2)'
+                      }}
+                    >
+                      <div style={{ fontSize: '16px', color: 'rgba(255, 255, 255, 0.92)', marginBottom: '4px' }}>
+                        {sugestao.de} → {sugestao.para}
+                      </div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2', marginBottom: chavesPix.length > 0 ? '4px' : '0' }}>
+                        {formatCurrency(sugestao.valor)}
+                      </div>
+                      {chavesPix.length > 0 && (
+                        <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginTop: '4px' }}>
+                          💳 PIX: {chavesPix.length === 1 ? chavesPix[0] : chavesPix.join(' ou ')}
+                        </div>
+                      )}
                     </div>
-                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>
-                      {formatCurrency(sugestao.valor)}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </>
             )}
           </div>
@@ -677,6 +757,47 @@ const Participacoes: React.FC = () => {
               );
             })()}
           </div>
+
+          {/* 3. Detalhamento de Despesas */}
+          {despesas.length > 0 && (
+            <div className="card" style={{ marginTop: '30px' }}>
+              <h3 style={{ marginBottom: '20px' }}>📋 Detalhamento</h3>
+              <div className="evento-publico-detalhamento">
+                {despesas.map((despesa) => (
+                  <div key={despesa.id} className="evento-publico-despesa-item">
+                    <div className="evento-publico-despesa-header">
+                      <span className="evento-publico-despesa-nome">{despesa.descricao}</span>
+                      <span className="evento-publico-despesa-valor">{formatCurrency(despesa.valorTotal)}</span>
+                    </div>
+                    <div className="evento-publico-despesa-detalhes">
+                      <div className="evento-publico-despesa-detalhe">
+                        <span className="evento-publico-despesa-label">Data:</span>
+                        <span>{formatDate(despesa.data)}</span>
+                      </div>
+                      <div className="evento-publico-despesa-detalhe">
+                        <span className="evento-publico-despesa-label">Pagou:</span>
+                        <span className="evento-publico-despesa-destaque">{despesa.pagador?.nome || 'Desconhecido'}</span>
+                      </div>
+                      {despesa.participacoes && despesa.participacoes.length > 0 && (
+                        <>
+                          <div className="evento-publico-despesa-detalhe">
+                            <span className="evento-publico-despesa-label">Dividido entre:</span>
+                            <span>{despesa.participacoes.map(p => p.participante?.nome || 'Desconhecido').join(', ')}</span>
+                          </div>
+                          <div className="evento-publico-despesa-detalhe">
+                            <span className="evento-publico-despesa-label">Valor por pessoa:</span>
+                            <span className="evento-publico-despesa-destaque">
+                              {formatCurrency(despesa.valorTotal / despesa.participacoes.length)}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <div className="card">
