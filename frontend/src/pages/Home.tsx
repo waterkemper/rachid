@@ -97,8 +97,8 @@ const Home: React.FC = () => {
             <div className="home-pills" aria-label="Destaques">
               <div className="home-pill">Sem planilhas</div>
               <div className="home-pill">Cálculo automático</div>
-              <div className="home-pill">Grupos e famílias</div>
-              <div className="home-pill">Consumo por padrÃ£o</div>
+              <div className="home-pill">Subgrupos e famílias</div>
+              <div className="home-pill">Compartilhar no WhatsApp</div>
             </div>
           </div>
 
@@ -122,7 +122,7 @@ const Home: React.FC = () => {
                   <div className="home-preview-dot">2</div>
                   <div className="home-preview-step-content">
                     <div className="home-preview-step-title">Adicionar participantes</div>
-                    <div className="home-preview-step-desc">Pessoas, grupos e grupos maiores</div>
+                    <div className="home-preview-step-desc">Pessoas, subgrupos e grupos maiores</div>
                   </div>
                 </div>
 
@@ -137,8 +137,8 @@ const Home: React.FC = () => {
                 <div className="home-preview-step">
                   <div className="home-preview-dot">4</div>
                   <div className="home-preview-step-content">
-                    <div className="home-preview-step-title">Ver totais</div>
-                    <div className="home-preview-step-desc">Desmarque só as exceções</div>
+                    <div className="home-preview-step-title">Ver totais e compartilhar</div>
+                    <div className="home-preview-step-desc">Saldos calculados + WhatsApp</div>
                   </div>
                 </div>
               </div>
@@ -174,7 +174,7 @@ const Home: React.FC = () => {
                 <span className="home-card-badge">Participantes</span>
               </div>
               <div className="home-card-title">Adicione quem participou</div>
-              <div className="home-card-desc">Inclua pessoas, reutilize grupos/famílias e crie grupos na hora.</div>
+              <div className="home-card-desc">Inclua pessoas, crie subgrupos (famílias/casais) e reutilize grupos maiores.</div>
             </div>
 
             <div className="home-card">
@@ -191,8 +191,8 @@ const Home: React.FC = () => {
                 <span className="home-card-kicker">Passo 4</span>
                 <span className="home-card-badge">Totais</span>
               </div>
-              <div className="home-card-title">Confira e ajuste</div>
-              <div className="home-card-desc">O sistema assume consumo total e você desmarca apenas as exceções.</div>
+              <div className="home-card-title">Confira e compartilhe</div>
+              <div className="home-card-desc">Veja os saldos calculados e compartilhe o resumo completo via WhatsApp com um link de visualização.</div>
             </div>
           </div>
         </section>
@@ -206,12 +206,12 @@ const Home: React.FC = () => {
           <div className="home-features-grid">
             <div className="home-feature">
               <div className="home-feature-title">Consumo por padrão</div>
-              <div className="home-feature-desc">Comece com tudo marcado e ajuste apenas o que nÃ£o foi consumido.</div>
+              <div className="home-feature-desc">Comece com tudo marcado e ajuste apenas o que não foi consumido.</div>
             </div>
 
             <div className="home-feature">
-              <div className="home-feature-title">Grupos e famílias</div>
-              <div className="home-feature-desc">Agrupe pessoas para visualizar totais por famÃ­lia ou subgrupo do evento.</div>
+              <div className="home-feature-title">Subgrupos (famílias e grupos)</div>
+              <div className="home-feature-desc">Crie subgrupos quando pessoas pagam juntas. O sistema calcula entre grupos, não entre indivíduos. Ideal para famílias, casais e times.</div>
             </div>
 
             <div className="home-feature">
@@ -227,6 +227,11 @@ const Home: React.FC = () => {
             <div className="home-feature">
               <div className="home-feature-title">Dados separados por usuário</div>
               <div className="home-feature-desc">Cada conta vê apenas os próprios eventos, participantes e grupos.</div>
+            </div>
+
+            <div className="home-feature">
+              <div className="home-feature-title">Compartilhamento no WhatsApp</div>
+              <div className="home-feature-desc">Gere uma mensagem completa com saldos, sugestões de pagamento e link para visualização. Qualquer pessoa pode ver o evento sem criar conta.</div>
             </div>
 
             <div className="home-feature">
