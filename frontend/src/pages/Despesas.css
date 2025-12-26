@@ -252,3 +252,18 @@
   }
 }
 
+.badge-subgrupo-despesa {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: rgba(99, 102, 241, 0.20);
+  border: 1px solid rgba(99, 102, 241, 0.30);
+  color: rgba(255, 255, 255, 0.90);
+  white-space: nowrap;
+  line-height: 1.2;
+}
+

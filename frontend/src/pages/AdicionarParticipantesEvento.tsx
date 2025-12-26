@@ -597,17 +597,36 @@ const AdicionarParticipantesEvento: React.FC = () => {
 
         <div className="adicionar-section">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            <h3 style={{ margin: 0 }}>Sub grupos / grupos do evento (opcional)</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <h3 style={{ margin: 0 }}>Famílias ou grupos dentro do evento (opcional)</h3>
+              <span className="badge-diferencial">Diferencial do Rachid</span>
+            </div>
             <button type="button" className="btn btn-secondary btn-with-icon" onClick={() => abrirModalFamilia()}>
               <FaUsers /> <span>Criar sub grupo</span>
             </button>
           </div>
           <p className="help-text" style={{ marginTop: '10px' }}>
-            Aqui você define quem faz parte de cada sub grupo (isso só vale neste evento).
+            Use quando pessoas pagam em conjunto. Ex: famílias, casais, times.
           </p>
 
           {familiasEvento.length === 0 ? (
-            <p className="empty-message">Nenhuma sub grupo criada ainda</p>
+            <div className="exemplo-subgrupos">
+              <div className="exemplo-subgrupos-header">
+                <strong>Exemplo:</strong>
+              </div>
+              <div className="exemplo-subgrupos-item">
+                <span className="exemplo-subgrupos-nome">Família Cris</span>
+                <span className="exemplo-subgrupos-pessoas">(Cris + Elo)</span>
+              </div>
+              <div className="exemplo-subgrupos-item">
+                <span className="exemplo-subgrupos-nome">Família João</span>
+                <span className="exemplo-subgrupos-pessoas">(João + Fernanda)</span>
+              </div>
+              <div className="exemplo-subgrupos-resultado">
+                <span className="exemplo-subgrupos-emoji">👉</span>
+                <span>Famílias acertam valores entre si, não pessoa por pessoa</span>
+              </div>
+            </div>
           ) : (
             <div className="participantes-lista" style={{ maxHeight: 260 }}>
               {familiasEvento.map((f) => (
@@ -842,6 +861,13 @@ const AdicionarParticipantesEvento: React.FC = () => {
         }}
         title={familiaEditando ? 'Editar sub grupo' : 'Criar sub grupo'}
       >
+        <div className="modal-explicacao-subgrupo">
+          <div className="modal-explicacao-subgrupo-icon">💡</div>
+          <div className="modal-explicacao-subgrupo-content">
+            <strong>Para que serve um subgrupo?</strong>
+            <p>Pessoas do mesmo subgrupo funcionam como uma unidade. Na hora de acertar, um grupo paga o outro, não indivíduos.</p>
+          </div>
+        </div>
         <div className="form-group">
           <label>Nome da sub grupo *</label>
           <input
