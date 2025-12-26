@@ -10,11 +10,70 @@ export class GrupoService {
   private static participanteGrupoRepository = AppDataSource.getRepository(ParticipanteGrupo);
 
   static async findAll(usuarioId: number): Promise<Grupo[]> {
-    return await this.grupoRepository.find({
-      where: { usuario_id: usuarioId },
-      order: { data: 'DESC' },
-      relations: ['participantes', 'participantes.participante'],
-    });
+    try {
+      // Buscar grupos com relações
+      const grupos = await this.grupoRepository.find({
+        where: { usuario_id: usuarioId },
+        order: { data: 'DESC' },
+        relations: ['participantes', 'participantes.participante'],
+      });
+      
+      // Filtrar participantes órfãos (caso existam referências quebradas)
+      grupos.forEach(grupo => {
+        if (grupo.participantes) {
+          grupo.participantes = grupo.participantes.filter(
+            pg => pg.participante !== null && pg.participante !== undefined
+          );
+        }
+      });
+      
+      return grupos;
+    } catch (error: any) {
+      console.error('Erro em GrupoService.findAll:', error);
+      console.error('Stack:', error.stack);
+      console.error('Código:', error.code);
+      console.error('Mensagem:', error.message);
+      console.error('Query:', error.query);
+      
+      // Se o erro for relacionado a relações quebradas, tentar buscar sem relações
+      if (error.message?.includes('relation') || 
+          error.message?.includes('foreign key') ||
+          error.message?.includes('violates foreign key') ||
+          error.code === '23503') {
+        console.warn('Tentando buscar grupos sem relações devido a erro de relação');
+        try {
+          const gruposSemRelacoes = await this.grupoRepository.find({
+            where: { usuario_id: usuarioId },
+            order: { data: 'DESC' },
+          });
+          
+          // Carregar participantes manualmente com tratamento de erro
+          for (const grupo of gruposSemRelacoes) {
+            try {
+              grupo.participantes = await this.participanteGrupoRepository.find({
+                where: { grupo_id: grupo.id },
+                relations: ['participante'],
+              });
+              // Filtrar órfãos
+              if (grupo.participantes) {
+                grupo.participantes = grupo.participantes.filter(
+                  pg => pg.participante !== null && pg.participante !== undefined
+                );
+              }
+            } catch (participanteError) {
+              console.warn(`Erro ao carregar participantes do grupo ${grupo.id}:`, participanteError);
+              grupo.participantes = [];
+            }
+          }
+          return gruposSemRelacoes;
+        } catch (fallbackError: any) {
+          console.error('Erro no fallback:', fallbackError);
+          throw error; // Lança o erro original
+        }
+      }
+      
+      throw error;
+    }
   }
 
   static async findById(id: number, usuarioId: number): Promise<Grupo | null> {

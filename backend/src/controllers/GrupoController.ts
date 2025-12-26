@@ -9,8 +9,20 @@ export class GrupoController {
       const usuarioId = req.usuarioId!;
       const grupos = await GrupoService.findAll(usuarioId);
       res.json(grupos);
-    } catch (error) {
-      res.status(500).json({ error: 'Erro ao buscar grupos' });
+    } catch (error: any) {
+      console.error('Erro ao buscar grupos:', error);
+      console.error('Stack trace:', error.stack);
+      // Log detalhes do erro para debug
+      if (error.message) {
+        console.error('Mensagem de erro:', error.message);
+      }
+      if (error.code) {
+        console.error('Código de erro:', error.code);
+      }
+      res.status(500).json({ 
+        error: 'Erro ao buscar grupos',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   }
 
