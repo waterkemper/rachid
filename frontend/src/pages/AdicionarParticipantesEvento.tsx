@@ -240,6 +240,18 @@ const AdicionarParticipantesEvento: React.FC = () => {
     }
   };
 
+  // Função para verificar se um participante já está em outro subgrupo
+  const participanteJaEmOutroSubgrupo = (participanteId: number, subgrupoAtualId?: number): boolean => {
+    return familiasEvento.some(familia => {
+      // Ignorar o subgrupo atual se estiver editando
+      if (subgrupoAtualId && familia.id === subgrupoAtualId) {
+        return false;
+      }
+      // Verificar se o participante está neste subgrupo
+      return (familia.participantes || []).some(p => p.participante_id === participanteId);
+    });
+  };
+
   const abrirModalFamilia = (familia?: GrupoParticipantesEvento) => {
     setErro('');
     if (familia) {
@@ -266,6 +278,22 @@ const AdicionarParticipantesEvento: React.FC = () => {
       return;
     }
 
+    // Validar se algum participante selecionado já está em outro subgrupo
+    const participantesEmConflito: string[] = [];
+    for (const participanteId of familiaSelecionados) {
+      if (participanteJaEmOutroSubgrupo(participanteId, familiaEditando?.id)) {
+        const participante = participantesNoEvento.find(p => p.id === participanteId);
+        if (participante) {
+          participantesEmConflito.push(participante.nome);
+        }
+      }
+    }
+
+    if (participantesEmConflito.length > 0) {
+      setErro(`Os seguintes participantes já estão em outro subgrupo: ${participantesEmConflito.join(', ')}`);
+      return;
+    }
+
     try {
       setErro('');
       const evId = Number(eventoId);
@@ -285,13 +313,19 @@ const AdicionarParticipantesEvento: React.FC = () => {
         // adicionar os novos
         for (const id of Array.from(desejados)) {
           if (!atuais.has(id)) {
-            await grupoParticipantesApi.adicionarParticipante(evId, familiaEditando.id, id);
+            // Verificar novamente antes de adicionar (caso tenha mudado enquanto editava)
+            if (!participanteJaEmOutroSubgrupo(id, familiaEditando.id)) {
+              await grupoParticipantesApi.adicionarParticipante(evId, familiaEditando.id, id);
+            }
           }
         }
       } else {
         const familia = await grupoParticipantesApi.create(evId, { nome: familiaNome.trim() });
         for (const id of familiaSelecionados) {
-          await grupoParticipantesApi.adicionarParticipante(evId, familia.id, id);
+          // Verificar novamente antes de adicionar (caso tenha mudado enquanto criava)
+          if (!participanteJaEmOutroSubgrupo(id, familia.id)) {
+            await grupoParticipantesApi.adicionarParticipante(evId, familia.id, id);
+          }
         }
       }
 
@@ -730,22 +764,55 @@ const AdicionarParticipantesEvento: React.FC = () => {
               background: 'rgba(2, 6, 23, 0.18)',
             }}
           >
-            {participantesNoEvento.map((p) => (
-              <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 6px' }}>
-                <input
-                  type="checkbox"
-                  checked={familiaSelecionados.includes(p.id)}
-                  onChange={() => {
-                    setFamiliaSelecionados((prev) =>
-                      prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]
-                    );
+            {participantesNoEvento.map((p) => {
+              const jaEmOutroSubgrupo = participanteJaEmOutroSubgrupo(p.id, familiaEditando?.id);
+              const estaSelecionado = familiaSelecionados.includes(p.id);
+              const podeSelecionar = !jaEmOutroSubgrupo || estaSelecionado;
+              
+              return (
+                <label 
+                  key={p.id} 
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 10, 
+                    padding: '8px 6px',
+                    opacity: podeSelecionar ? 1 : 0.5,
+                    cursor: podeSelecionar ? 'pointer' : 'not-allowed'
                   }}
-                />
-                <span style={{ color: 'rgba(226, 232, 240, 0.92)' }}>{p.nome}</span>
-              </label>
-            ))}
+                >
+                  <input
+                    type="checkbox"
+                    checked={estaSelecionado}
+                    disabled={!podeSelecionar}
+                    onChange={() => {
+                      if (podeSelecionar) {
+                        setFamiliaSelecionados((prev) =>
+                          prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]
+                        );
+                      }
+                    }}
+                  />
+                  <span style={{ 
+                    color: podeSelecionar ? 'rgba(226, 232, 240, 0.92)' : 'rgba(148, 163, 184, 0.6)'
+                  }}>
+                    {p.nome}
+                    {jaEmOutroSubgrupo && !estaSelecionado && (
+                      <span style={{ 
+                        marginLeft: '8px', 
+                        fontSize: '12px', 
+                        color: 'rgba(239, 68, 68, 0.8)',
+                        fontStyle: 'italic'
+                      }}>
+                        (já em outro subgrupo)
+                      </span>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
           </div>
-          <p className="help-text">Dica: você pode editar isso depois.</p>
+          <p className="help-text">Dica: você pode editar isso depois. Cada participante só pode estar em um subgrupo.</p>
         </div>
 
         <div className="form-actions">
