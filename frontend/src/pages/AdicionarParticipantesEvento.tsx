@@ -145,6 +145,88 @@ const AdicionarParticipantesEvento: React.FC = () => {
       for (const participanteGrupo of grupo.participantes) {
         await adicionarParticipanteAoEvento(participanteGrupo.participante_id);
       }
+
+      // Recarregar dados do evento para garantir que os participantes estejam atualizados
+      await loadData();
+
+      // Aguardar um pouco para garantir que os participantes foram adicionados
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Copiar subgrupos do evento anterior
+      try {
+        const subgruposAnteriores = await grupoParticipantesApi.getAll(grupoId);
+        
+        if (subgruposAnteriores.length === 0) {
+          // Não há subgrupos para copiar
+          setGrupoSelecionado('');
+          return;
+        }
+
+        // Buscar evento atualizado para obter lista correta de participantes
+        const eventoAtualizado = await grupoApi.getById(Number(eventoId));
+        const participantesIdsNoEvento = new Set(
+          eventoAtualizado.participantes?.map(p => p.participante_id) || []
+        );
+
+        console.log('Participantes no evento atual:', Array.from(participantesIdsNoEvento));
+        console.log('Subgrupos a copiar:', subgruposAnteriores.length);
+
+        // Criar subgrupos no evento atual
+        for (const subgrupoAnterior of subgruposAnteriores) {
+          // Criar o subgrupo no evento atual
+          const novoSubgrupo = await grupoParticipantesApi.create(Number(eventoId), {
+            nome: subgrupoAnterior.nome,
+            descricao: subgrupoAnterior.descricao,
+          });
+
+          console.log(`Criado subgrupo: ${novoSubgrupo.nome} (ID: ${novoSubgrupo.id})`);
+
+          // Adicionar participantes ao subgrupo (apenas os que estão no evento atual)
+          if (subgrupoAnterior.participantes && subgrupoAnterior.participantes.length > 0) {
+            console.log(`Subgrupo ${subgrupoAnterior.nome} tem ${subgrupoAnterior.participantes.length} participantes`);
+            
+            for (const participanteSubgrupo of subgrupoAnterior.participantes) {
+              const participanteId = participanteSubgrupo.participante_id;
+              
+              console.log(`Verificando participante ${participanteId} - está no evento? ${participantesIdsNoEvento.has(participanteId)}`);
+              
+              // Verificar se o participante está no evento atual
+              if (participantesIdsNoEvento.has(participanteId)) {
+                try {
+                  await grupoParticipantesApi.adicionarParticipante(
+                    Number(eventoId),
+                    novoSubgrupo.id,
+                    participanteId
+                  );
+                  console.log(`✓ Participante ${participanteId} adicionado ao subgrupo ${novoSubgrupo.nome}`);
+                } catch (err: any) {
+                  // Se o erro for porque o participante já está em outro subgrupo, ignorar
+                  // Caso contrário, logar o erro
+                  if (err?.response?.status !== 400) {
+                    console.warn(`Erro ao adicionar participante ${participanteId} ao subgrupo ${novoSubgrupo.id}:`, err);
+                  } else {
+                    console.log(`Participante ${participanteId} já está em outro subgrupo`);
+                  }
+                }
+              } else {
+                console.warn(`Participante ${participanteId} não está no evento atual, pulando...`);
+              }
+            }
+          } else {
+            console.log(`Subgrupo ${subgrupoAnterior.nome} não tem participantes`);
+          }
+        }
+
+        // Aguardar um pouco para garantir que todas as operações foram concluídas
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Recarregar subgrupos do evento atual
+        await reloadFamilias();
+      } catch (error) {
+        console.error('Erro ao copiar subgrupos:', error);
+        // Não bloquear o fluxo se houver erro ao copiar subgrupos
+      }
+
       setGrupoSelecionado('');
     } catch (error) {
       console.error('Erro ao adicionar grupo:', error);
