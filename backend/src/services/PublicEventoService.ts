@@ -266,51 +266,69 @@ export class PublicEventoService {
       return { transferidos: 0 };
     }
 
-    // Transferir cada participante para o novo usuário
-    let transferidos = 0;
-    for (const participante of participantesParaTransferir) {
-      // Verificar se já existe um participante com mesmo nome e email para o novo usuário
-      const participanteExistente = await this.participanteRepository.findOne({
-        where: {
-          usuario_id: novoUsuarioId,
-          nome: participante.nome,
-          email: participante.email,
-        },
-      });
+    // Executar a transferência em transação para evitar estado inconsistente caso ocorra erro no meio
+    const queryRunner = AppDataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-      if (participanteExistente) {
-        // Se já existe, atualizar as referências nas despesas e participações
-        // Primeiro, atualizar despesas onde este participante é pagador
-        await this.despesaRepository.update(
-          { participante_pagador_id: participante.id },
-          { participante_pagador_id: participanteExistente.id }
-        );
+    try {
+      // Transferir cada participante para o novo usuário
+      let transferidos = 0;
+      for (const participante of participantesParaTransferir) {
+        // Verificar se já existe um participante com mesmo nome e email para o novo usuário
+        const participanteExistente = await queryRunner.manager.findOne(Participante, {
+          where: {
+            usuario_id: novoUsuarioId,
+            nome: participante.nome,
+            email: participante.email,
+          },
+        });
 
-        // Atualizar participações em despesas
-        const participacoesRepository = AppDataSource.getRepository(ParticipacaoDespesa);
-        await participacoesRepository.update(
-          { participante_id: participante.id },
-          { participante_id: participanteExistente.id }
-        );
+        if (participanteExistente) {
+          // Se já existe, atualizar as referências nas despesas e participações
+          // Primeiro, atualizar despesas onde este participante é pagador
+          await queryRunner.manager.update(
+            Despesa,
+            { participante_pagador_id: participante.id },
+            { participante_pagador_id: participanteExistente.id }
+          );
 
-        // Atualizar referências em participantes_grupos
-        await this.participanteGrupoRepository.update(
-          { participante_id: participante.id },
-          { participante_id: participanteExistente.id }
-        );
+          // Atualizar participações em despesas
+          await queryRunner.manager.update(
+            ParticipacaoDespesa,
+            { participante_id: participante.id },
+            { participante_id: participanteExistente.id }
+          );
 
-        // Deletar o participante antigo
-        await this.participanteRepository.delete({ id: participante.id });
-        transferidos++;
-      } else {
-        // Se não existe, apenas transferir o participante
-        participante.usuario_id = novoUsuarioId;
-        await this.participanteRepository.save(participante);
-        transferidos++;
+          // Atualizar referências em participantes_grupos
+          await queryRunner.manager.update(
+            ParticipanteGrupo,
+            { participante_id: participante.id },
+            { participante_id: participanteExistente.id }
+          );
+
+          // Deletar o participante antigo
+          await queryRunner.manager.delete(Participante, { id: participante.id });
+          transferidos++;
+        } else {
+          // Se não existe, apenas transferir o participante
+          await queryRunner.manager.update(
+            Participante,
+            { id: participante.id },
+            { usuario_id: novoUsuarioId }
+          );
+          transferidos++;
+        }
       }
-    }
 
-    return { transferidos };
+      await queryRunner.commitTransaction();
+      return { transferidos };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   static async buscarDespesasPublicas(grupoId: number) {
