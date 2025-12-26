@@ -42,8 +42,23 @@ export class GrupoController {
 
   static async create(req: AuthRequest, res: Response) {
     try {
-      const { nome, descricao, data, participanteIds } = req.body;
+      const { nome, descricao, data, participanteIds, templateId } = req.body;
       const usuarioId = req.usuarioId!;
+      
+      // Se templateId fornecido, usar createFromTemplate
+      if (templateId) {
+        const grupo = await GrupoService.createFromTemplate({
+          templateId,
+          nome, // Permite sobrescrever nome do template
+          descricao, // Permite sobrescrever descrição do template
+          data: data ? new Date(data) : undefined,
+          participanteIds,
+          usuario_id: usuarioId,
+        });
+        return res.status(201).json(grupo);
+      }
+      
+      // Criação normal (sem template)
       if (!nome) {
         return res.status(400).json({ error: 'Nome é obrigatório' });
       }
@@ -55,7 +70,10 @@ export class GrupoController {
         usuario_id: usuarioId,
       });
       res.status(201).json(grupo);
-    } catch (error) {
+    } catch (error: any) {
+      if (error.message?.includes('Template não encontrado')) {
+        return res.status(404).json({ error: error.message });
+      }
       res.status(500).json({ error: 'Erro ao criar grupo' });
     }
   }

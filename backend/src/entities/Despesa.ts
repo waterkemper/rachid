@@ -31,10 +31,10 @@ export class Despesa {
 
   @ManyToOne(() => Participante, participante => participante.despesasPagas)
   @JoinColumn({ name: 'participante_pagador_id' })
-  pagador!: Participante;
+  pagador?: Participante;
 
-  @Column('integer')
-  participante_pagador_id!: number;
+  @Column('integer', { nullable: true })
+  participante_pagador_id?: number;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   data!: Date;

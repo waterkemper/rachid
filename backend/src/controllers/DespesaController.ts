@@ -20,7 +20,7 @@ export class DespesaController {
       const usuarioId = req.usuarioId!;
       const despesa = await DespesaService.findById(id, usuarioId);
       if (!despesa) {
-        return res.status(404).json({ error: 'Despesa n�o encontrada' });
+        return res.status(404).json({ error: 'Despesa não encontrada' });
       }
       res.json(despesa);
     } catch (error) {
@@ -33,15 +33,15 @@ export class DespesaController {
       const { grupo_id, descricao, valorTotal, participante_pagador_id, data, participacoes } = req.body;
       const usuarioId = req.usuarioId!;
       
-      if (!grupo_id || !descricao || !valorTotal || !participante_pagador_id) {
-        return res.status(400).json({ error: 'Campos obrigat�rios faltando' });
+      if (!grupo_id || !descricao || valorTotal === undefined || valorTotal === null) {
+        return res.status(400).json({ error: 'Campos obrigatórios faltando' });
       }
 
       const despesa = await DespesaService.create({
         grupo_id,
         descricao,
         valorTotal: parseFloat(valorTotal),
-        participante_pagador_id,
+        participante_pagador_id: participante_pagador_id ? parseInt(participante_pagador_id) : undefined,
         data: data ? new Date(data) : undefined,
         participacoes: participacoes && Array.isArray(participacoes) && participacoes.length > 0
           ? participacoes.map((p: any) => ({
@@ -102,7 +102,7 @@ export class DespesaController {
       });
 
       if (!despesa) {
-        return res.status(404).json({ error: 'Despesa n�o encontrada' });
+        return res.status(404).json({ error: 'Despesa não encontrada' });
       }
 
       res.json(despesa);
@@ -117,7 +117,7 @@ export class DespesaController {
       const usuarioId = req.usuarioId!;
       const sucesso = await DespesaService.delete(id, usuarioId);
       if (!sucesso) {
-        return res.status(404).json({ error: 'Despesa n�o encontrada' });
+        return res.status(404).json({ error: 'Despesa não encontrada' });
       }
       res.status(204).send();
     } catch (error) {

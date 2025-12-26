@@ -8,6 +8,7 @@ import { GrupoParticipantesController } from '../controllers/GrupoParticipantesC
 import { GrupoMaiorController } from '../controllers/GrupoMaiorController';
 import { AuthController } from '../controllers/AuthController';
 import { PublicEventoController } from '../controllers/PublicEventoController';
+import { TemplateController } from '../controllers/TemplateController';
 import { authMiddleware } from '../middleware/auth';
 import { AnalyticsController } from '../controllers/AnalyticsController';
 
@@ -28,6 +29,10 @@ router.get('/public/eventos/:token/saldos', PublicEventoController.getSaldosByTo
 router.get('/public/eventos/:token/saldos-por-grupo', PublicEventoController.getSaldosPorGrupoByToken);
 router.get('/public/eventos/:token/sugestoes', PublicEventoController.getSugestoesByToken);
 router.get('/public/eventos/:token/despesas', PublicEventoController.getDespesasByToken);
+
+// Rotas de templates (públicas, não requerem autenticação)
+router.get('/templates', TemplateController.getAll);
+router.get('/templates/:id', TemplateController.getById);
 
 // Rotas protegidas (requerem autenticação)
 router.get('/auth/me', authMiddleware, AuthController.me);
