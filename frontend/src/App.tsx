@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import PaywallModal from './components/PaywallModal';
@@ -292,9 +293,11 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <HelmetProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </HelmetProvider>
   );
 }
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { publicEventoApi, EventoPublico as EventoPublicoType } from '../services/api';
 import { SaldoParticipante, SugestaoPagamento, SaldoGrupo, Despesa } from '../types';
 import './EventoPublico.css';
@@ -147,11 +148,50 @@ const EventoPublico: React.FC = () => {
     );
   }
 
+  // Construir URLs absolutas para OpenGraph
+  // Em produção, garante HTTPS (necessário para WhatsApp/Telegram)
+  const getAbsoluteUrl = (path: string): string => {
+    const origin = window.location.origin;
+    // Se não estiver em localhost, força HTTPS
+    const baseUrl = origin.includes('localhost') || origin.includes('127.0.0.1')
+      ? origin
+      : origin.replace('http://', 'https://');
+    return `${baseUrl}${path}`;
+  };
+
+  const ogImageUrl = getAbsoluteUrl('/logo.png');
+  const ogUrl = getAbsoluteUrl(`/evento/${token}`);
+  const ogTitle = evento.nome;
+  const ogDescription = 'Resumo de despesas do evento';
+
   return (
-    <div className="evento-publico-container">
-      <div className="evento-publico-card">
-        <div className="evento-publico-header evento-publico-header-inline">
-          <h1>{evento.nome}</h1>
+    <>
+      <Helmet>
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={ogUrl} />
+        <meta property="og:title" content={ogTitle} />
+        <meta property="og:description" content={ogDescription} />
+        <meta property="og:image" content={ogImageUrl} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:site_name" content="Rachid" />
+        
+        {/* Twitter Card */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:url" content={ogUrl} />
+        <meta name="twitter:title" content={ogTitle} />
+        <meta name="twitter:description" content={ogDescription} />
+        <meta name="twitter:image" content={ogImageUrl} />
+        
+        {/* SEO básico */}
+        <title>{ogTitle} - Rachid</title>
+        <meta name="description" content={ogDescription} />
+      </Helmet>
+      <div className="evento-publico-container">
+        <div className="evento-publico-card">
+          <div className="evento-publico-header evento-publico-header-inline">
+            <h1>{evento.nome}</h1>
           <div className="evento-publico-header-meta">
             <span>Data: {formatarData(evento.data)}</span>
             {evento.totalDespesas > 0 && (
@@ -468,6 +508,7 @@ const EventoPublico: React.FC = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 
