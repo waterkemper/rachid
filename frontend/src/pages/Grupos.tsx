@@ -50,6 +50,8 @@ const Grupos: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
       const [gruposData, participantesData] = await Promise.all([
         grupoApi.getAll(),
         participanteApi.getAll(),
@@ -66,6 +68,8 @@ const Grupos: React.FC = () => {
             const total = despesas.reduce((sum, despesa) => sum + Number(despesa.valorTotal), 0);
             totaisMap.set(grupo.id, total);
           } catch (err) {
+            // Erro ao carregar despesas de um grupo específico não deve quebrar tudo
+            console.warn(`Erro ao carregar despesas do grupo ${grupo.id}:`, err);
             totaisMap.set(grupo.id, 0);
           }
         })
@@ -73,8 +77,43 @@ const Grupos: React.FC = () => {
       setTotaisDespesas(totaisMap);
       
       setError(null);
-    } catch (err) {
-      setError('Erro ao carregar dados');
+    } catch (err: any) {
+      console.error('Erro ao carregar dados:', err);
+      
+      // Mensagens de erro mais específicas
+      let errorMessage = 'Erro ao carregar dados';
+      
+      if (err.response) {
+        // Erro da API
+        const status = err.response.status;
+        const data = err.response.data;
+        
+        if (status === 401) {
+          errorMessage = 'Sessão expirada. Por favor, faça login novamente.';
+          // O interceptor já deve redirecionar, mas garantimos aqui também
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 2000);
+        } else if (status === 403) {
+          errorMessage = 'Você não tem permissão para acessar estes dados.';
+        } else if (status === 404) {
+          errorMessage = 'Recurso não encontrado.';
+        } else if (status >= 500) {
+          errorMessage = 'Erro no servidor. Por favor, tente novamente mais tarde.';
+        } else if (data?.error) {
+          errorMessage = data.error;
+        } else {
+          errorMessage = `Erro ao carregar dados (${status})`;
+        }
+      } else if (err.request) {
+        // Erro de rede (sem resposta do servidor)
+        errorMessage = 'Erro de conexão. Verifique sua internet e tente novamente.';
+      } else if (err.message) {
+        // Outro tipo de erro
+        errorMessage = `Erro: ${err.message}`;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -233,7 +272,18 @@ const Grupos: React.FC = () => {
         </button>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && (
+        <div className="alert alert-error" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{error}</span>
+          <button 
+            className="btn btn-secondary" 
+            onClick={loadData}
+            style={{ marginLeft: '15px', padding: '8px 16px' }}
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
 
       <div className="card">
         {/* Desktop Table View */}
