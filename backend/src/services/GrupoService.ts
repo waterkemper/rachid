@@ -10,6 +10,7 @@ import { DespesaService } from './DespesaService';
 import { ParticipacaoService } from './ParticipacaoService';
 import { Usuario } from '../entities/Usuario';
 import { Participante } from '../entities/Participante';
+import { In } from 'typeorm';
 
 export class GrupoService {
   private static grupoRepository = AppDataSource.getRepository(Grupo);
@@ -59,34 +60,75 @@ export class GrupoService {
 
   static async findAll(usuarioId: number): Promise<Grupo[]> {
     try {
-      // Buscar email do usuário
+      // Buscar grupos onde o usuário é dono
+      const gruposComoDono = await this.grupoRepository.find({
+        where: { usuario_id: usuarioId },
+        relations: ['participantes', 'participantes.participante'],
+        order: { data: 'DESC', id: 'DESC' },
+      });
+
+      // Buscar grupos onde o usuário é participante (via email)
       const usuario = await this.usuarioRepository.findOne({
         where: { id: usuarioId },
         select: ['email'],
       });
 
-      // Buscar grupos onde o usuário é dono OU é participante (via email)
-      const queryBuilder = this.grupoRepository
-        .createQueryBuilder('grupo')
-        .leftJoinAndSelect('grupo.participantes', 'participantes')
-        .leftJoinAndSelect('participantes.participante', 'participante')
-        .where('grupo.usuario_id = :usuarioId', { usuarioId });
+      const gruposIdsComoDono = new Set(gruposComoDono.map(g => g.id));
+      const gruposComoParticipante: Grupo[] = [];
 
-      // Se o usuário tem email, também buscar grupos onde há participante com mesmo email
       if (usuario?.email) {
-        queryBuilder.orWhere(
-          'EXISTS (SELECT 1 FROM participantes_grupos pg INNER JOIN participantes p ON pg.participante_id = p.id WHERE pg.grupo_id = grupo.id AND LOWER(p.email) = LOWER(:email))',
-          { email: usuario.email }
-        );
+        // Buscar participantes com o mesmo email (case-insensitive)
+        // Usar ILIKE para compatibilidade com Supabase
+        const participantesComEmail = await this.participanteRepository
+          .createQueryBuilder('participante')
+          .where('LOWER(participante.email) = LOWER(:email)', { email: usuario.email })
+          .select(['participante.id'])
+          .getMany();
+
+        if (participantesComEmail.length > 0) {
+          const participantesIds = participantesComEmail.map(p => p.id);
+          
+          // Buscar grupos onde esses participantes estão
+          const participantesGrupos = await this.participanteGrupoRepository.find({
+            where: { participante_id: In(participantesIds) },
+            relations: ['grupo', 'grupo.participantes', 'grupo.participantes.participante'],
+          });
+
+          // Filtrar grupos únicos que o usuário ainda não tem acesso
+          const gruposIdsAdicionais = new Set<number>();
+          participantesGrupos.forEach(pg => {
+            if (pg.grupo && !gruposIdsComoDono.has(pg.grupo.id)) {
+              gruposIdsAdicionais.add(pg.grupo.id);
+            }
+          });
+
+          // Buscar grupos adicionais
+          if (gruposIdsAdicionais.size > 0) {
+            const gruposIdsArray = Array.from(gruposIdsAdicionais);
+            const gruposAdicionais = await this.grupoRepository.find({
+              where: { id: In(gruposIdsArray) },
+              relations: ['participantes', 'participantes.participante'],
+              order: { data: 'DESC', id: 'DESC' },
+            });
+            gruposComoParticipante.push(...gruposAdicionais);
+          }
+        }
       }
 
-      queryBuilder.orderBy('grupo.data', 'DESC')
-                  .addOrderBy('grupo.id', 'DESC');
-
-      const grupos = await queryBuilder.getMany();
+      // Combinar e ordenar
+      const todosGrupos = [...gruposComoDono, ...gruposComoParticipante];
+      
+      // Remover duplicatas e ordenar
+      const gruposUnicos = Array.from(new Map(todosGrupos.map(g => [g.id, g])).values());
+      gruposUnicos.sort((a, b) => {
+        if (a.data.getTime() !== b.data.getTime()) {
+          return b.data.getTime() - a.data.getTime();
+        }
+        return b.id - a.id;
+      });
       
       // Filtrar participantes órfãos (caso existam referências quebradas)
-      grupos.forEach(grupo => {
+      gruposUnicos.forEach(grupo => {
         if (grupo.participantes) {
           grupo.participantes = grupo.participantes.filter(
             pg => pg.participante !== null && pg.participante !== undefined
@@ -94,7 +136,7 @@ export class GrupoService {
         }
       });
       
-      return grupos;
+      return gruposUnicos;
     } catch (error: any) {
       console.error('Erro em GrupoService.findAll:', error);
       console.error('Stack:', error.stack);
@@ -115,21 +157,11 @@ export class GrupoService {
             select: ['email'],
           });
 
-          const queryBuilderFallback = this.grupoRepository
-            .createQueryBuilder('grupo')
-            .where('grupo.usuario_id = :usuarioId', { usuarioId });
-
-          if (usuarioFallback?.email) {
-            queryBuilderFallback.orWhere(
-              'EXISTS (SELECT 1 FROM participantes_grupos pg INNER JOIN participantes p ON pg.participante_id = p.id WHERE pg.grupo_id = grupo.id AND LOWER(p.email) = LOWER(:email))',
-              { email: usuarioFallback.email }
-            );
-          }
-
-          queryBuilderFallback.orderBy('grupo.data', 'DESC')
-                             .addOrderBy('grupo.id', 'DESC');
-
-          const gruposSemRelacoes = await queryBuilderFallback.getMany();
+          // Fallback: buscar apenas grupos do usuário (sem colaboração)
+          const gruposSemRelacoes = await this.grupoRepository.find({
+            where: { usuario_id: usuarioId },
+            order: { data: 'DESC', id: 'DESC' },
+          });
           
           // Carregar participantes manualmente com tratamento de erro
           for (const grupo of gruposSemRelacoes) {
@@ -161,32 +193,17 @@ export class GrupoService {
   }
 
   static async findById(id: number, usuarioId: number): Promise<Grupo | null> {
-    // Buscar email do usuário
-    const usuario = await this.usuarioRepository.findOne({
-      where: { id: usuarioId },
-      select: ['email'],
-    });
-
-    // Buscar grupo onde o usuário é dono OU é participante (via email)
-    const queryBuilder = this.grupoRepository
-      .createQueryBuilder('grupo')
-      .leftJoinAndSelect('grupo.participantes', 'participantes')
-      .leftJoinAndSelect('participantes.participante', 'participante')
-      .leftJoinAndSelect('grupo.despesas', 'despesas')
-      .where('grupo.id = :id', { id });
-
-    // Verificar se é dono OU participante
-    if (usuario?.email) {
-      queryBuilder.andWhere(
-        '(grupo.usuario_id = :usuarioId OR EXISTS (SELECT 1 FROM participantes_grupos pg INNER JOIN participantes p ON pg.participante_id = p.id WHERE pg.grupo_id = grupo.id AND LOWER(p.email) = LOWER(:email)))',
-        { usuarioId, email: usuario.email }
-      );
-    } else {
-      // Se não tem email, só pode ser dono
-      queryBuilder.andWhere('grupo.usuario_id = :usuarioId', { usuarioId });
+    // Primeiro, verificar se o usuário tem acesso ao grupo
+    const hasAccess = await this.isUserGroupMember(usuarioId, id);
+    if (!hasAccess) {
+      return null;
     }
 
-    return await queryBuilder.getOne();
+    // Se tem acesso, buscar o grupo com todas as relações
+    return await this.grupoRepository.findOne({
+      where: { id },
+      relations: ['participantes', 'participantes.participante', 'despesas'],
+    });
   }
 
   /**
