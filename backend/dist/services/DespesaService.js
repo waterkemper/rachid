@@ -7,23 +7,95 @@ const ParticipacaoDespesa_1 = require("../entities/ParticipacaoDespesa");
 const ParticipacaoService_1 = require("./ParticipacaoService");
 const Grupo_1 = require("../entities/Grupo");
 const ParticipanteGrupo_1 = require("../entities/ParticipanteGrupo");
+const Usuario_1 = require("../entities/Usuario");
+const DespesaHistoricoService_1 = require("./DespesaHistoricoService");
 class DespesaService {
     static async findAll(usuarioId, grupoId) {
-        const where = { usuario_id: usuarioId };
+        // Buscar despesas onde o usuário é dono OU é membro do grupo
+        let despesas = [];
         if (grupoId) {
-            where.grupo_id = grupoId;
+            // Se tem grupoId, verificar se é membro do grupo
+            const isMember = await this.isUserGroupMember(usuarioId, grupoId);
+            if (isMember) {
+                // Buscar todas as despesas do grupo (não filtrar por usuario_id)
+                despesas = await this.despesaRepository.find({
+                    where: { grupo_id: grupoId },
+                    relations: ['pagador', 'grupo', 'participacoes', 'participacoes.participante'],
+                    order: { data: 'DESC' },
+                });
+            }
+            else {
+                // Se não é membro, buscar apenas despesas próprias
+                despesas = await this.despesaRepository.find({
+                    where: { grupo_id: grupoId, usuario_id: usuarioId },
+                    relations: ['pagador', 'grupo', 'participacoes', 'participacoes.participante'],
+                    order: { data: 'DESC' },
+                });
+            }
         }
-        return await this.despesaRepository.find({
-            where,
-            relations: ['pagador', 'grupo', 'participacoes', 'participacoes.participante'],
-            order: { data: 'DESC' },
-        });
+        else {
+            // Sem grupoId, buscar todas as despesas do usuário
+            despesas = await this.despesaRepository.find({
+                where: { usuario_id: usuarioId },
+                relations: ['pagador', 'grupo', 'participacoes', 'participacoes.participante'],
+                order: { data: 'DESC' },
+            });
+        }
+        return despesas;
     }
     static async findById(id, usuarioId) {
+        const where = { id };
+        if (usuarioId !== undefined) {
+            where.usuario_id = usuarioId;
+        }
         return await this.despesaRepository.findOne({
-            where: { id, usuario_id: usuarioId },
+            where,
             relations: ['pagador', 'grupo', 'participacoes', 'participacoes.participante'],
         });
+    }
+    /**
+     * Verifica se um usuário é membro de um grupo (pode ser dono ou ter participante com email correspondente)
+     */
+    static async isUserGroupMember(usuarioId, grupoId) {
+        // Verificar se é dono do grupo
+        const grupo = await this.grupoRepository.findOne({
+            where: { id: grupoId },
+            select: ['usuario_id'],
+        });
+        if (!grupo) {
+            return false;
+        }
+        if (grupo.usuario_id === usuarioId) {
+            return true;
+        }
+        // Verificar se tem participante no grupo com email correspondente
+        const usuario = await this.usuarioRepository.findOne({
+            where: { id: usuarioId },
+            select: ['email'],
+        });
+        if (!usuario || !usuario.email) {
+            return false;
+        }
+        const participantesGrupo = await this.participanteGrupoRepository.find({
+            where: { grupo_id: grupoId },
+            relations: ['participante'],
+        });
+        return participantesGrupo.some((pg) => pg.participante?.email?.toLowerCase() === usuario.email.toLowerCase());
+    }
+    /**
+     * Verifica se um usuário pode editar uma despesa
+     */
+    static async canUserEditDespesa(usuarioId, despesaId) {
+        const despesa = await this.findById(despesaId);
+        if (!despesa) {
+            return false;
+        }
+        // Se é dono da despesa, pode editar
+        if (despesa.usuario_id === usuarioId) {
+            return true;
+        }
+        // Verificar se é membro do grupo
+        return await this.isUserGroupMember(usuarioId, despesa.grupo_id);
     }
     static async create(data) {
         const despesa = this.despesaRepository.create({
@@ -79,32 +151,73 @@ class DespesaService {
         return despesaCompleta;
     }
     static async update(id, usuarioId, data) {
-        const despesa = await this.findById(id, usuarioId);
+        // Verificar permissão primeiro
+        const canEdit = await this.canUserEditDespesa(usuarioId, id);
+        if (!canEdit) {
+            throw new Error('Usuário não tem permissão para editar esta despesa');
+        }
+        const despesa = await this.findById(id);
         if (!despesa)
             return null;
         const valorTotalFoiAlterado = data.valorTotal !== undefined && data.valorTotal !== despesa.valorTotal;
-        // Preparar dados para atualização
+        // Preparar dados para atualização e histórico
         const updateData = {};
-        if (data.descricao !== undefined)
+        const historicoAlteracoes = [];
+        if (data.descricao !== undefined && data.descricao !== despesa.descricao) {
             updateData.descricao = data.descricao;
-        if (data.valorTotal !== undefined)
+            historicoAlteracoes.push({
+                campo_alterado: 'descricao',
+                valor_anterior: despesa.descricao,
+                valor_novo: data.descricao,
+            });
+        }
+        if (data.valorTotal !== undefined && data.valorTotal !== despesa.valorTotal) {
             updateData.valorTotal = data.valorTotal;
+            historicoAlteracoes.push({
+                campo_alterado: 'valorTotal',
+                valor_anterior: despesa.valorTotal.toString(),
+                valor_novo: data.valorTotal.toString(),
+            });
+        }
         if (data.participante_pagador_id !== undefined && data.participante_pagador_id !== null) {
             const novoPagadorId = Number(data.participante_pagador_id);
-            console.log('[DespesaService.update] Atualizando pagador:', {
-                despesaId: id,
-                pagadorAntigo: despesa.participante_pagador_id,
-                pagadorNovo: novoPagadorId,
-            });
-            updateData.participante_pagador_id = novoPagadorId;
+            if (novoPagadorId !== despesa.participante_pagador_id) {
+                console.log('[DespesaService.update] Atualizando pagador:', {
+                    despesaId: id,
+                    pagadorAntigo: despesa.participante_pagador_id,
+                    pagadorNovo: novoPagadorId,
+                });
+                updateData.participante_pagador_id = novoPagadorId;
+                historicoAlteracoes.push({
+                    campo_alterado: 'participante_pagador_id',
+                    valor_anterior: despesa.participante_pagador_id?.toString(),
+                    valor_novo: novoPagadorId.toString(),
+                });
+            }
         }
-        if (data.data !== undefined)
-            updateData.data = data.data;
+        if (data.data !== undefined) {
+            const novaData = new Date(data.data);
+            const dataAtual = new Date(despesa.data);
+            if (novaData.getTime() !== dataAtual.getTime()) {
+                updateData.data = novaData;
+                historicoAlteracoes.push({
+                    campo_alterado: 'data',
+                    valor_anterior: despesa.data.toISOString(),
+                    valor_novo: novaData.toISOString(),
+                });
+            }
+        }
+        // Adicionar updatedBy e updatedAt
+        updateData.updated_by = usuarioId;
         // Usar update() para forçar atualização direta no banco
         if (Object.keys(updateData).length > 0) {
             console.log('[DespesaService.update] Dados para update direto:', updateData);
-            await this.despesaRepository.update({ id, usuario_id: usuarioId }, updateData);
+            await this.despesaRepository.update({ id }, updateData);
             console.log('[DespesaService.update] Update direto executado com sucesso');
+            // Registrar histórico apenas se houver alterações
+            if (historicoAlteracoes.length > 0) {
+                await this.registrarHistorico(id, usuarioId, historicoAlteracoes);
+            }
         }
         if (data.participacoes !== undefined) {
             // Remover duplicatas baseado no participante_id (manter apenas a primeira ocorrência)
@@ -156,7 +269,6 @@ class DespesaService {
             .leftJoinAndSelect('despesa.participacoes', 'participacoes')
             .leftJoinAndSelect('participacoes.participante', 'participante')
             .where('despesa.id = :id', { id })
-            .andWhere('despesa.usuario_id = :usuarioId', { usuarioId })
             .getOne();
         console.log('[DespesaService.update] Despesa recarregada:', {
             id: despesaAtualizada?.id,
@@ -165,8 +277,33 @@ class DespesaService {
         });
         return despesaAtualizada;
     }
+    /**
+     * Registra histórico de alterações em uma despesa
+     */
+    static async registrarHistorico(despesaId, usuarioId, alteracoes) {
+        try {
+            const historicoData = alteracoes.map(alt => ({
+                despesa_id: despesaId,
+                usuario_id: usuarioId,
+                campo_alterado: alt.campo_alterado,
+                valor_anterior: alt.valor_anterior,
+                valor_novo: alt.valor_novo,
+            }));
+            await DespesaHistoricoService_1.DespesaHistoricoService.createMultiple(historicoData);
+            console.log('[DespesaService.registrarHistorico] Histórico registrado:', historicoData.length, 'alterações');
+        }
+        catch (error) {
+            console.error('[DespesaService.registrarHistorico] Erro ao registrar histórico:', error);
+            // Não lançar erro para não quebrar o fluxo de atualização
+        }
+    }
     static async delete(id, usuarioId) {
-        const result = await this.despesaRepository.delete({ id, usuario_id: usuarioId });
+        // Verificar permissão primeiro
+        const canEdit = await this.canUserEditDespesa(usuarioId, id);
+        if (!canEdit) {
+            throw new Error('Usuário não tem permissão para excluir esta despesa');
+        }
+        const result = await this.despesaRepository.delete({ id });
         return (result.affected ?? 0) > 0;
     }
 }
@@ -175,3 +312,4 @@ DespesaService.despesaRepository = data_source_1.AppDataSource.getRepository(Des
 DespesaService.participacaoRepository = data_source_1.AppDataSource.getRepository(ParticipacaoDespesa_1.ParticipacaoDespesa);
 DespesaService.grupoRepository = data_source_1.AppDataSource.getRepository(Grupo_1.Grupo);
 DespesaService.participanteGrupoRepository = data_source_1.AppDataSource.getRepository(ParticipanteGrupo_1.ParticipanteGrupo);
+DespesaService.usuarioRepository = data_source_1.AppDataSource.getRepository(Usuario_1.Usuario);

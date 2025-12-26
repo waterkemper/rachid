@@ -10,6 +10,7 @@ import { AuthController } from '../controllers/AuthController';
 import { PublicEventoController } from '../controllers/PublicEventoController';
 import { TemplateController } from '../controllers/TemplateController';
 import { authMiddleware } from '../middleware/auth';
+import { requireGroupMember } from '../middleware/requireGroupMember';
 import { AnalyticsController } from '../controllers/AnalyticsController';
 
 const router = Router();
@@ -57,9 +58,9 @@ router.get('/grupos/:id/link', authMiddleware, GrupoController.obterLink);
 
 router.get('/despesas', authMiddleware, DespesaController.getAll);
 router.get('/despesas/:id', authMiddleware, DespesaController.getById);
-router.post('/despesas', authMiddleware, DespesaController.create);
-router.put('/despesas/:id', authMiddleware, DespesaController.update);
-router.delete('/despesas/:id', authMiddleware, DespesaController.delete);
+router.post('/despesas', authMiddleware, requireGroupMember, DespesaController.create);
+router.put('/despesas/:id', authMiddleware, requireGroupMember, DespesaController.update);
+router.delete('/despesas/:id', authMiddleware, requireGroupMember, DespesaController.delete);
 
 router.get('/grupos/:id/saldos', authMiddleware, RelatorioController.getSaldosGrupo);
 router.get('/grupos/:id/saldos-por-grupo', authMiddleware, RelatorioController.getSaldosPorGrupo);

@@ -9,6 +9,8 @@ const Despesa_1 = require("../entities/Despesa");
 const ParticipanteGrupoEvento_1 = require("../entities/ParticipanteGrupoEvento");
 const TemplateService_1 = require("./TemplateService");
 const DespesaService_1 = require("./DespesaService");
+const Usuario_1 = require("../entities/Usuario");
+const Participante_1 = require("../entities/Participante");
 class GrupoService {
     static async findAll(usuarioId) {
         try {
@@ -76,6 +78,36 @@ class GrupoService {
             relations: ['participantes', 'participantes.participante', 'despesas'],
         });
     }
+    /**
+     * Encontra ou cria um participante para o usuário logado
+     * Usa o nome e email do usuário
+     */
+    static async encontrarOuCriarParticipanteUsuario(usuarioId) {
+        const usuario = await this.usuarioRepository.findOne({
+            where: { id: usuarioId },
+            select: ['id', 'nome', 'email'],
+        });
+        if (!usuario || !usuario.email) {
+            return null;
+        }
+        // Buscar participante existente com mesmo email e mesmo usuario_id
+        let participante = await this.participanteRepository.findOne({
+            where: {
+                usuario_id: usuarioId,
+                email: usuario.email,
+            },
+        });
+        // Se não encontrou, criar um novo participante
+        if (!participante) {
+            participante = this.participanteRepository.create({
+                usuario_id: usuarioId,
+                nome: usuario.nome,
+                email: usuario.email,
+            });
+            participante = await this.participanteRepository.save(participante);
+        }
+        return participante;
+    }
     static async create(data) {
         const grupo = this.grupoRepository.create({
             nome: data.nome,
@@ -84,8 +116,26 @@ class GrupoService {
             usuario_id: data.usuario_id,
         });
         const grupoSalvo = await this.grupoRepository.save(grupo);
+        // Adicionar automaticamente o criador do evento como participante
+        const participanteCriador = await this.encontrarOuCriarParticipanteUsuario(data.usuario_id);
+        if (participanteCriador) {
+            // Verificar se já não está na lista de participantes
+            const jaEstaNaLista = data.participanteIds?.includes(participanteCriador.id);
+            if (!jaEstaNaLista) {
+                const participanteGrupo = this.participanteGrupoRepository.create({
+                    grupo_id: grupoSalvo.id,
+                    participante_id: participanteCriador.id,
+                });
+                await this.participanteGrupoRepository.save(participanteGrupo);
+            }
+        }
+        // Adicionar outros participantes se fornecidos
         if (data.participanteIds && data.participanteIds.length > 0) {
             for (const participanteId of data.participanteIds) {
+                // Pular se for o participante do criador (já foi adicionado)
+                if (participanteCriador && participanteId === participanteCriador.id) {
+                    continue;
+                }
                 const participanteGrupo = this.participanteGrupoRepository.create({
                     grupo_id: grupoSalvo.id,
                     participante_id: participanteId,
@@ -240,9 +290,26 @@ class GrupoService {
             usuario_id: data.usuario_id,
         });
         const grupoSalvo = await this.grupoRepository.save(grupo);
-        // Adicionar participantes se fornecidos
+        // Adicionar automaticamente o criador do evento como participante
+        const participanteCriador = await this.encontrarOuCriarParticipanteUsuario(data.usuario_id);
+        if (participanteCriador) {
+            // Verificar se já não está na lista de participantes
+            const jaEstaNaLista = data.participanteIds?.includes(participanteCriador.id);
+            if (!jaEstaNaLista) {
+                const participanteGrupo = this.participanteGrupoRepository.create({
+                    grupo_id: grupoSalvo.id,
+                    participante_id: participanteCriador.id,
+                });
+                await this.participanteGrupoRepository.save(participanteGrupo);
+            }
+        }
+        // Adicionar outros participantes se fornecidos
         if (data.participanteIds && data.participanteIds.length > 0) {
             for (const participanteId of data.participanteIds) {
+                // Pular se for o participante do criador (já foi adicionado)
+                if (participanteCriador && participanteId === participanteCriador.id) {
+                    continue;
+                }
                 const participanteGrupo = this.participanteGrupoRepository.create({
                     grupo_id: grupoSalvo.id,
                     participante_id: participanteId,
@@ -269,3 +336,5 @@ class GrupoService {
 exports.GrupoService = GrupoService;
 GrupoService.grupoRepository = data_source_1.AppDataSource.getRepository(Grupo_1.Grupo);
 GrupoService.participanteGrupoRepository = data_source_1.AppDataSource.getRepository(ParticipanteGrupo_1.ParticipanteGrupo);
+GrupoService.usuarioRepository = data_source_1.AppDataSource.getRepository(Usuario_1.Usuario);
+GrupoService.participanteRepository = data_source_1.AppDataSource.getRepository(Participante_1.Participante);

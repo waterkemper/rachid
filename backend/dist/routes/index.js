@@ -12,6 +12,7 @@ const AuthController_1 = require("../controllers/AuthController");
 const PublicEventoController_1 = require("../controllers/PublicEventoController");
 const TemplateController_1 = require("../controllers/TemplateController");
 const auth_1 = require("../middleware/auth");
+const requireGroupMember_1 = require("../middleware/requireGroupMember");
 const AnalyticsController_1 = require("../controllers/AnalyticsController");
 const router = (0, express_1.Router)();
 // Rotas públicas (sem autenticação)
@@ -51,9 +52,9 @@ router.post('/grupos/:id/gerar-link', auth_1.authMiddleware, GrupoController_1.G
 router.get('/grupos/:id/link', auth_1.authMiddleware, GrupoController_1.GrupoController.obterLink);
 router.get('/despesas', auth_1.authMiddleware, DespesaController_1.DespesaController.getAll);
 router.get('/despesas/:id', auth_1.authMiddleware, DespesaController_1.DespesaController.getById);
-router.post('/despesas', auth_1.authMiddleware, DespesaController_1.DespesaController.create);
-router.put('/despesas/:id', auth_1.authMiddleware, DespesaController_1.DespesaController.update);
-router.delete('/despesas/:id', auth_1.authMiddleware, DespesaController_1.DespesaController.delete);
+router.post('/despesas', auth_1.authMiddleware, requireGroupMember_1.requireGroupMember, DespesaController_1.DespesaController.create);
+router.put('/despesas/:id', auth_1.authMiddleware, requireGroupMember_1.requireGroupMember, DespesaController_1.DespesaController.update);
+router.delete('/despesas/:id', auth_1.authMiddleware, requireGroupMember_1.requireGroupMember, DespesaController_1.DespesaController.delete);
 router.get('/grupos/:id/saldos', auth_1.authMiddleware, RelatorioController_1.RelatorioController.getSaldosGrupo);
 router.get('/grupos/:id/saldos-por-grupo', auth_1.authMiddleware, RelatorioController_1.RelatorioController.getSaldosPorGrupo);
 router.get('/grupos/:id/sugestoes-pagamento-grupos', auth_1.authMiddleware, RelatorioController_1.RelatorioController.getSugestoesPagamentoEntreGrupos);

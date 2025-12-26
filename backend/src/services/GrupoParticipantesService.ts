@@ -2,6 +2,7 @@ import { AppDataSource } from '../database/data-source';
 import { GrupoParticipantesEvento } from '../entities/GrupoParticipantesEvento';
 import { ParticipanteGrupoEvento } from '../entities/ParticipanteGrupoEvento';
 import { Grupo } from '../entities/Grupo';
+import { GrupoService } from './GrupoService';
 
 export class GrupoParticipantesService {
   private static grupoParticipantesRepository = AppDataSource.getRepository(GrupoParticipantesEvento);
@@ -9,10 +10,10 @@ export class GrupoParticipantesService {
   private static grupoRepository = AppDataSource.getRepository(Grupo);
 
   static async findAllByEvento(eventoId: number, usuarioId: number): Promise<GrupoParticipantesEvento[]> {
-    // Verificar se o grupo (evento) pertence ao usu�rio
-    const grupo = await this.grupoRepository.findOne({ where: { id: eventoId, usuario_id: usuarioId } });
-    if (!grupo) {
-      throw new Error('Grupo n�o encontrado ou n�o pertence ao usu�rio');
+    // Verificar se o usuário tem acesso ao grupo (é dono ou participante)
+    const hasAccess = await GrupoService.isUserGroupMember(usuarioId, eventoId);
+    if (!hasAccess) {
+      throw new Error('Grupo não encontrado ou usuário não tem acesso');
     }
 
     return await this.grupoParticipantesRepository.find({
@@ -28,7 +29,13 @@ export class GrupoParticipantesService {
       relations: ['grupo', 'participantes', 'participantes.participante'],
     });
 
-    if (!grupoParticipantes || grupoParticipantes.grupo.usuario_id !== usuarioId) {
+    if (!grupoParticipantes) {
+      return null;
+    }
+
+    // Verificar se o usuário tem acesso ao grupo (é dono ou participante)
+    const hasAccess = await GrupoService.isUserGroupMember(usuarioId, grupoParticipantes.grupo.id);
+    if (!hasAccess) {
       return null;
     }
 
@@ -41,10 +48,10 @@ export class GrupoParticipantesService {
     descricao?: string;
     usuario_id: number;
   }): Promise<GrupoParticipantesEvento> {
-    // Verificar se o grupo pertence ao usu�rio
-    const grupo = await this.grupoRepository.findOne({ where: { id: data.grupo_id, usuario_id: data.usuario_id } });
-    if (!grupo) {
-      throw new Error('Grupo não encontrado ou não pertence ao usuário');
+    // Verificar se o usuário tem acesso ao grupo (é dono ou participante)
+    const hasAccess = await GrupoService.isUserGroupMember(data.usuario_id, data.grupo_id);
+    if (!hasAccess) {
+      throw new Error('Grupo não encontrado ou usuário não tem acesso');
     }
 
     const grupoParticipantes = this.grupoParticipantesRepository.create({
@@ -75,10 +82,10 @@ export class GrupoParticipantesService {
   }
 
   static async adicionarParticipante(grupoParticipantesId: number, participanteId: number, eventoId: number, usuarioId: number): Promise<boolean> {
-    // Verificar se o grupo (evento) pertence ao usu�rio
-    const grupo = await this.grupoRepository.findOne({ where: { id: eventoId, usuario_id: usuarioId } });
-    if (!grupo) {
-      throw new Error('Grupo não encontrado ou não pertence ao usuário');
+    // Verificar se o usuário tem acesso ao grupo (é dono ou participante)
+    const hasAccess = await GrupoService.isUserGroupMember(usuarioId, eventoId);
+    if (!hasAccess) {
+      throw new Error('Grupo não encontrado ou usuário não tem acesso');
     }
     const participanteJaEmGrupo = await this.participanteGrupoEventoRepository
       .createQueryBuilder('pge')
@@ -113,4 +120,3 @@ export class GrupoParticipantesService {
     return (result.affected ?? 0) > 0;
   }
 }
-

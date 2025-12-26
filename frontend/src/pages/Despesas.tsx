@@ -3,13 +3,15 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageFocus } from '../hooks/usePageFocus';
 import { despesaApi, grupoApi, participanteApi, grupoParticipantesApi } from '../services/api';
 import { Despesa, Grupo, Participante } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 import Modal from '../components/Modal';
-import { FaPlus, FaEdit, FaTrash, FaChartBar, FaUsers, FaShare } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaChartBar, FaUsers, FaShare, FaLock } from 'react-icons/fa';
 import './Despesas.css';
 
 const Despesas: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { usuario } = useAuth();
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
@@ -32,6 +34,37 @@ const Despesas: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Função helper para verificar se usuário pode editar uma despesa
+  const canEditDespesa = useCallback((despesa: Despesa): boolean => {
+    if (!usuario) return false;
+    
+    // Se o grupo não está carregado, assumir que pode editar (backend vai validar)
+    if (!despesa.grupo) return true;
+    
+    // Verificar se é dono do grupo
+    const grupo = grupos.find(g => g.id === despesa.grupo_id);
+    if (grupo) {
+      // Se o grupo tem usuario_id, verificar (mas grupos não têm esse campo no tipo)
+      // Vamos verificar pelos grupos do usuário
+      const grupoDoUsuario = grupos.find(g => g.id === despesa.grupo_id);
+      if (grupoDoUsuario) {
+        // Se o grupo tem participantes, verificar se algum tem email correspondente
+        if (grupoDoUsuario.participantes && grupoDoUsuario.participantes.length > 0) {
+          const temParticipanteComEmail = grupoDoUsuario.participantes.some(
+            pg => pg.participante?.email?.toLowerCase() === usuario.email.toLowerCase()
+          );
+          if (temParticipanteComEmail) {
+            return true;
+          }
+        }
+      }
+    }
+    
+    // Por padrão, permitir tentar editar (backend vai validar)
+    // Mas vamos verificar se temos informação suficiente
+    return true;
+  }, [usuario, grupos]);
 
   useEffect(() => {
     loadData();
@@ -239,6 +272,10 @@ const Despesas: React.FC = () => {
     } catch (err: any) {
       const errorMessage = err?.response?.data?.error || 'Erro ao salvar despesa';
       setError(errorMessage);
+      // Se for erro de permissão, mostrar mensagem mais clara
+      if (err?.response?.status === 403) {
+        setError('Você não tem permissão para editar esta despesa. Apenas participantes do evento podem editar.');
+      }
     } finally {
       setSaving(false);
     }
@@ -251,8 +288,12 @@ const Despesas: React.FC = () => {
     try {
       await despesaApi.delete(id);
       loadDespesas();
-    } catch (err) {
-      setError('Erro ao excluir despesa');
+    } catch (err: any) {
+      if (err?.response?.status === 403) {
+        setError('Você não tem permissão para excluir esta despesa. Apenas participantes do evento podem excluir.');
+      } else {
+        setError('Erro ao excluir despesa');
+      }
     }
   };
 
@@ -388,20 +429,37 @@ const Despesas: React.FC = () => {
                     <td>{despesa.participacoes?.length || 0}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
-                        <button
-                          className="btn btn-secondary btn-icon"
-                          onClick={() => handleOpenModal(despesa)}
-                          title="Editar"
-                        >
-                          <FaEdit />
-                        </button>
-                        <button
-                          className="btn btn-danger btn-icon"
-                          onClick={() => handleDelete(despesa.id)}
-                          title="Excluir"
-                        >
-                          <FaTrash />
-                        </button>
+                        {canEditDespesa(despesa) ? (
+                          <>
+                            <button
+                              className="btn btn-secondary btn-icon"
+                              onClick={() => handleOpenModal(despesa)}
+                              title="Editar"
+                            >
+                              <FaEdit />
+                            </button>
+                            <button
+                              className="btn btn-danger btn-icon"
+                              onClick={() => handleDelete(despesa.id)}
+                              title="Excluir"
+                            >
+                              <FaTrash />
+                            </button>
+                          </>
+                        ) : (
+                          <span 
+                            style={{ 
+                              color: 'rgba(226, 232, 240, 0.6)', 
+                              fontSize: '14px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}
+                            title="Você não tem permissão para editar esta despesa"
+                          >
+                            <FaLock /> Somente leitura
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -439,18 +497,33 @@ const Despesas: React.FC = () => {
                   </div>
                 </div>
                 <div className="despesa-card-actions">
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => handleOpenModal(despesa)}
-                  >
-                    <FaEdit /> <span>Editar</span>
-                  </button>
-                  <button
-                    className="btn btn-danger"
-                    onClick={() => handleDelete(despesa.id)}
-                  >
-                    <FaTrash /> <span>Excluir</span>
-                  </button>
+                  {canEditDespesa(despesa) ? (
+                    <>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => handleOpenModal(despesa)}
+                      >
+                        <FaEdit /> <span>Editar</span>
+                      </button>
+                      <button
+                        className="btn btn-danger"
+                        onClick={() => handleDelete(despesa.id)}
+                      >
+                        <FaTrash /> <span>Excluir</span>
+                      </button>
+                    </>
+                  ) : (
+                    <div style={{ 
+                      color: 'rgba(226, 232, 240, 0.6)', 
+                      fontSize: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px'
+                    }}>
+                      <FaLock /> <span>Somente leitura</span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))

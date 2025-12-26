@@ -1,8 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { Grupo } from './Grupo';
 import { Participante } from './Participante';
 import { ParticipacaoDespesa } from './ParticipacaoDespesa';
 import { Usuario } from './Usuario';
+import { DespesaHistorico } from './DespesaHistorico';
 
 @Entity('despesas')
 export class Despesa {
@@ -42,7 +43,20 @@ export class Despesa {
   @CreateDateColumn()
   criadoEm!: Date;
 
+  @UpdateDateColumn()
+  updatedAt!: Date;
+
+  @ManyToOne(() => Usuario, { nullable: true })
+  @JoinColumn({ name: 'updated_by' })
+  updatedBy?: Usuario;
+
+  @Column('integer', { nullable: true })
+  updated_by?: number;
+
   @OneToMany(() => ParticipacaoDespesa, participacao => participacao.despesa, { cascade: true })
   participacoes!: ParticipacaoDespesa[];
+
+  @OneToMany(() => DespesaHistorico, historico => historico.despesa)
+  historico!: DespesaHistorico[];
 }
 

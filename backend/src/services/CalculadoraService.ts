@@ -3,6 +3,8 @@ import { Despesa } from '../entities/Despesa';
 import { Participante } from '../entities/Participante';
 import { Grupo } from '../entities/Grupo';
 import { GrupoParticipantesEvento } from '../entities/GrupoParticipantesEvento';
+import { GrupoService } from './GrupoService';
+import { In } from 'typeorm';
 
 export interface SaldoParticipante {
   participanteId: number;
@@ -36,20 +38,45 @@ export class CalculadoraService {
     const participanteRepository = AppDataSource.getRepository(Participante);
     const grupoRepository = AppDataSource.getRepository(Grupo);
 
-    // Verificar se o grupo pertence ao usu�rio
-    const grupo = await grupoRepository.findOne({ where: { id: grupoId, usuario_id: usuarioId } });
-    if (!grupo) {
-      throw new Error('Grupo n�o encontrado ou n�o pertence ao usu�rio');
+    // Verificar se o usuário tem acesso ao grupo (é dono ou participante)
+    const hasAccess = await GrupoService.isUserGroupMember(usuarioId, grupoId);
+    if (!hasAccess) {
+      throw new Error('Grupo não encontrado ou usuário não tem acesso');
     }
 
+    // Buscar grupo com participantes (para obter todos os participantes do evento)
+    const grupo = await grupoRepository.findOne({ 
+      where: { id: grupoId },
+      relations: ['participantes', 'participantes.participante'],
+    });
+    if (!grupo) {
+      throw new Error('Grupo não encontrado');
+    }
+
+    // Buscar despesas do grupo (sem filtrar por usuario_id para permitir colaboração)
     const despesas = await despesaRepository.find({
-      where: { grupo_id: grupoId, usuario_id: usuarioId },
+      where: { grupo_id: grupoId },
       relations: ['pagador', 'participacoes', 'participacoes.participante'],
     });
 
-    const participantes = await participanteRepository.find({
-      where: { usuario_id: usuarioId },
-    });
+    // Buscar TODOS os participantes do evento (não apenas os do usuário logado)
+    // Extrair IDs únicos dos participantes do evento
+    const participantesIdsDoEvento = new Set<number>();
+    if (grupo.participantes) {
+      grupo.participantes.forEach(pg => {
+        if (pg.participante_id) {
+          participantesIdsDoEvento.add(pg.participante_id);
+        }
+      });
+    }
+
+    // Buscar participantes do evento (sem filtrar por usuario_id)
+    const participantesIdsArray = Array.from(participantesIdsDoEvento);
+    const participantes = participantesIdsArray.length > 0
+      ? await participanteRepository.find({
+          where: { id: In(participantesIdsArray) },
+        })
+      : [];
 
     const saldos: Map<number, SaldoParticipante> = new Map();
 
@@ -97,13 +124,18 @@ export class CalculadoraService {
     const despesaRepository = AppDataSource.getRepository(Despesa);
     const grupoRepository = AppDataSource.getRepository(Grupo);
 
-    // Verificar se o grupo pertence ao usu�rio e buscar com participantes
+    // Verificar se o usuário tem acesso ao grupo (é dono ou participante)
+    const hasAccess = await GrupoService.isUserGroupMember(usuarioId, grupoId);
+    if (!hasAccess) {
+      throw new Error('Grupo não encontrado ou usuário não tem acesso');
+    }
+
     const grupo = await grupoRepository.findOne({ 
-      where: { id: grupoId, usuario_id: usuarioId },
+      where: { id: grupoId },
       relations: ['participantes', 'participantes.participante'],
     });
     if (!grupo) {
-      throw new Error('Grupo n�o encontrado ou n�o pertence ao usu�rio');
+      throw new Error('Grupo não encontrado ou não pertence ao usuário');
     }
 
     const gruposParticipantes = await grupoParticipantesRepository.find({
@@ -112,11 +144,11 @@ export class CalculadoraService {
     });
 
     const despesas = await despesaRepository.find({
-      where: { grupo_id: grupoId, usuario_id: usuarioId },
+      where: { grupo_id: grupoId },
       relations: ['pagador', 'participacoes', 'participacoes.participante'],
     });
 
-    // Identificar participantes que est�o em grupos
+    // Identificar participantes que estão em grupos
     const participantesEmGrupos = new Set<number>();
     gruposParticipantes.forEach(gp => {
       gp.participantes.forEach(p => {
@@ -124,7 +156,7 @@ export class CalculadoraService {
       });
     });
 
-    // Identificar participantes do evento que n�o est�o em nenhum grupo
+    // Identificar participantes do evento que não estão em nenhum grupo
     const participantesSolitarios = grupo.participantes
       .filter(pg => !participantesEmGrupos.has(pg.participante_id))
       .map(pg => pg.participante);
@@ -168,10 +200,10 @@ export class CalculadoraService {
       saldosGrupos.push(saldoGrupo);
     }
 
-    // Criar grupos virtuais para participantes solit�rios
+    // Criar grupos virtuais para participantes solitários
     for (const participante of participantesSolitarios) {
       const saldoGrupo: SaldoGrupo = {
-        grupoId: -participante.id, // ID negativo para indicar que � um grupo virtual
+        grupoId: -participante.id, // ID negativo para indicar que é um grupo virtual
         grupoNome: participante.nome, // Nome do participante como nome do grupo
         participantes: [{
           participanteId: participante.id,

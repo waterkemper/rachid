@@ -18,12 +18,20 @@ export class DespesaController {
     try {
       const id = parseInt(req.params.id);
       const usuarioId = req.usuarioId!;
-      const despesa = await DespesaService.findById(id, usuarioId);
+      const despesa = await DespesaService.findById(id);
       if (!despesa) {
         return res.status(404).json({ error: 'Despesa não encontrada' });
       }
+      
+      // Verificar se usuário tem acesso (dono ou membro do grupo)
+      const canAccess = await DespesaService.canUserEditDespesa(usuarioId, id);
+      if (!canAccess && despesa.usuario_id !== usuarioId) {
+        return res.status(403).json({ error: 'Usuário não tem permissão para acessar esta despesa' });
+      }
+      
       res.json(despesa);
     } catch (error) {
+      console.error('Erro ao buscar despesa:', error);
       res.status(500).json({ error: 'Erro ao buscar despesa' });
     }
   }
@@ -106,7 +114,11 @@ export class DespesaController {
       }
 
       res.json(despesa);
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Erro ao atualizar despesa:', error);
+      if (error.message?.includes('permissão')) {
+        return res.status(403).json({ error: error.message });
+      }
       res.status(500).json({ error: 'Erro ao atualizar despesa' });
     }
   }
@@ -120,7 +132,11 @@ export class DespesaController {
         return res.status(404).json({ error: 'Despesa não encontrada' });
       }
       res.status(204).send();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Erro ao deletar despesa:', error);
+      if (error.message?.includes('permissão')) {
+        return res.status(403).json({ error: error.message });
+      }
       res.status(500).json({ error: 'Erro ao deletar despesa' });
     }
   }

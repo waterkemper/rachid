@@ -12,6 +12,7 @@ import { GrupoMaior } from '../entities/GrupoMaior';
 import { GrupoMaiorGrupo } from '../entities/GrupoMaiorGrupo';
 import { GrupoMaiorParticipante } from '../entities/GrupoMaiorParticipante';
 import { PasswordResetToken } from '../entities/PasswordResetToken';
+import { DespesaHistorico } from '../entities/DespesaHistorico';
 
 // Suporta DATABASE_URL (formato URI) ou variáveis individuais
 function getDataSourceConfig() {
@@ -24,7 +25,7 @@ function getDataSourceConfig() {
     return {
       type: 'postgres' as const,
       url: process.env.DATABASE_URL,
-      synchronize: process.env.NODE_ENV !== 'production',
+      synchronize: false, // Desabilitado - migrations são aplicadas manualmente
       logging: false,
       entities: [
         Usuario,
@@ -39,6 +40,7 @@ function getDataSourceConfig() {
         GrupoMaiorGrupo,
         GrupoMaiorParticipante,
         PasswordResetToken,
+        DespesaHistorico,
       ],
       migrations: [],
       subscribers: [],
@@ -55,7 +57,7 @@ function getDataSourceConfig() {
     username: process.env.DB_USERNAME || 'postgres',
     password: process.env.DB_PASSWORD || 'postgres',
     database: process.env.DB_DATABASE || 'racha_contas',
-    synchronize: process.env.NODE_ENV !== 'production',
+      synchronize: false, // Desabilitado - migrations são aplicadas manualmente via SQL
     logging: false,
     entities: [
       Usuario,
@@ -70,6 +72,7 @@ function getDataSourceConfig() {
       GrupoMaiorGrupo,
       GrupoMaiorParticipante,
       PasswordResetToken,
+      DespesaHistorico,
     ],
     migrations: [],
     subscribers: [],

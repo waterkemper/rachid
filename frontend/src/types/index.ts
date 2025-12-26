@@ -31,6 +31,8 @@ export interface Despesa {
   participante_pagador_id?: number;
   data: string;
   criadoEm: string;
+  updatedAt?: string;
+  updated_by?: number;
   grupo?: Grupo;
   pagador?: Participante;
   participacoes?: ParticipacaoDespesa[];
@@ -102,5 +104,16 @@ export interface EventTemplate {
   nome: string;
   descricao: string;
   despesas: string[];
+}
+
+export interface DespesaHistorico {
+  id: number;
+  despesa_id: number;
+  usuario_id: number;
+  campo_alterado: string;
+  valor_anterior?: string;
+  valor_novo?: string;
+  criadoEm: string;
+  usuario?: Usuario;
 }
 

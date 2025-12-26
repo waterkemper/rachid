@@ -13,6 +13,7 @@
 
 ### Autenticação
 - ✅ Login com email e senha
+- ✅ Login com Google OAuth
 - ✅ Logout
 - ✅ Criação de conta (cadastro)
 - ✅ Recuperação de senha
@@ -22,6 +23,7 @@
 - ✅ Autenticação via JWT (token)
 - ✅ Cookies HTTP-only para segurança
 - ✅ Suporte a planos (FREE/PRO)
+- ✅ Vinculação automática de contas Google existentes por email
 
 ### Perfil de Usuário
 - ✅ Visualizar informações do usuário
@@ -53,9 +55,12 @@
 - ✅ Listar todos os grupos do usuário
 - ✅ Visualizar grupo por ID
 - ✅ Criar novo grupo
+- ✅ Criar grupo a partir de template
 - ✅ Editar grupo (nome, descrição, data)
 - ✅ Excluir grupo
 - ✅ Duplicar grupo
+- ✅ Gerar link de compartilhamento público
+- ✅ Obter link de compartilhamento existente
 
 ### Participantes em Grupos
 - ✅ Adicionar participante ao grupo
@@ -153,6 +158,44 @@
 
 ---
 
+## 📋 Templates de Eventos
+
+### Gerenciamento de Templates
+- ✅ Listar todos os templates disponíveis
+- ✅ Visualizar template por ID
+- ✅ Criar evento a partir de template
+- ✅ Templates pré-configurados com despesas comuns
+
+### Funcionalidades
+- ✅ Templates incluem nome, descrição e lista de despesas
+- ✅ Criação de eventos com despesas placeholder a partir de templates
+- ✅ Personalização de nome e descrição ao usar template
+
+---
+
+## 🌐 Eventos Públicos e Compartilhamento
+
+### Compartilhamento de Eventos
+- ✅ Geração de token único para compartilhamento
+- ✅ Link público para visualização de eventos
+- ✅ Visualização de eventos sem necessidade de login
+- ✅ Visualização de saldos e sugestões de pagamento em eventos públicos
+- ✅ Visualização de despesas em eventos públicos
+
+### Reivindicação de Participação
+- ✅ Reivindicar participação em evento público via email
+- ✅ Transferência automática de participantes ao criar conta
+- ✅ Vinculação de participantes existentes ao usuário
+
+### Dados Acessíveis Publicamente
+- ✅ Informações do evento (nome, descrição, data)
+- ✅ Lista de participantes
+- ✅ Saldos calculados
+- ✅ Sugestões de pagamento
+- ✅ Lista de despesas
+
+---
+
 ## 📈 Analytics
 
 ### Rastreamento de Eventos
@@ -197,10 +240,18 @@
 - ✅ Cadastro
 - ✅ Dashboard/Home
 - ✅ Participantes
-- ✅ Grupos
+- ✅ Grupos (Meus eventos)
+- ✅ Novo Evento
+- ✅ Adicionar Participantes ao Evento
 - ✅ Despesas
 - ✅ Participações
+- ✅ Totais por Grupos
+- ✅ Grupos Maiores
 - ✅ Relatórios
+- ✅ Conta (Perfil do usuário)
+- ✅ Ajuda (Guia de uso)
+- ✅ Convidar Amigos
+- ✅ Evento Público (visualização sem login)
 
 ### Funcionalidades de UI
 - ✅ Formatação de valores monetários
@@ -247,6 +298,7 @@
 
 ### Autenticação (Públicas)
 - `POST /api/auth/login` - Login
+- `POST /api/auth/google` - Login com Google OAuth
 - `POST /api/auth/logout` - Logout
 - `POST /api/auth/create-user` - Criar conta
 - `POST /api/auth/solicitar-recuperacao-senha` - Solicitar recuperação
@@ -266,12 +318,14 @@
 ### Grupos (Protegidas)
 - `GET /api/grupos` - Listar todos
 - `GET /api/grupos/:id` - Obter por ID
-- `POST /api/grupos` - Criar
+- `POST /api/grupos` - Criar (suporta `templateId` para criar a partir de template)
 - `PUT /api/grupos/:id` - Atualizar
 - `DELETE /api/grupos/:id` - Excluir
 - `POST /api/grupos/:id/duplicar` - Duplicar
 - `POST /api/grupos/:id/participantes` - Adicionar participante
 - `DELETE /api/grupos/:id/participantes` - Remover participante
+- `POST /api/grupos/:id/gerar-link` - Gerar link de compartilhamento
+- `GET /api/grupos/:id/link` - Obter link de compartilhamento existente
 
 ### Despesas (Protegidas)
 - `GET /api/despesas` - Listar todas (opcional: ?grupoId=X)
@@ -314,6 +368,20 @@
 
 ### Analytics (Protegidas)
 - `POST /api/analytics/event` - Rastrear evento
+
+### Templates (Públicas)
+- `GET /api/templates` - Listar todos os templates
+- `GET /api/templates/:id` - Obter template por ID
+
+### Eventos Públicos (Públicas)
+- `GET /api/public/eventos/:token` - Obter evento por token
+- `GET /api/public/eventos/:token/saldos` - Obter saldos do evento
+- `GET /api/public/eventos/:token/saldos-por-grupo` - Obter saldos por grupo
+- `GET /api/public/eventos/:token/sugestoes` - Obter sugestões de pagamento
+- `GET /api/public/eventos/:token/despesas` - Obter despesas do evento
+
+### Eventos Públicos (Protegidas)
+- `POST /api/public/eventos/:token/reivindicar` - Reivindicar participação no evento
 
 ### Health Checks (Públicas)
 - `GET /api/health` - Health check básico
@@ -360,9 +428,9 @@
 ## 📊 Estrutura de Dados
 
 ### Entidades Principais
-- **Usuario**: Usuários do sistema
+- **Usuario**: Usuários do sistema (suporta Google OAuth via `google_id` e `auth_provider`)
 - **Participante**: Pessoas que participam dos eventos
-- **Grupo**: Grupos de despesas (eventos)
+- **Grupo**: Grupos de despesas (eventos) (inclui `shareToken` para compartilhamento público)
 - **Despesa**: Despesas registradas
 - **ParticipacaoDespesa**: Participações em despesas
 - **ParticipanteGrupo**: Relação participantes-grupos
@@ -395,4 +463,8 @@
 - Cálculos de saldos são feitos automaticamente
 - Sugestões de pagamento otimizam o número de transferências
 - Suporte a planos FREE e PRO (estrutura preparada)
+- Eventos públicos podem ser visualizados sem autenticação através de token único
+- Templates permitem criar eventos rapidamente com despesas pré-configuradas
+- Google OAuth vincula automaticamente contas existentes por email
+- Consumo por padrão: ao criar despesas, todos os participantes são marcados por padrão
 

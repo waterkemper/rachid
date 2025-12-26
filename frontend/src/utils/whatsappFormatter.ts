@@ -115,15 +115,26 @@ const gerarDetalhamento = (
     if (despesa.participacoes && despesa.participacoes.length > 0) {
       const participantesNomes: string[] = [];
       despesa.participacoes.forEach(participacao => {
-        const participante = participantes.find(p => p.id === participacao.participante_id);
-        if (participante) {
-          participantesNomes.push(participante.nome.trim());
+        // Tentar usar a relação participante primeiro (se vier do backend)
+        if (participacao.participante && participacao.participante.nome) {
+          participantesNomes.push(participacao.participante.nome.trim());
+        } else {
+          // Fallback: buscar na lista de participantes
+          const participante = participantes.find(p => p.id === participacao.participante_id);
+          if (participante) {
+            participantesNomes.push(participante.nome.trim());
+          } else {
+            // Se não encontrar, usar o ID como fallback
+            participantesNomes.push(`Participante ${participacao.participante_id}`);
+          }
         }
       });
       
-      detalhamento += `  Dividido entre: ${participantesNomes.join(', ')}\n`;
-      const valorPorPessoa = despesa.valorTotal / despesa.participacoes.length;
-      detalhamento += `  Valor por pessoa: *${formatCurrency(valorPorPessoa)}*\n`;
+      if (participantesNomes.length > 0) {
+        detalhamento += `  Dividido entre: ${participantesNomes.join(', ')}\n`;
+        const valorPorPessoa = despesa.valorTotal / despesa.participacoes.length;
+        detalhamento += `  Valor por pessoa: *${formatCurrency(valorPorPessoa)}*\n`;
+      }
     }
     
     if (index < despesas.length - 1) {
@@ -192,7 +203,9 @@ const gerarPixSubgrupos = (
       if (!gruposProcessados.has(grupoKey)) {
         pixInfo += `\n👥 *Membros do grupo "${grupoNome.trim()}" com PIX:*\n`;
         participantesComPix.forEach(participante => {
-          pixInfo += `• *${participante.nome.trim()}*: ${participante.chavePix.trim()}\n`;
+          if (participante.chavePix) {
+            pixInfo += `• *${participante.nome.trim()}*: ${participante.chavePix.trim()}\n`;
+          }
         });
         gruposProcessados.add(grupoKey);
       }

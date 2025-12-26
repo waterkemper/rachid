@@ -194,6 +194,8 @@ export const despesaApi = {
         ? d.participacoes.map((p: any) => ({
             ...p,
             valorDevePagar: toNumber(p?.valorDevePagar),
+            // Preservar a relação participante se vier do backend
+            participante: p.participante || undefined,
           }))
         : d?.participacoes,
     });

@@ -4,21 +4,86 @@ import { ParticipanteGrupo } from '../entities/ParticipanteGrupo';
 import { GrupoParticipantesEvento } from '../entities/GrupoParticipantesEvento';
 import { Despesa } from '../entities/Despesa';
 import { ParticipanteGrupoEvento } from '../entities/ParticipanteGrupoEvento';
+import { ParticipacaoDespesa } from '../entities/ParticipacaoDespesa';
 import { TemplateService } from './TemplateService';
 import { DespesaService } from './DespesaService';
+import { ParticipacaoService } from './ParticipacaoService';
+import { Usuario } from '../entities/Usuario';
+import { Participante } from '../entities/Participante';
 
 export class GrupoService {
   private static grupoRepository = AppDataSource.getRepository(Grupo);
   private static participanteGrupoRepository = AppDataSource.getRepository(ParticipanteGrupo);
+  private static participacaoDespesaRepository = AppDataSource.getRepository(ParticipacaoDespesa);
+  private static despesaRepository = AppDataSource.getRepository(Despesa);
+  private static usuarioRepository = AppDataSource.getRepository(Usuario);
+  private static participanteRepository = AppDataSource.getRepository(Participante);
+
+  /**
+   * Verifica se um usuário tem acesso a um grupo (é dono OU é participante via email)
+   */
+  static async isUserGroupMember(usuarioId: number, grupoId: number): Promise<boolean> {
+    // Verificar se é dono do grupo
+    const grupo = await this.grupoRepository.findOne({
+      where: { id: grupoId },
+      select: ['usuario_id'],
+    });
+
+    if (!grupo) {
+      return false;
+    }
+
+    if (grupo.usuario_id === usuarioId) {
+      return true;
+    }
+
+    // Verificar se tem participante no grupo com email correspondente
+    const usuario = await this.usuarioRepository.findOne({
+      where: { id: usuarioId },
+      select: ['email'],
+    });
+
+    if (!usuario || !usuario.email) {
+      return false;
+    }
+
+    const participantesGrupo = await this.participanteGrupoRepository.find({
+      where: { grupo_id: grupoId },
+      relations: ['participante'],
+    });
+
+    return participantesGrupo.some(
+      (pg) => pg.participante?.email?.toLowerCase() === usuario.email.toLowerCase()
+    );
+  }
 
   static async findAll(usuarioId: number): Promise<Grupo[]> {
     try {
-      // Buscar grupos com relações
-      const grupos = await this.grupoRepository.find({
-        where: { usuario_id: usuarioId },
-        order: { data: 'DESC' },
-        relations: ['participantes', 'participantes.participante'],
+      // Buscar email do usuário
+      const usuario = await this.usuarioRepository.findOne({
+        where: { id: usuarioId },
+        select: ['email'],
       });
+
+      // Buscar grupos onde o usuário é dono OU é participante (via email)
+      const queryBuilder = this.grupoRepository
+        .createQueryBuilder('grupo')
+        .leftJoinAndSelect('grupo.participantes', 'participantes')
+        .leftJoinAndSelect('participantes.participante', 'participante')
+        .where('grupo.usuario_id = :usuarioId', { usuarioId });
+
+      // Se o usuário tem email, também buscar grupos onde há participante com mesmo email
+      if (usuario?.email) {
+        queryBuilder.orWhere(
+          'EXISTS (SELECT 1 FROM participantes_grupos pg INNER JOIN participantes p ON pg.participante_id = p.id WHERE pg.grupo_id = grupo.id AND LOWER(p.email) = LOWER(:email))',
+          { email: usuario.email }
+        );
+      }
+
+      queryBuilder.orderBy('grupo.data', 'DESC')
+                  .addOrderBy('grupo.id', 'DESC');
+
+      const grupos = await queryBuilder.getMany();
       
       // Filtrar participantes órfãos (caso existam referências quebradas)
       grupos.forEach(grupo => {
@@ -44,10 +109,27 @@ export class GrupoService {
           error.code === '23503') {
         console.warn('Tentando buscar grupos sem relações devido a erro de relação');
         try {
-          const gruposSemRelacoes = await this.grupoRepository.find({
-            where: { usuario_id: usuarioId },
-            order: { data: 'DESC' },
+          // Buscar email do usuário para o fallback também
+          const usuarioFallback = await this.usuarioRepository.findOne({
+            where: { id: usuarioId },
+            select: ['email'],
           });
+
+          const queryBuilderFallback = this.grupoRepository
+            .createQueryBuilder('grupo')
+            .where('grupo.usuario_id = :usuarioId', { usuarioId });
+
+          if (usuarioFallback?.email) {
+            queryBuilderFallback.orWhere(
+              'EXISTS (SELECT 1 FROM participantes_grupos pg INNER JOIN participantes p ON pg.participante_id = p.id WHERE pg.grupo_id = grupo.id AND LOWER(p.email) = LOWER(:email))',
+              { email: usuarioFallback.email }
+            );
+          }
+
+          queryBuilderFallback.orderBy('grupo.data', 'DESC')
+                             .addOrderBy('grupo.id', 'DESC');
+
+          const gruposSemRelacoes = await queryBuilderFallback.getMany();
           
           // Carregar participantes manualmente com tratamento de erro
           for (const grupo of gruposSemRelacoes) {
@@ -79,10 +161,67 @@ export class GrupoService {
   }
 
   static async findById(id: number, usuarioId: number): Promise<Grupo | null> {
-    return await this.grupoRepository.findOne({
-      where: { id, usuario_id: usuarioId },
-      relations: ['participantes', 'participantes.participante', 'despesas'],
+    // Buscar email do usuário
+    const usuario = await this.usuarioRepository.findOne({
+      where: { id: usuarioId },
+      select: ['email'],
     });
+
+    // Buscar grupo onde o usuário é dono OU é participante (via email)
+    const queryBuilder = this.grupoRepository
+      .createQueryBuilder('grupo')
+      .leftJoinAndSelect('grupo.participantes', 'participantes')
+      .leftJoinAndSelect('participantes.participante', 'participante')
+      .leftJoinAndSelect('grupo.despesas', 'despesas')
+      .where('grupo.id = :id', { id });
+
+    // Verificar se é dono OU participante
+    if (usuario?.email) {
+      queryBuilder.andWhere(
+        '(grupo.usuario_id = :usuarioId OR EXISTS (SELECT 1 FROM participantes_grupos pg INNER JOIN participantes p ON pg.participante_id = p.id WHERE pg.grupo_id = grupo.id AND LOWER(p.email) = LOWER(:email)))',
+        { usuarioId, email: usuario.email }
+      );
+    } else {
+      // Se não tem email, só pode ser dono
+      queryBuilder.andWhere('grupo.usuario_id = :usuarioId', { usuarioId });
+    }
+
+    return await queryBuilder.getOne();
+  }
+
+  /**
+   * Encontra ou cria um participante para o usuário logado
+   * Usa o nome e email do usuário
+   */
+  private static async encontrarOuCriarParticipanteUsuario(usuarioId: number): Promise<Participante | null> {
+    const usuario = await this.usuarioRepository.findOne({
+      where: { id: usuarioId },
+      select: ['id', 'nome', 'email'],
+    });
+
+    if (!usuario || !usuario.email) {
+      return null;
+    }
+
+    // Buscar participante existente com mesmo email e mesmo usuario_id
+    let participante = await this.participanteRepository.findOne({
+      where: {
+        usuario_id: usuarioId,
+        email: usuario.email,
+      },
+    });
+
+    // Se não encontrou, criar um novo participante
+    if (!participante) {
+      participante = this.participanteRepository.create({
+        usuario_id: usuarioId,
+        nome: usuario.nome,
+        email: usuario.email,
+      });
+      participante = await this.participanteRepository.save(participante);
+    }
+
+    return participante;
   }
 
   static async create(data: {
@@ -100,8 +239,27 @@ export class GrupoService {
     });
     const grupoSalvo = await this.grupoRepository.save(grupo);
 
+    // Adicionar automaticamente o criador do evento como participante
+    const participanteCriador = await this.encontrarOuCriarParticipanteUsuario(data.usuario_id);
+    if (participanteCriador) {
+      // Verificar se já não está na lista de participantes
+      const jaEstaNaLista = data.participanteIds?.includes(participanteCriador.id);
+      if (!jaEstaNaLista) {
+        const participanteGrupo = this.participanteGrupoRepository.create({
+          grupo_id: grupoSalvo.id,
+          participante_id: participanteCriador.id,
+        });
+        await this.participanteGrupoRepository.save(participanteGrupo);
+      }
+    }
+
+    // Adicionar outros participantes se fornecidos
     if (data.participanteIds && data.participanteIds.length > 0) {
       for (const participanteId of data.participanteIds) {
+        // Pular se for o participante do criador (já foi adicionado)
+        if (participanteCriador && participanteId === participanteCriador.id) {
+          continue;
+        }
         const participanteGrupo = this.participanteGrupoRepository.create({
           grupo_id: grupoSalvo.id,
           participante_id: participanteId,
@@ -171,6 +329,30 @@ export class GrupoService {
           grupo_participantes_evento_id: subGrupo.id,
           participante_id: participanteId,
         });
+      }
+      
+      // Remover todas as participações do participante nas despesas do evento
+      // Buscar todas as despesas do evento
+      const despesas = await this.despesaRepository.find({
+        where: { grupo_id: grupoId },
+        select: ['id'],
+      });
+      
+      // Remover participações do participante em cada despesa
+      for (const despesa of despesas) {
+        // Deletar participação
+        await this.participacaoDespesaRepository.delete({
+          despesa_id: despesa.id,
+          participante_id: participanteId,
+        });
+        
+        // Recalcular valores da despesa após remover participação
+        try {
+          await ParticipacaoService.recalcularValores(despesa.id, grupo.usuario_id);
+        } catch (error) {
+          console.error(`Erro ao recalcular valores da despesa ${despesa.id}:`, error);
+          // Não lançar erro para não interromper o processo de remoção
+        }
       }
       
       return true;
@@ -295,9 +477,27 @@ export class GrupoService {
     });
     const grupoSalvo = await this.grupoRepository.save(grupo);
 
-    // Adicionar participantes se fornecidos
+    // Adicionar automaticamente o criador do evento como participante
+    const participanteCriador = await this.encontrarOuCriarParticipanteUsuario(data.usuario_id);
+    if (participanteCriador) {
+      // Verificar se já não está na lista de participantes
+      const jaEstaNaLista = data.participanteIds?.includes(participanteCriador.id);
+      if (!jaEstaNaLista) {
+        const participanteGrupo = this.participanteGrupoRepository.create({
+          grupo_id: grupoSalvo.id,
+          participante_id: participanteCriador.id,
+        });
+        await this.participanteGrupoRepository.save(participanteGrupo);
+      }
+    }
+
+    // Adicionar outros participantes se fornecidos
     if (data.participanteIds && data.participanteIds.length > 0) {
       for (const participanteId of data.participanteIds) {
+        // Pular se for o participante do criador (já foi adicionado)
+        if (participanteCriador && participanteId === participanteCriador.id) {
+          continue;
+        }
         const participanteGrupo = this.participanteGrupoRepository.create({
           grupo_id: grupoSalvo.id,
           participante_id: participanteId,

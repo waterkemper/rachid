@@ -225,9 +225,83 @@ const Participacoes: React.FC = () => {
         }
       }
       
-      const participantesAtualizados = await participanteApi.getAll();
-      participantesParaFormatar = participantesAtualizados;
-      setParticipantes(participantesAtualizados);
+      // Buscar TODOS os participantes do evento (não apenas os do usuário logado)
+      // Isso é necessário para colaboradores verem todos os participantes
+      const eventoCompleto = await grupoApi.getById(Number(grupoSelecionado));
+      
+      // Criar um mapa de participantes a partir das despesas e do evento
+      const participantesMap = new Map<number, Participante>();
+      
+      // 1. Extrair participantes das despesas (se vierem com a relação carregada)
+      despesasParaFormatar.forEach(despesa => {
+        if (despesa.pagador) {
+          participantesMap.set(despesa.pagador.id, despesa.pagador);
+        }
+        if (despesa.participacoes) {
+          despesa.participacoes.forEach(participacao => {
+            if (participacao.participante) {
+              participantesMap.set(participacao.participante.id, participacao.participante);
+            }
+          });
+        }
+      });
+      
+      // 2. Extrair participantes do evento (se vierem com a relação carregada)
+      if (eventoCompleto && eventoCompleto.participantes) {
+        eventoCompleto.participantes.forEach(pg => {
+          if (pg.participante) {
+            participantesMap.set(pg.participante.id, pg.participante);
+          }
+        });
+      }
+      
+      // 3. Coletar todos os IDs de participantes que precisamos
+      const participantesIdsNecessarios = new Set<number>();
+      despesasParaFormatar.forEach(despesa => {
+        if (despesa.pagador?.id) {
+          participantesIdsNecessarios.add(despesa.pagador.id);
+        }
+        if (despesa.participacoes) {
+          despesa.participacoes.forEach(participacao => {
+            if (participacao.participante_id) {
+              participantesIdsNecessarios.add(participacao.participante_id);
+            }
+          });
+        }
+      });
+      
+      if (eventoCompleto && eventoCompleto.participantes) {
+        eventoCompleto.participantes.forEach(pg => {
+          if (pg.participante_id) {
+            participantesIdsNecessarios.add(pg.participante_id);
+          }
+        });
+      }
+      
+      // 4. Buscar participantes que faltam (não vieram nas relações)
+      const participantesFaltantes = Array.from(participantesIdsNecessarios).filter(id => !participantesMap.has(id));
+      
+      // Buscar participantes faltantes individualmente
+      for (const id of participantesFaltantes) {
+        try {
+          const participante = await participanteApi.getById(id);
+          participantesMap.set(id, participante);
+        } catch (err) {
+          // Ignorar erros (participante pode não existir ou não ter acesso)
+          console.warn(`Não foi possível buscar participante ${id}:`, err);
+        }
+      }
+      
+      // 5. Adicionar também participantes do usuário logado (para garantir que temos todos)
+      const todosParticipantes = await participanteApi.getAll();
+      todosParticipantes.forEach(p => {
+        if (participantesIdsNecessarios.has(p.id) && !participantesMap.has(p.id)) {
+          participantesMap.set(p.id, p);
+        }
+      });
+      
+      participantesParaFormatar = Array.from(participantesMap.values());
+      setParticipantes(participantesParaFormatar);
 
       let mensagem = formatarSugestoesPagamento(
         evento,
