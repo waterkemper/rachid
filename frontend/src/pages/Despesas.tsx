@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageFocus } from '../hooks/usePageFocus';
-import { despesaApi, grupoApi, participanteApi, participacaoApi } from '../services/api';
+import { despesaApi, grupoApi, participanteApi, participacaoApi, grupoParticipantesApi } from '../services/api';
 import { Despesa, Grupo, Participante } from '../types';
 import Modal from '../components/Modal';
 import AdicionarParticipanteRapido from '../components/AdicionarParticipanteRapido';
@@ -15,6 +15,7 @@ const Despesas: React.FC = () => {
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [participantesDoEvento, setParticipantesDoEvento] = useState<Participante[]>([]);
+  const [participanteSubgrupoMap, setParticipanteSubgrupoMap] = useState<Map<number, string>>(new Map());
   // Inicializar filtroGrupo com o valor da URL se existir
   const eventoIdFromUrl = searchParams.get('evento');
   const [filtroGrupo, setFiltroGrupo] = useState<number | ''>(eventoIdFromUrl ? Number(eventoIdFromUrl) : '');
@@ -81,6 +82,23 @@ const Despesas: React.FC = () => {
   const loadParticipantesDoEvento = async (eventoId: number, incluirPagadorAtual?: number) => {
     try {
       const evento = await grupoApi.getById(eventoId);
+      
+      // Carregar subgrupos do evento e criar mapeamento
+      try {
+        const subgrupos = await grupoParticipantesApi.getAll(eventoId);
+        const map = new Map<number, string>();
+        subgrupos.forEach(subgrupo => {
+          if (subgrupo.participantes) {
+            subgrupo.participantes.forEach(p => {
+              map.set(p.participante_id, subgrupo.nome);
+            });
+          }
+        });
+        setParticipanteSubgrupoMap(map);
+      } catch (err) {
+        setParticipanteSubgrupoMap(new Map());
+      }
+      
       if (evento.participantes) {
         const participantesIds = evento.participantes.map(p => p.participante_id);
         let participantesFiltrados = participantes.filter(p => participantesIds.includes(p.id));
@@ -105,6 +123,7 @@ const Despesas: React.FC = () => {
       }
     } catch (err) {
       setParticipantesDoEvento([]);
+      setParticipanteSubgrupoMap(new Map());
     }
   };
 
@@ -160,6 +179,7 @@ const Despesas: React.FC = () => {
     setParticipantesDoEvento([]);
     setParticipantesSelecionados([]);
     setParticipantesExpandido(false);
+    setParticipanteSubgrupoMap(new Map());
     setFormData({
       grupo_id: 0,
       descricao: '',
@@ -675,6 +695,7 @@ const Despesas: React.FC = () => {
                 )}
                 {participantesDoEvento.map((participante) => {
                   const isSelected = participantesSelecionados.includes(participante.id);
+                  const nomeSubgrupo = participanteSubgrupoMap.get(participante.id);
                   return (
                     <label
                       key={participante.id}
@@ -697,7 +718,12 @@ const Despesas: React.FC = () => {
                           }
                         }}
                       />
-                      <span style={{ color: 'rgba(226, 232, 240, 0.92)' }}>{participante.nome}</span>
+                      <span style={{ color: 'rgba(226, 232, 240, 0.92)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {participante.nome}
+                        {nomeSubgrupo && (
+                          <span className="badge-subgrupo-despesa">{nomeSubgrupo}</span>
+                        )}
+                      </span>
                     </label>
                   );
                 })}
