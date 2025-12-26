@@ -43,7 +43,7 @@ export class Despesa {
   @CreateDateColumn()
   criadoEm!: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt!: Date;
 
   @ManyToOne(() => Usuario, { nullable: true })
