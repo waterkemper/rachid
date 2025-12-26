@@ -10,6 +10,7 @@ import {
   GrupoParticipantesEvento,
   SaldoGrupo,
   Usuario,
+  EventTemplate,
 } from '../../shared/types';
 
 const api: AxiosInstance = axios.create({
@@ -172,6 +173,7 @@ export const grupoApi = {
     descricao?: string;
     data?: string;
     participanteIds?: number[];
+    templateId?: string;
   }): Promise<Grupo> => {
     const response = await api.post('/grupos', data);
     return response.data;
@@ -202,6 +204,16 @@ export const grupoApi = {
 
   duplicar: async (id: number): Promise<Grupo> => {
     const response = await api.post(`/grupos/${id}/duplicar`);
+    return response.data;
+  },
+
+  gerarLink: async (id: number): Promise<{ token: string; link: string }> => {
+    const response = await api.post(`/grupos/${id}/gerar-link`);
+    return response.data;
+  },
+
+  obterLink: async (id: number): Promise<{ token: string | null; link: string | null }> => {
+    const response = await api.get(`/grupos/${id}/link`);
     return response.data;
   },
 };
@@ -260,7 +272,7 @@ export const despesaApi = {
     grupo_id: number;
     descricao: string;
     valorTotal: number;
-    participante_pagador_id: number;
+    participante_pagador_id?: number;
     data?: string;
     participacoes?: Array<{
       participante_id: number;
@@ -293,7 +305,7 @@ export const despesaApi = {
     grupo_id: number;
     descricao: string;
     valorTotal: number;
-    participante_pagador_id: number;
+    participante_pagador_id?: number;
     data: string;
     participacoes?: Array<{
       participante_id: number;
@@ -478,6 +490,18 @@ export const grupoMaiorApi = {
 
   obterTodosParticipantes: async (id: number): Promise<{ participanteIds: number[] }> => {
     const response = await api.get(`/grupos-maiores/${id}/participantes`);
+    return response.data;
+  },
+};
+
+export const templateApi = {
+  getAll: async (): Promise<EventTemplate[]> => {
+    const response = await api.get('/templates');
+    return response.data;
+  },
+
+  getById: async (id: string): Promise<EventTemplate> => {
+    const response = await api.get(`/templates/${id}`);
     return response.data;
   },
 };

@@ -158,9 +158,75 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
       const grupo = grupos.find(g => g.id === grupoId);
       if (!grupo || !grupo.participantes) return;
 
+      // Adicionar todos os participantes do grupo ao evento
       for (const participanteGrupo of grupo.participantes) {
         await adicionarParticipanteAoEvento(participanteGrupo.participante_id);
       }
+
+      // Recarregar dados do evento para garantir que os participantes estejam atualizados
+      await loadData();
+
+      // Aguardar um pouco para garantir que os participantes foram adicionados
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Copiar subgrupos do evento anterior
+      try {
+        const subgruposAnteriores = await grupoParticipantesApi.getAll(grupoId);
+        
+        if (subgruposAnteriores.length === 0) {
+          // Não há subgrupos para copiar
+          setGrupoSelecionado(null);
+          return;
+        }
+
+        // Buscar evento atualizado para obter lista correta de participantes
+        const eventoAtualizado = await grupoApi.getById(eventoId);
+        const participantesIdsNoEvento = new Set(
+          eventoAtualizado.participantes?.map(p => p.participante_id) || []
+        );
+
+        // Criar subgrupos no evento atual
+        for (const subgrupoAnterior of subgruposAnteriores) {
+          // Criar o subgrupo no evento atual
+          const novoSubgrupo = await grupoParticipantesApi.create(eventoId, {
+            nome: subgrupoAnterior.nome,
+            descricao: subgrupoAnterior.descricao,
+          });
+
+          // Adicionar participantes ao subgrupo (apenas os que estão no evento atual)
+          if (subgrupoAnterior.participantes && subgrupoAnterior.participantes.length > 0) {
+            for (const participanteSubgrupo of subgrupoAnterior.participantes) {
+              const participanteId = participanteSubgrupo.participante_id;
+              
+              // Verificar se o participante está no evento atual
+              if (participantesIdsNoEvento.has(participanteId)) {
+                try {
+                  await grupoParticipantesApi.adicionarParticipante(
+                    eventoId,
+                    novoSubgrupo.id,
+                    participanteId
+                  );
+                } catch (err: any) {
+                  // Se o erro for porque o participante já está em outro subgrupo, ignorar
+                  if (err?.response?.status !== 400) {
+                    console.warn(`Erro ao adicionar participante ${participanteId} ao subgrupo:`, err);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Aguardar um pouco para garantir que todas as operações foram concluídas
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Recarregar subgrupos do evento atual
+        await reloadFamilias();
+      } catch (error) {
+        console.error('Erro ao copiar subgrupos:', error);
+        // Não bloquear o fluxo se houver erro ao copiar subgrupos
+      }
+
       setGrupoSelecionado(null);
     } catch (error) {
       console.error('Erro ao adicionar grupo:', error);

@@ -303,16 +303,10 @@ const Participacoes: React.FC = () => {
       participantesParaFormatar = Array.from(participantesMap.values());
       setParticipantes(participantesParaFormatar);
 
-      let mensagem = formatarSugestoesPagamento(
-        evento,
-        sugestoes,
-        despesasParaFormatar,
-        participantesParaFormatar,
-        subgruposParaFormatar.length > 0 ? subgruposParaFormatar : undefined,
-        true
-      );
-
-      // Obter ou gerar link de compartilhamento
+      // Obter ou gerar link de compartilhamento primeiro
+      let textoInicio = '📊 Pessoal, organizei as contas deste evento em oRachid.\n';
+      textoInicio += 'Ele calcula tudo automaticamente (inclusive por famílias) e mostra quem paga quem, sem confusão.\n\n';
+      
       try {
         let linkData = await grupoApi.obterLink(Number(grupoSelecionado));
         if (!linkData.link) {
@@ -321,14 +315,29 @@ const Participacoes: React.FC = () => {
         }
         
         if (linkData.link) {
-          mensagem += '\n\n🔗 *Visualize este evento online:*\n';
-          mensagem += linkData.link;
-          mensagem += '\n\n(Você pode visualizar o resumo e seus saldos sem precisar criar conta)';
+          textoInicio += '🔗 *Visualize o evento online:*\n';
+          textoInicio += linkData.link + '\n';
+          textoInicio += '👉 Dá pra ver o resumo e seus saldos sem criar conta.\n\n';
         }
       } catch (err) {
-        // Se falhar ao obter link, continua sem adicionar
+        // Se falhar ao obter link, continua sem adicionar o link mas mantém o texto inicial
         console.error('Erro ao obter link de compartilhamento:', err);
+        textoInicio += '\n';
       }
+
+      let mensagem = formatarSugestoesPagamento(
+        evento,
+        sugestoes,
+        despesasParaFormatar,
+        participantesParaFormatar,
+        saldos,
+        saldosGrupos,
+        subgruposParaFormatar.length > 0 ? subgruposParaFormatar : undefined,
+        true
+      );
+
+      // Adicionar texto inicial no início da mensagem
+      mensagem = textoInicio + mensagem;
 
       setMensagemWhatsApp(mensagem);
     } catch (err) {

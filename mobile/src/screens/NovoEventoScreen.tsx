@@ -4,24 +4,41 @@ import { Card, Text, Button, ActivityIndicator, TextInput } from 'react-native-p
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { grupoApi, grupoMaiorApi } from '../services/api';
+import { grupoApi, grupoMaiorApi, templateApi } from '../services/api';
 import { GrupoMaior } from '../services/api';
+import { EventTemplate } from '../../shared/types';
 
 type NovoEventoScreenNavigationProp = StackNavigationProp<RootStackParamList>;
 
 const NovoEventoScreen: React.FC = () => {
   const navigation = useNavigation<NovoEventoScreenNavigationProp>();
   const [nome, setNome] = useState('');
+  const [descricao, setDescricao] = useState('');
   const [data, setData] = useState(new Date().toISOString().split('T')[0]);
   const [gruposMaiores, setGruposMaiores] = useState<GrupoMaior[]>([]);
   const [grupoMaiorSelecionado, setGrupoMaiorSelecionado] = useState<number | null>(null);
+  const [templates, setTemplates] = useState<EventTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [carregandoTemplates, setCarregandoTemplates] = useState(true);
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(false);
   const [carregandoGrupos, setCarregandoGrupos] = useState(true);
 
   useEffect(() => {
     loadGruposMaiores();
+    loadTemplates();
   }, []);
+
+  useEffect(() => {
+    // Quando template é selecionado, preencher nome e descrição
+    if (selectedTemplateId) {
+      const template = templates.find(t => t.id === selectedTemplateId);
+      if (template) {
+        setNome(template.nome);
+        setDescricao(template.descricao);
+      }
+    }
+  }, [selectedTemplateId, templates]);
 
   const loadGruposMaiores = async () => {
     try {
@@ -31,6 +48,17 @@ const NovoEventoScreen: React.FC = () => {
       console.error('Erro ao carregar grupos maiores:', error);
     } finally {
       setCarregandoGrupos(false);
+    }
+  };
+
+  const loadTemplates = async () => {
+    try {
+      const data = await templateApi.getAll();
+      setTemplates(data);
+    } catch (error) {
+      console.error('Erro ao carregar templates:', error);
+    } finally {
+      setCarregandoTemplates(false);
     }
   };
 
@@ -47,7 +75,9 @@ const NovoEventoScreen: React.FC = () => {
     try {
       const evento = await grupoApi.create({
         nome: nome.trim(),
+        descricao: descricao.trim() || undefined,
         data: data,
+        templateId: selectedTemplateId || undefined,
       });
 
       setCarregando(false);
@@ -75,6 +105,27 @@ const NovoEventoScreen: React.FC = () => {
             <Text style={styles.error}>{erro}</Text>
           ) : null}
 
+          {carregandoTemplates ? (
+            <ActivityIndicator style={styles.loading} />
+          ) : templates.length > 0 ? (
+            <View style={styles.templatesSection}>
+              <Text variant="titleMedium" style={styles.templatesTitle}>
+                Usar template (opcional):
+              </Text>
+              {templates.map((template) => (
+                <Button
+                  key={template.id}
+                  mode={selectedTemplateId === template.id ? 'contained' : 'outlined'}
+                  onPress={() => setSelectedTemplateId(selectedTemplateId === template.id ? null : template.id)}
+                  style={styles.templateButton}
+                  disabled={carregando}
+                >
+                  {template.nome}
+                </Button>
+              ))}
+            </View>
+          ) : null}
+
           <TextInput
             label="Nome do Evento *"
             value={nome}
@@ -83,6 +134,18 @@ const NovoEventoScreen: React.FC = () => {
             style={styles.input}
             placeholder="Ex: Churrasco dia 12/11"
             disabled={carregando}
+          />
+
+          <TextInput
+            label="Descrição"
+            value={descricao}
+            onChangeText={setDescricao}
+            mode="outlined"
+            style={styles.input}
+            placeholder="Descrição do evento (opcional)"
+            disabled={carregando}
+            multiline
+            numberOfLines={3}
           />
 
           <TextInput
@@ -162,6 +225,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   grupoButton: {
+    marginBottom: 8,
+  },
+  templatesSection: {
+    marginBottom: 24,
+  },
+  templatesTitle: {
+    marginBottom: 12,
+  },
+  templateButton: {
     marginBottom: 8,
   },
   button: {

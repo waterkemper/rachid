@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert, TouchableOpacity, Platform } from 'react-native';
-import { Card, Text, Button, ActivityIndicator, SegmentedButtons, Menu, TextInput, Modal, Portal, Divider } from 'react-native-paper';
+import { Card, Text, Button, ActivityIndicator, Menu, TextInput, Modal, Portal, Divider } from 'react-native-paper';
 import { useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import { MainTabParamList } from '../navigation/AppNavigator';
 import { relatorioApi, grupoApi, grupoParticipantesApi, despesaApi, participanteApi } from '../services/api';
-import { SaldoParticipante, SugestaoPagamento, Grupo, Despesa, Participante, GrupoParticipantesEvento } from '../../shared/types';
+import { SaldoParticipante, SugestaoPagamento, Grupo, Despesa, Participante, GrupoParticipantesEvento, SaldoGrupo } from '../../shared/types';
 import { menuTheme, customColors } from '../theme';
 import { formatarSugestoesPagamento } from '../utils/whatsappFormatter';
 
@@ -20,11 +20,11 @@ const RelatorioScreen: React.FC = () => {
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [grupoSelecionado, setGrupoSelecionado] = useState<number | null>(null);
   const [saldos, setSaldos] = useState<SaldoParticipante[]>([]);
+  const [saldosGrupos, setSaldosGrupos] = useState<SaldoGrupo[]>([]);
   const [sugestoes, setSugestoes] = useState<SugestaoPagamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [carregandoRelatorio, setCarregandoRelatorio] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tipoRelatorio, setTipoRelatorio] = useState('saldos');
   const [menuEventoVisible, setMenuEventoVisible] = useState(false);
   const [modalDetalhesVisible, setModalDetalhesVisible] = useState(false);
   const [participanteSelecionado, setParticipanteSelecionado] = useState<SaldoParticipante | null>(null);
@@ -158,7 +158,7 @@ const RelatorioScreen: React.FC = () => {
       // Salvar evento selecionado sempre que mudar
       AsyncStorage.setItem(STORAGE_KEY_SELECTED_EVENT, grupoSelecionado.toString());
     }
-  }, [grupoSelecionado, tipoRelatorio]);
+  }, [grupoSelecionado]);
 
   const loadGrupos = async () => {
     try {
@@ -225,27 +225,28 @@ const RelatorioScreen: React.FC = () => {
         setDespesas([]);
       }
       
-      if (tipoRelatorio === 'saldos') {
-        const saldosData = await relatorioApi.getSaldosGrupo(grupoSelecionado);
-        setSaldos(saldosData);
-      } else {
-        // Verificar se há grupos no evento para usar a API correta
-        try {
-          const gruposParticipantes = await grupoParticipantesApi.getAll(grupoSelecionado);
-          setSubgrupos(gruposParticipantes || []);
-          const temGrupos = gruposParticipantes && gruposParticipantes.length > 0;
-          
-          // Se houver grupos (sub-grupos), usar a API que considera grupos
-          const sugestoesData = temGrupos
-            ? await relatorioApi.getSugestoesPagamentoGrupos(grupoSelecionado)
-            : await relatorioApi.getSugestoesPagamento(grupoSelecionado);
-          setSugestoes(sugestoesData);
-        } catch (err) {
-          // Se der erro ao verificar grupos, usar a API padrão
-          setSubgrupos([]);
-          const sugestoesData = await relatorioApi.getSugestoesPagamento(grupoSelecionado);
-          setSugestoes(sugestoesData);
-        }
+      // Carregar todos os dados em paralelo
+      const [saldosData, saldosGruposData] = await Promise.all([
+        relatorioApi.getSaldosGrupo(grupoSelecionado),
+        relatorioApi.getSaldosPorGrupo(grupoSelecionado)
+      ]);
+      setSaldos(saldosData);
+      setSaldosGrupos(saldosGruposData);
+      
+      // Verificar se há grupos no evento e carregar sugestões
+      try {
+        const gruposParticipantes = await grupoParticipantesApi.getAll(grupoSelecionado);
+        setSubgrupos(gruposParticipantes || []);
+        const temGrupos = gruposParticipantes && gruposParticipantes.length > 0;
+        
+        const sugestoesData = temGrupos
+          ? await relatorioApi.getSugestoesPagamentoGrupos(grupoSelecionado)
+          : await relatorioApi.getSugestoesPagamento(grupoSelecionado);
+        setSugestoes(sugestoesData);
+      } catch (err) {
+        setSubgrupos([]);
+        const sugestoesData = await relatorioApi.getSugestoesPagamento(grupoSelecionado);
+        setSugestoes(sugestoesData);
       }
     } catch (err: any) {
       const errorMessage = err?.response?.data?.error || 'Erro ao carregar relatório';
@@ -347,15 +348,42 @@ const RelatorioScreen: React.FC = () => {
         subgruposParaFormatar = subgruposCompletos;
       }
 
+      // Obter ou gerar link de compartilhamento primeiro
+      let textoInicio = '📊 Pessoal, organizei as contas deste evento em oRachid.\n';
+      textoInicio += 'Ele calcula tudo automaticamente (inclusive por famílias) e mostra quem paga quem, sem confusão.\n\n';
+      
+      try {
+        let linkData = await grupoApi.obterLink(grupoSelecionado);
+        if (!linkData.link) {
+          // Se não existe, gera um novo
+          linkData = await grupoApi.gerarLink(grupoSelecionado);
+        }
+        
+        if (linkData.link) {
+          textoInicio += '🔗 *Visualize o evento online:*\n';
+          textoInicio += linkData.link + '\n';
+          textoInicio += '👉 Dá pra ver o resumo e seus saldos sem criar conta.\n\n';
+        }
+      } catch (err) {
+        // Se falhar ao obter link, continua sem adicionar o link mas mantém o texto inicial
+        console.error('Erro ao obter link de compartilhamento:', err);
+        textoInicio += '\n';
+      }
+
       // Gerar mensagem formatada
-      const mensagem = formatarSugestoesPagamento(
+      let mensagem = formatarSugestoesPagamento(
         evento,
         sugestoes,
         despesasParaFormatar,
         participantesParaFormatar,
+        saldos,
+        saldosGrupos,
         subgruposParaFormatar.length > 0 ? subgruposParaFormatar : undefined,
         true
       );
+
+      // Adicionar texto inicial no início da mensagem
+      mensagem = textoInicio + mensagem;
 
       setMensagemWhatsApp(mensagem);
     } catch (err) {
@@ -380,6 +408,70 @@ const RelatorioScreen: React.FC = () => {
   const handleCloseWhatsApp = () => {
     setModalWhatsAppVisible(false);
     setMensagemWhatsApp('');
+  };
+
+  // Função para organizar saldos por grupo
+  const organizarSaldosPorGrupo = () => {
+    if (saldosGrupos.length === 0) {
+      // Se não há grupos, retornar saldos sem agrupamento
+      return { gruposOrdenados: [], saldosSemGrupo: saldos };
+    }
+
+    // Criar mapa de participanteId -> grupoId
+    const participanteParaGrupo = new Map<number, { grupoId: number; grupoNome: string }>();
+    
+    saldosGrupos.forEach(grupo => {
+      grupo.participantes.forEach(participante => {
+        participanteParaGrupo.set(participante.participanteId, {
+          grupoId: grupo.grupoId,
+          grupoNome: grupo.grupoNome
+        });
+      });
+    });
+
+    // Organizar saldos por grupo
+    const saldosPorGrupo = new Map<number, { grupoNome: string; saldos: SaldoParticipante[] }>();
+    const saldosSemGrupo: SaldoParticipante[] = [];
+
+    saldos.forEach(saldo => {
+      const grupoInfo = participanteParaGrupo.get(saldo.participanteId);
+      if (grupoInfo) {
+        if (!saldosPorGrupo.has(grupoInfo.grupoId)) {
+          saldosPorGrupo.set(grupoInfo.grupoId, {
+            grupoNome: grupoInfo.grupoNome,
+            saldos: []
+          });
+        }
+        saldosPorGrupo.get(grupoInfo.grupoId)!.saldos.push(saldo);
+      } else {
+        saldosSemGrupo.push(saldo);
+      }
+    });
+
+    // Ordenar grupos pela ordem em saldosGrupos e incluir dados do grupo
+    const gruposOrdenados: Array<{ 
+      grupoId: number; 
+      grupoNome: string; 
+      saldos: SaldoParticipante[];
+      totalPagou: number;
+      totalDeve: number;
+      saldo: number;
+    }> = [];
+    saldosGrupos.forEach(grupo => {
+      const saldosDoGrupo = saldosPorGrupo.get(grupo.grupoId);
+      if (saldosDoGrupo) {
+        gruposOrdenados.push({
+          grupoId: grupo.grupoId,
+          grupoNome: grupo.grupoNome,
+          saldos: saldosDoGrupo.saldos,
+          totalPagou: grupo.totalPagou,
+          totalDeve: grupo.totalDeve,
+          saldo: grupo.saldo
+        });
+      }
+    });
+
+    return { gruposOrdenados, saldosSemGrupo };
   };
 
   if (loading) {
@@ -454,109 +546,289 @@ const RelatorioScreen: React.FC = () => {
 
       {grupoSelecionado ? (
         <>
-          <Card style={styles.card}>
-            <Card.Content>
-              <SegmentedButtons
-                value={tipoRelatorio}
-                onValueChange={setTipoRelatorio}
-                buttons={[
-                  { value: 'saldos', label: 'Saldos' },
-                  { value: 'sugestoes', label: 'Sugestões' },
-                ]}
-              />
-            </Card.Content>
-          </Card>
-
           {carregandoRelatorio ? (
             <View style={styles.center}>
               <ActivityIndicator size="large" />
             </View>
-          ) : tipoRelatorio === 'saldos' ? (
-            <Card style={styles.card}>
-              <Card.Title title="Saldos dos Participantes" />
-              <Card.Content>
-                {saldos.length === 0 ? (
-                  <Text style={styles.emptyText}>Nenhum saldo encontrado</Text>
-                ) : (
-                  saldos.map((saldo) => (
-                    <TouchableOpacity
-                      key={saldo.participanteId}
-                      style={styles.saldoItem}
-                      onPress={() => handleOpenDetalhes(saldo)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.saldoItemContent}>
-                        <Text variant="titleSmall" style={styles.saldoNome}>{saldo.participanteNome}</Text>
-                        <Text
-                          variant="bodyLarge"
-                          style={[
-                            styles.saldoValor,
-                            saldo.saldo > 0 ? styles.positivo : saldo.saldo < 0 ? styles.negativo : null,
-                          ]}
-                        >
-                          {formatCurrency(saldo.saldo)}
-                        </Text>
-                        <Text variant="bodySmall" style={styles.saldoDetail}>
-                          Pagou: {formatCurrency(saldo.totalPagou)} | Deve: {formatCurrency(saldo.totalDeve)}
-                        </Text>
-                        <Text variant="bodySmall" style={styles.saldoClickHint}>
-                          Toque para ver detalhes
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))
-                )}
-              </Card.Content>
-            </Card>
           ) : (
-            <Card style={styles.card}>
-              <Card.Title 
-                title="Sugestões de Pagamento"
-                right={(props) => (
-                  sugestoes.length > 0 ? (
-                    <Button
-                      {...props}
-                      icon="share-variant"
-                      onPress={handleCompartilharWhatsApp}
-                      mode="contained"
-                      compact
-                      style={styles.shareButton}
-                    >
-                      Compartilhar
-                    </Button>
-                  ) : null
-                )}
-              />
-              <Card.Content>
-                {sugestoes.length === 0 ? (
-                  <Text style={styles.emptyText}>Nenhuma sugestão encontrada</Text>
-                ) : (
-                  <>
-                    {sugestoes.map((sugestao, index) => (
-                    <View key={index} style={styles.sugestaoItem}>
-                      <Text variant="bodyLarge">
-                        {sugestao.de} → {sugestao.para}
-                      </Text>
-                      <Text variant="titleMedium" style={styles.sugestaoValor}>
-                        {formatCurrency(sugestao.valor)}
-                      </Text>
-                    </View>
-                    ))}
-                    <View style={styles.shareButtonContainer}>
+            <>
+              {/* 1. Sugestões de Pagamento */}
+              <Card style={styles.card}>
+                <Card.Title 
+                  title="Sugestões de Pagamento"
+                  right={(props) => (
+                    sugestoes.length > 0 ? (
                       <Button
-                        icon="whatsapp"
-                        mode="contained"
+                        {...props}
+                        icon="share-variant"
                         onPress={handleCompartilharWhatsApp}
-                        style={styles.shareButtonFull}
+                        mode="contained"
+                        compact
+                        style={styles.shareButton}
                         buttonColor="#25D366"
                       >
-                        Compartilhar via WhatsApp
+                        Compartilhar
                       </Button>
-                    </View>
-                  </>
-                )}
-              </Card.Content>
-            </Card>
+                    ) : null
+                  )}
+                />
+                <Card.Content>
+                  {sugestoes.length === 0 ? (
+                    <Text style={styles.emptyText}>Nenhuma sugestão encontrada</Text>
+                  ) : (
+                    sugestoes.map((sugestao, index) => {
+                      // Buscar chave PIX do recebedor
+                      const obterChavesPix = (nomeRecebedor: string): string[] => {
+                        // Primeiro, verificar se é um subgrupo
+                        if (subgrupos && subgrupos.length > 0) {
+                          const grupoNomeNormalizado = nomeRecebedor.trim().toLowerCase();
+                          let subgrupo = subgrupos.find(sg => {
+                            if (!sg.nome) return false;
+                            return sg.nome.trim().toLowerCase() === grupoNomeNormalizado;
+                          });
+                          
+                          if (!subgrupo) {
+                            subgrupo = subgrupos.find(sg => {
+                              if (!sg.nome) return false;
+                              const nomeSubgrupoNormalizado = sg.nome.trim().toLowerCase();
+                              return nomeSubgrupoNormalizado.includes(grupoNomeNormalizado) ||
+                                     grupoNomeNormalizado.includes(nomeSubgrupoNormalizado);
+                            });
+                          }
+                          
+                          if (subgrupo && subgrupo.participantes) {
+                            const pixKeys: string[] = [];
+                            subgrupo.participantes.forEach(p => {
+                              const participante = participantes.find(part => part.id === p.participante_id);
+                              if (participante?.chavePix && participante.chavePix.trim()) {
+                                pixKeys.push(participante.chavePix.trim());
+                              }
+                            });
+                            if (pixKeys.length > 0) return pixKeys;
+                          }
+                        }
+                        
+                        // Verificar se é um grupo em saldosGrupos
+                        const grupo = saldosGrupos.find(g => g.grupoNome === nomeRecebedor);
+                        if (grupo) {
+                          const pixKeys: string[] = [];
+                          grupo.participantes.forEach(p => {
+                            const participante = participantes.find(part => part.id === p.participanteId);
+                            if (participante?.chavePix && participante.chavePix.trim()) {
+                              pixKeys.push(participante.chavePix.trim());
+                            }
+                          });
+                          if (pixKeys.length > 0) return pixKeys;
+                        }
+                        
+                        // Verificar se é um participante individual
+                        const participante = participantes.find(p => p.nome === nomeRecebedor);
+                        if (participante?.chavePix && participante.chavePix.trim()) {
+                          return [participante.chavePix.trim()];
+                        }
+                        
+                        return [];
+                      };
+
+                      const chavesPix = obterChavesPix(sugestao.para);
+                      
+                      return (
+                        <View key={index} style={styles.sugestaoItem}>
+                          <Text variant="bodyLarge">
+                            {sugestao.de} → {sugestao.para}
+                          </Text>
+                          <Text variant="titleMedium" style={styles.sugestaoValor}>
+                            {formatCurrency(sugestao.valor)}
+                          </Text>
+                          {chavesPix.length > 0 && (
+                            <Text variant="bodySmall" style={styles.pixInfo}>
+                              💳 PIX: {chavesPix.length === 1 ? chavesPix[0] : chavesPix.join(' ou ')}
+                            </Text>
+                          )}
+                        </View>
+                      );
+                    })
+                  )}
+                </Card.Content>
+              </Card>
+
+              {/* 2. Saldos por Participante */}
+              <Card style={styles.card}>
+                <Card.Title title="Saldos por Participante" />
+                <Card.Content>
+                  {saldos.length === 0 ? (
+                    <Text style={styles.emptyText}>Nenhum saldo encontrado</Text>
+                  ) : (() => {
+                    const { gruposOrdenados, saldosSemGrupo } = organizarSaldosPorGrupo();
+                    
+                    return (
+                      <View>
+                        {gruposOrdenados.map(({ grupoId, grupoNome, totalPagou, totalDeve, saldo }, index) => {
+                          const grupoCompleto = saldosGrupos.find(g => g.grupoId === grupoId);
+                          return (
+                            <View key={grupoId} style={styles.grupoCard}>
+                              <View style={styles.grupoHeader}>
+                                <View style={styles.grupoHeaderLeft}>
+                                  <Text variant="titleMedium" style={styles.grupoNome}>{grupoNome}</Text>
+                                  {grupoCompleto && (
+                                    <Text variant="bodySmall" style={styles.grupoParticipantes}>
+                                      {grupoCompleto.participantes.map(p => p.participanteNome).join(', ')}
+                                    </Text>
+                                  )}
+                                </View>
+                              </View>
+                              <View style={styles.grupoTotais}>
+                                <View style={styles.grupoTotalItem}>
+                                  <Text variant="bodySmall" style={styles.grupoTotalLabel}>Total Pagou</Text>
+                                  <Text variant="bodyMedium" style={styles.grupoTotalValorPositivo}>
+                                    {formatCurrency(totalPagou)}
+                                  </Text>
+                                </View>
+                                <View style={styles.grupoTotalItem}>
+                                  <Text variant="bodySmall" style={styles.grupoTotalLabel}>Total Deve</Text>
+                                  <Text variant="bodyMedium" style={styles.grupoTotalValorNegativo}>
+                                    {formatCurrency(totalDeve)}
+                                  </Text>
+                                </View>
+                                <View style={styles.grupoTotalItem}>
+                                  <Text variant="bodySmall" style={styles.grupoTotalLabel}>Saldo</Text>
+                                  <Text
+                                    variant="titleMedium"
+                                    style={[
+                                      saldo >= 0 ? styles.grupoSaldoPositivo : styles.grupoSaldoNegativo,
+                                    ]}
+                                  >
+                                    {formatCurrency(saldo)}
+                                    {saldo > 0 && <Text variant="bodySmall"> (recebe)</Text>}
+                                    {saldo < 0 && <Text variant="bodySmall"> (deve pagar)</Text>}
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+                          );
+                        })}
+                        
+                        {saldosSemGrupo.length > 0 && (
+                          <View>
+                            {gruposOrdenados.length > 0 && (
+                              <View style={styles.semGrupoHeader}>
+                                <Text variant="titleMedium" style={styles.semGrupoTitle}>Sem Grupo</Text>
+                                <Text variant="bodySmall" style={styles.semGrupoSubtitle}>
+                                  Participantes que não estão em nenhum grupo
+                                </Text>
+                                <View style={styles.grupoTotais}>
+                                  <View style={styles.grupoTotalItem}>
+                                    <Text variant="bodySmall" style={styles.grupoTotalLabel}>Total Pagou</Text>
+                                    <Text variant="bodyMedium" style={styles.grupoTotalValorPositivo}>
+                                      {formatCurrency(saldosSemGrupo.reduce((sum, s) => sum + s.totalPagou, 0))}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.grupoTotalItem}>
+                                    <Text variant="bodySmall" style={styles.grupoTotalLabel}>Total Deve</Text>
+                                    <Text variant="bodyMedium" style={styles.grupoTotalValorNegativo}>
+                                      {formatCurrency(saldosSemGrupo.reduce((sum, s) => sum + s.totalDeve, 0))}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.grupoTotalItem}>
+                                    <Text variant="bodySmall" style={styles.grupoTotalLabel}>Saldo Total</Text>
+                                    <Text
+                                      variant="titleMedium"
+                                      style={[
+                                        saldosSemGrupo.reduce((sum, s) => sum + s.saldo, 0) >= 0
+                                          ? styles.grupoSaldoPositivo
+                                          : styles.grupoSaldoNegativo,
+                                      ]}
+                                    >
+                                      {formatCurrency(saldosSemGrupo.reduce((sum, s) => sum + s.saldo, 0))}
+                                    </Text>
+                                  </View>
+                                </View>
+                              </View>
+                            )}
+                            {saldosSemGrupo.map((saldo) => (
+                              <TouchableOpacity
+                                key={saldo.participanteId}
+                                style={styles.saldoItem}
+                                onPress={() => handleOpenDetalhes(saldo)}
+                                activeOpacity={0.7}
+                              >
+                                <View style={styles.saldoItemContent}>
+                                  <Text variant="titleSmall" style={styles.saldoNome}>{saldo.participanteNome}</Text>
+                                  <Text
+                                    variant="bodyLarge"
+                                    style={[
+                                      styles.saldoValor,
+                                      saldo.saldo > 0 ? styles.positivo : saldo.saldo < 0 ? styles.negativo : null,
+                                    ]}
+                                  >
+                                    {formatCurrency(saldo.saldo)}
+                                  </Text>
+                                  <Text variant="bodySmall" style={styles.saldoDetail}>
+                                    Pagou: {formatCurrency(saldo.totalPagou)} | Deve: {formatCurrency(saldo.totalDeve)}
+                                  </Text>
+                                  <Text variant="bodySmall" style={styles.saldoClickHint}>
+                                    Toque para ver detalhes
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })()}
+                </Card.Content>
+              </Card>
+
+              {/* 3. Detalhamento de Despesas */}
+              {despesas.length > 0 && (
+                <Card style={styles.card}>
+                  <Card.Title title="📋 Detalhamento" />
+                  <Card.Content>
+                    {despesas.map((despesa) => (
+                      <View key={despesa.id} style={styles.detalhamentoItem}>
+                        <View style={styles.detalhamentoHeader}>
+                          <Text variant="titleSmall" style={styles.detalhamentoNome}>
+                            {despesa.descricao}
+                          </Text>
+                          <Text variant="titleMedium" style={styles.detalhamentoValor}>
+                            {formatCurrency(despesa.valorTotal)}
+                          </Text>
+                        </View>
+                        <View style={styles.detalhamentoDetalhes}>
+                          <View style={styles.detalhamentoDetalhe}>
+                            <Text variant="bodySmall" style={styles.detalhamentoLabel}>Data:</Text>
+                            <Text variant="bodySmall">{formatDate(despesa.data)}</Text>
+                          </View>
+                          <View style={styles.detalhamentoDetalhe}>
+                            <Text variant="bodySmall" style={styles.detalhamentoLabel}>Pagou:</Text>
+                            <Text variant="bodySmall" style={styles.detalhamentoDestaque}>
+                              {despesa.pagador?.nome || 'Desconhecido'}
+                            </Text>
+                          </View>
+                          {despesa.participacoes && despesa.participacoes.length > 0 && (
+                            <>
+                              <View style={styles.detalhamentoDetalheDividido}>
+                                <Text variant="bodySmall" style={styles.detalhamentoLabel}>Dividido entre:</Text>
+                                <Text variant="bodySmall" style={styles.detalhamentoParticipantes}>
+                                  {despesa.participacoes.map(p => p.participante?.nome || 'Desconhecido').join(', ')}
+                                </Text>
+                              </View>
+                              <View style={styles.detalhamentoDetalhe}>
+                                <Text variant="bodySmall" style={styles.detalhamentoLabel}>Valor por pessoa:</Text>
+                                <Text variant="bodySmall" style={styles.detalhamentoDestaque}>
+                                  {formatCurrency(despesa.valorTotal / despesa.participacoes.length)}
+                                </Text>
+                              </View>
+                            </>
+                          )}
+                        </View>
+                      </View>
+                    ))}
+                  </Card.Content>
+                </Card>
+              )}
+            </>
           )}
         </>
       ) : null}
@@ -998,6 +1270,132 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: customColors.textSecondary,
     textAlign: 'center',
+  },
+  grupoCard: {
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    borderRadius: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(99, 102, 241, 0.3)',
+  },
+  grupoHeader: {
+    marginBottom: 12,
+  },
+  grupoHeaderLeft: {
+    flex: 1,
+  },
+  grupoNome: {
+    fontWeight: '700',
+    color: customColors.text,
+    marginBottom: 8,
+  },
+  grupoParticipantes: {
+    color: customColors.textSecondary,
+    fontSize: 13,
+  },
+  grupoTotais: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148, 163, 184, 0.2)',
+  },
+  grupoTotalItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  grupoTotalLabel: {
+    color: customColors.textSecondary,
+    marginBottom: 4,
+    fontSize: 12,
+  },
+  grupoTotalValorPositivo: {
+    color: '#4caf50',
+    fontWeight: '600',
+  },
+  grupoTotalValorNegativo: {
+    color: '#f44336',
+    fontWeight: '600',
+  },
+  grupoSaldoPositivo: {
+    color: '#4caf50',
+    fontWeight: '700',
+  },
+  grupoSaldoNegativo: {
+    color: '#f44336',
+    fontWeight: '700',
+  },
+  semGrupoHeader: {
+    marginBottom: 12,
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: 'rgba(148, 163, 184, 0.15)',
+    borderRadius: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(148, 163, 184, 0.3)',
+  },
+  semGrupoTitle: {
+    fontWeight: '700',
+    color: customColors.text,
+    marginBottom: 8,
+  },
+  semGrupoSubtitle: {
+    color: customColors.textSecondary,
+    fontSize: 13,
+  },
+  pixInfo: {
+    color: customColors.textSecondary,
+    marginTop: 4,
+    fontSize: 13,
+  },
+  detalhamentoItem: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: customColors.surfaceVariant,
+    borderRadius: 8,
+  },
+  detalhamentoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  detalhamentoNome: {
+    flex: 1,
+    color: customColors.text,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  detalhamentoValor: {
+    color: customColors.primary,
+    fontWeight: 'bold',
+  },
+  detalhamentoDetalhes: {
+    // gap não é suportado no React Native, usar marginBottom em cada item
+  },
+  detalhamentoDetalhe: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  detalhamentoDetalheDividido: {
+    marginBottom: 8,
+  },
+  detalhamentoParticipantes: {
+    marginTop: 4,
+    flexWrap: 'wrap',
+    flexShrink: 1,
+  },
+  detalhamentoLabel: {
+    color: customColors.textSecondary,
+    marginRight: 8,
+  },
+  detalhamentoDestaque: {
+    color: customColors.text,
+    fontWeight: '600',
   },
 });
 

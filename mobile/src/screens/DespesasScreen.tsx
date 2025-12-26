@@ -182,10 +182,10 @@ const DespesasScreen: React.FC = () => {
         grupo_id: despesa.grupo_id,
         descricao: despesa.descricao,
         valorTotal: despesa.valorTotal.toString(),
-        participante_pagador_id: despesa.participante_pagador_id,
+        participante_pagador_id: despesa.participante_pagador_id || 0,
         data: despesa.data.split('T')[0],
       });
-      await loadParticipantesDoEvento(despesa.grupo_id, despesa.participante_pagador_id);
+      await loadParticipantesDoEvento(despesa.grupo_id, despesa.participante_pagador_id || undefined);
       // Carregar participantes da despesa
       const participantesIds = despesa.participacoes?.map(p => p.participante_id) || [];
       setParticipantesSelecionados(participantesIds);
@@ -259,7 +259,10 @@ const DespesasScreen: React.FC = () => {
       };
       
       if (editingDespesa) {
-        despesaData.participante_pagador_id = Number(formData.participante_pagador_id);
+        // Ao editar, incluir participante_pagador_id apenas se foi selecionado (maior que 0)
+        if (formData.participante_pagador_id > 0) {
+          despesaData.participante_pagador_id = Number(formData.participante_pagador_id);
+        }
         await despesaApi.update(editingDespesa.id, despesaData);
       } else if (formData.participante_pagador_id > 0) {
         despesaData.participante_pagador_id = Number(formData.participante_pagador_id);
@@ -561,7 +564,7 @@ const DespesasScreen: React.FC = () => {
                       style={styles.dropdownButton}
                     >
                       <TextInput
-                        value={formData.participante_pagador_id ? participantesDoEvento.find(p => p.id === formData.participante_pagador_id)?.nome || 'Selecione quem pagou' : 'Selecione quem pagou'}
+                        value={formData.participante_pagador_id && formData.participante_pagador_id > 0 ? participantesDoEvento.find(p => p.id === formData.participante_pagador_id)?.nome || 'Selecione quem pagou' : 'Selecione quem pagou'}
                         mode="outlined"
                         editable={false}
                         style={styles.input}
@@ -587,7 +590,7 @@ const DespesasScreen: React.FC = () => {
                         setMenuPagadorVisible(false);
                       }}
                       title={participante.nome}
-                      leadingIcon={formData.participante_pagador_id === participante.id ? 'check' : undefined}
+                      leadingIcon={formData.participante_pagador_id && formData.participante_pagador_id === participante.id ? 'check' : undefined}
                     />
                   ))}
                 </Menu>

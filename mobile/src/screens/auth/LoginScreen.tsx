@@ -1,15 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, Image, Platform } from 'react-native';
 import { TextInput, Button, Text, Card, ActivityIndicator } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { authApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { customColors } from '../../theme';
 
 type LoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
+
+// Importação condicional do Google Sign-In (só funciona em development builds ou produção)
+let GoogleSignin: any = null;
+let statusCodes: any = null;
+let isGoogleSignInAvailable = false;
+
+try {
+  const googleSignInModule = require('@react-native-google-signin/google-signin');
+  GoogleSignin = googleSignInModule.GoogleSignin;
+  statusCodes = googleSignInModule.statusCodes;
+  isGoogleSignInAvailable = true;
+} catch (error) {
+  // Módulo não disponível (Expo Go) - Google Sign-In desabilitado
+  console.log('⚠️ Google Sign-In não disponível (Expo Go). Funciona apenas em development builds ou produção.');
+  isGoogleSignInAvailable = false;
+}
 
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -20,21 +35,34 @@ const LoginScreen: React.FC = () => {
   const navigation = useNavigation<LoginScreenNavigationProp>();
 
   useEffect(() => {
-    // Configurar Google Sign-In
-    GoogleSignin.configure({
-      // O webClientId será configurado via variável de ambiente ou constante
-      // Por enquanto, deixamos vazio - deve ser configurado no código ou .env
-      webClientId: '', // Deve ser configurado com o Client ID do Google Cloud Console
-    });
+    // Configurar Google Sign-In apenas se estiver disponível
+    if (isGoogleSignInAvailable && GoogleSignin) {
+      try {
+        GoogleSignin.configure({
+          // O webClientId será configurado via variável de ambiente ou constante
+          // Por enquanto, deixamos vazio - deve ser configurado no código ou .env
+          webClientId: '', // Deve ser configurado com o Client ID do Google Cloud Console
+        });
+      } catch (error) {
+        console.error('Erro ao configurar Google Sign-In:', error);
+      }
+    }
   }, []);
 
   const handleGoogleSignIn = async () => {
+    if (!isGoogleSignInAvailable || !GoogleSignin) {
+      setErro('Login com Google não disponível no Expo Go. Use um development build ou produção.');
+      return;
+    }
+
     setErro('');
     setCarregando(true);
 
     try {
-      // Verificar se Google Play Services está disponível
-      await GoogleSignin.hasPlayServices();
+      // Verificar se Google Play Services está disponível (Android)
+      if (Platform.OS === 'android') {
+        await GoogleSignin.hasPlayServices();
+      }
       
       // Fazer login
       const userInfo = await GoogleSignin.signIn();
@@ -48,12 +76,16 @@ const LoginScreen: React.FC = () => {
     } catch (error: any) {
       console.error('❌ Erro no login Google:', error);
       
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-        setErro('Login cancelado');
-      } else if (error.code === statusCodes.IN_PROGRESS) {
-        setErro('Login em progresso');
-      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        setErro('Google Play Services não disponível');
+      if (statusCodes) {
+        if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+          setErro('Login cancelado');
+        } else if (error.code === statusCodes.IN_PROGRESS) {
+          setErro('Login em progresso');
+        } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+          setErro('Google Play Services não disponível');
+        } else {
+          setErro(error.response?.data?.error || error.message || 'Erro ao fazer login com Google');
+        }
       } else {
         setErro(error.response?.data?.error || error.message || 'Erro ao fazer login com Google');
       }
@@ -149,23 +181,27 @@ const LoginScreen: React.FC = () => {
               {carregando ? 'Entrando...' : 'Entrar'}
             </Button>
 
-            <View style={styles.dividerContainer}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>ou</Text>
-              <View style={styles.divider} />
-            </View>
+            {isGoogleSignInAvailable && (
+              <>
+                <View style={styles.dividerContainer}>
+                  <View style={styles.divider} />
+                  <Text style={styles.dividerText}>ou</Text>
+                  <View style={styles.divider} />
+                </View>
 
-            <Button
-              mode="outlined"
-              onPress={handleGoogleSignIn}
-              disabled={carregando}
-              style={styles.googleButton}
-              contentStyle={styles.buttonContent}
-              icon="google"
-              textColor={customColors.text}
-            >
-              Entrar com Google
-            </Button>
+                <Button
+                  mode="outlined"
+                  onPress={handleGoogleSignIn}
+                  disabled={carregando}
+                  style={styles.googleButton}
+                  contentStyle={styles.buttonContent}
+                  icon="google"
+                  textColor={customColors.text}
+                >
+                  Entrar com Google
+                </Button>
+              </>
+            )}
 
             <View style={styles.linksContainer}>
               <Button

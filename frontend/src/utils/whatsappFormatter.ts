@@ -3,7 +3,9 @@ import {
   Participante, 
   Despesa, 
   GrupoParticipantesEvento,
-  Grupo 
+  Grupo,
+  SaldoParticipante,
+  SaldoGrupo
 } from '../types';
 
 /**
@@ -86,6 +88,103 @@ const encontrarParticipantePorNome = (
   participantes: Participante[]
 ): Participante | undefined => {
   return participantes.find(p => p.nome === nome);
+};
+
+/**
+ * Gera a seção de saldos dos participantes
+ */
+const gerarSaldosParticipantes = (
+  saldos: SaldoParticipante[],
+  saldosGrupos: SaldoGrupo[]
+): string => {
+  if (saldos.length === 0 && saldosGrupos.length === 0) {
+    return '';
+  }
+
+  let saldosTexto = '\n💰 *Saldos dos Participantes:*\n\n';
+
+  // Se houver grupos, organizar por grupo
+  if (saldosGrupos.length > 0) {
+    // Criar mapa de participanteId -> grupoId
+    const participanteParaGrupo = new Map<number, { grupoId: number; grupoNome: string }>();
+    
+    saldosGrupos.forEach(grupo => {
+      grupo.participantes.forEach(participante => {
+        participanteParaGrupo.set(participante.participanteId, {
+          grupoId: grupo.grupoId,
+          grupoNome: grupo.grupoNome
+        });
+      });
+    });
+
+    // Organizar saldos por grupo
+    const saldosPorGrupo = new Map<number, SaldoParticipante[]>();
+    const saldosSemGrupo: SaldoParticipante[] = [];
+
+    saldos.forEach(saldo => {
+      const grupoInfo = participanteParaGrupo.get(saldo.participanteId);
+      if (grupoInfo) {
+        if (!saldosPorGrupo.has(grupoInfo.grupoId)) {
+          saldosPorGrupo.set(grupoInfo.grupoId, []);
+        }
+        saldosPorGrupo.get(grupoInfo.grupoId)!.push(saldo);
+      } else {
+        saldosSemGrupo.push(saldo);
+      }
+    });
+
+    // Exibir grupos ordenados
+    saldosGrupos.forEach(grupo => {
+      const saldosDoGrupo = saldosPorGrupo.get(grupo.grupoId);
+      if (saldosDoGrupo && saldosDoGrupo.length > 0) {
+        const participantesNomes = grupo.participantes.map(p => p.participanteNome).join(', ');
+        saldosTexto += `👥 *${grupo.grupoNome}*\n`;
+        saldosTexto += `   Membros: ${participantesNomes}\n`;
+        saldosTexto += `   Total Pagou: ${formatCurrency(grupo.totalPagou)}\n`;
+        saldosTexto += `   Total Deve: ${formatCurrency(grupo.totalDeve)}\n`;
+        saldosTexto += `   Saldo: *${formatCurrency(grupo.saldo)}*\n`;
+        if (grupo.saldo > 0) {
+          saldosTexto += `   (recebe)\n`;
+        } else if (grupo.saldo < 0) {
+          saldosTexto += `   (deve pagar)\n`;
+        }
+        saldosTexto += '\n';
+      }
+    });
+
+    // Exibir participantes sem grupo
+    if (saldosSemGrupo.length > 0) {
+      if (saldosPorGrupo.size > 0) {
+        saldosTexto += '👤 *Sem Grupo:*\n\n';
+      }
+      saldosSemGrupo.forEach(saldo => {
+        saldosTexto += `• *${saldo.participanteNome}*\n`;
+        saldosTexto += `  Pagou: ${formatCurrency(saldo.totalPagou)} | Deve: ${formatCurrency(saldo.totalDeve)}\n`;
+        saldosTexto += `  Saldo: *${formatCurrency(saldo.saldo)}*\n`;
+        if (saldo.saldo > 0) {
+          saldosTexto += `  (recebe)\n`;
+        } else if (saldo.saldo < 0) {
+          saldosTexto += `  (deve pagar)\n`;
+        }
+        saldosTexto += '\n';
+      });
+    }
+  } else {
+    // Sem grupos, exibir todos os participantes individualmente
+    saldos.forEach(saldo => {
+      saldosTexto += `• *${saldo.participanteNome}*\n`;
+      saldosTexto += `  Pagou: ${formatCurrency(saldo.totalPagou)} | Deve: ${formatCurrency(saldo.totalDeve)}\n`;
+      saldosTexto += `  Saldo: *${formatCurrency(saldo.saldo)}*\n`;
+      if (saldo.saldo > 0) {
+        saldosTexto += `  (recebe)\n`;
+      } else if (saldo.saldo < 0) {
+        saldosTexto += `  (deve pagar)\n`;
+      }
+      saldosTexto += '\n';
+    });
+  }
+
+  return saldosTexto;
 };
 
 /**
@@ -257,6 +356,8 @@ export const formatarSugestoesPagamentoIndividual = (
   sugestoes: SugestaoPagamento[],
   despesas: Despesa[],
   participantes: Participante[],
+  saldos: SaldoParticipante[],
+  saldosGrupos: SaldoGrupo[],
   incluirDetalhamento: boolean = true
 ): string => {
   // Calcular total de despesas
@@ -283,11 +384,14 @@ export const formatarSugestoesPagamentoIndividual = (
       const pixFormatado = chavesPix.length === 1 
         ? chavesPix[0]
         : chavesPix.join(' ou ');
-      mensagem += `• *${deLimpo}* deve pagar *${valorFormatado}* para *${paraLimpo}* (pix ${pixFormatado})\n`;
+      mensagem += `• *${deLimpo}* deve pagar *${valorFormatado}* para *${paraLimpo}* - *pix:* ${pixFormatado}\n`;
     } else {
       mensagem += `• *${deLimpo}* deve pagar *${valorFormatado}* para *${paraLimpo}*\n`;
     }
   });
+
+  // Adicionar saldos dos participantes
+  mensagem += gerarSaldosParticipantes(saldos, saldosGrupos);
 
   if (incluirDetalhamento) {
     mensagem += gerarDetalhamento(despesas, [], participantes);
@@ -305,6 +409,8 @@ export const formatarSugestoesPagamentoSubgrupos = (
   despesas: Despesa[],
   subgrupos: GrupoParticipantesEvento[],
   participantes: Participante[],
+  saldos: SaldoParticipante[],
+  saldosGrupos: SaldoGrupo[],
   incluirDetalhamento: boolean = true
 ): string => {
   // Calcular total de despesas
@@ -331,11 +437,14 @@ export const formatarSugestoesPagamentoSubgrupos = (
       const pixFormatado = chavesPix.length === 1 
         ? chavesPix[0]
         : chavesPix.join(' ou ');
-      mensagem += `• *${deLimpo}* deve pagar *${valorFormatado}* para *${paraLimpo}* (pix ${pixFormatado})\n`;
+      mensagem += `• *${deLimpo}* deve pagar *${valorFormatado}* para *${paraLimpo}* - *pix:* ${pixFormatado}\n`;
     } else {
       mensagem += `• *${deLimpo}* deve pagar *${valorFormatado}* para *${paraLimpo}*\n`;
     }
   });
+
+  // Adicionar saldos dos participantes
+  mensagem += gerarSaldosParticipantes(saldos, saldosGrupos);
 
   if (incluirDetalhamento) {
     mensagem += gerarDetalhamento(despesas, subgrupos, participantes);
@@ -352,6 +461,8 @@ export const formatarSugestoesPagamento = (
   sugestoes: SugestaoPagamento[],
   despesas: Despesa[],
   participantes: Participante[],
+  saldos: SaldoParticipante[],
+  saldosGrupos: SaldoGrupo[],
   subgrupos?: GrupoParticipantesEvento[],
   incluirDetalhamento: boolean = true
 ): string => {
@@ -370,6 +481,8 @@ export const formatarSugestoesPagamento = (
         despesas,
         subgrupos,
         participantes,
+        saldos,
+        saldosGrupos,
         incluirDetalhamento
       );
     }
@@ -380,6 +493,8 @@ export const formatarSugestoesPagamento = (
     sugestoes,
     despesas,
     participantes,
+    saldos,
+    saldosGrupos,
     incluirDetalhamento
   );
 };
