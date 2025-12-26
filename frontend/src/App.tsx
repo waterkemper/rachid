@@ -23,6 +23,7 @@ import TotaisGrupos from './pages/TotaisGrupos';
 import Relatorio from './pages/Relatorio';
 import Conta from './pages/Conta';
 import Ajuda from './pages/Ajuda';
+import ConvidarAmigos from './pages/ConvidarAmigos';
 
 function Navbar() {
   const location = useLocation();
@@ -273,6 +274,14 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Ajuda />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/convidar-amigos/:eventoId"
+          element={
+            <ProtectedRoute>
+              <ConvidarAmigos />
             </ProtectedRoute>
           }
         />

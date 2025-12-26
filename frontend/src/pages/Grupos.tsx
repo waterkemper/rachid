@@ -4,7 +4,7 @@ import { usePageFocus } from '../hooks/usePageFocus';
 import { grupoApi, participanteApi, despesaApi } from '../services/api';
 import { Grupo, Participante } from '../types';
 import Modal from '../components/Modal';
-import { FaEdit, FaUsers, FaMoneyBillWave, FaChartBar, FaCopy, FaTrash, FaShare } from 'react-icons/fa';
+import { FaEdit, FaUsers, FaMoneyBillWave, FaChartBar, FaCopy, FaTrash, FaShare, FaUserPlus } from 'react-icons/fa';
 import './Grupos.css';
 
 const Grupos: React.FC = () => {
@@ -352,6 +352,13 @@ const Grupos: React.FC = () => {
                           <FaCopy />
                         </button>
                         <button
+                          className="btn btn-secondary"
+                          onClick={() => navigate(`/convidar-amigos/${grupo.id}`)}
+                          title="Convidar amigos"
+                        >
+                          <FaUserPlus />
+                        </button>
+                        <button
                           className="btn btn-danger"
                           onClick={() => handleDelete(grupo.id)}
                           title="Excluir evento"
@@ -413,6 +420,13 @@ const Grupos: React.FC = () => {
                       title="Duplicar evento"
                     >
                       <FaCopy />
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => navigate(`/convidar-amigos/${grupo.id}`)}
+                      title="Convidar amigos"
+                    >
+                      <FaUserPlus />
                     </button>
                     <button
                       className="btn btn-secondary"

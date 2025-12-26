@@ -25,8 +25,8 @@ const NovoEvento: React.FC = () => {
     if (selectedTemplateId) {
       const template = templates.find(t => t.id === selectedTemplateId);
       if (template) {
-        if (!nome) setNome(template.nome);
-        if (!descricao) setDescricao(template.descricao);
+        setNome(template.nome);
+        setDescricao(template.descricao);
       }
     }
   }, [selectedTemplateId, templates]);

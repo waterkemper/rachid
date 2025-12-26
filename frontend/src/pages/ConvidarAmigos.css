@@ -1,0 +1,151 @@
+.convidar-amigos-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.convidar-amigos-card {
+  width: 100%;
+  max-width: 600px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(10px);
+  padding: 32px 24px;
+  position: relative;
+}
+
+.convidar-amigos-card h1 {
+  margin: 0 0 16px 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  text-align: center;
+}
+
+.convidar-amigos-descricao {
+  margin: 0 0 32px 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: rgba(226, 232, 240, 0.82);
+  text-align: center;
+}
+
+.convidar-amigos-link-container {
+  margin-bottom: 24px;
+}
+
+.convidar-amigos-link-container label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 13px;
+}
+
+.link-input-wrapper {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.link-input {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.20);
+  background: rgba(2, 6, 23, 0.32);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  font-family: monospace;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.link-input:focus {
+  border-color: rgba(99, 102, 241, 0.60);
+  background: rgba(2, 6, 23, 0.42);
+}
+
+.btn-copiar {
+  white-space: nowrap;
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-copiar.copied {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  box-shadow: 0 10px 30px rgba(34, 197, 94, 0.35);
+}
+
+.convidar-amigos-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.btn-whatsapp {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.btn-voltar {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.2s;
+}
+
+.btn-voltar:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .convidar-amigos-card {
+    padding: 24px 18px;
+  }
+
+  .convidar-amigos-card h1 {
+    font-size: 24px;
+    margin-top: 40px;
+  }
+
+  .link-input-wrapper {
+    flex-direction: column;
+  }
+
+  .btn-copiar {
+    width: 100%;
+  }
+
+  .btn-voltar {
+    position: relative;
+    top: 0;
+    left: 0;
+    margin-bottom: 16px;
+  }
+}
+
