@@ -482,9 +482,6 @@ const AdicionarParticipantesEvento: React.FC = () => {
             <button className="btn btn-secondary" onClick={() => navigate(`/participacoes?evento=${eventoId}`)}>
               <FaChartBar /> <span>Ver resultado</span>
             </button>
-            <button className="btn btn-secondary" onClick={() => navigate(`/totais-grupos?evento=${eventoId}`)}>
-              <FaUsers /> <span>Totais por grupo</span>
-            </button>
           </div>
         </div>
       )}

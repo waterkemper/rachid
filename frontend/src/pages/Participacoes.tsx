@@ -5,7 +5,7 @@ import { grupoApi, despesaApi, grupoParticipantesApi, relatorioApi, participante
 import { Grupo, Despesa, Participante, GrupoParticipantesEvento, SugestaoPagamento, SaldoParticipante, SaldoGrupo } from '../types';
 import Modal from '../components/Modal';
 import { formatarSugestoesPagamento } from '../utils/whatsappFormatter';
-import { FaUsers, FaMoneyBillWave, FaShareAlt } from 'react-icons/fa';
+import { FaUsers, FaMoneyBillWave, FaShareAlt, FaUserPlus } from 'react-icons/fa';
 import { FaWhatsapp } from 'react-icons/fa6';
 import './Participacoes.css';
 
@@ -399,8 +399,8 @@ const Participacoes: React.FC = () => {
               <button className="btn btn-secondary" onClick={() => navigate(`/despesas?evento=${grupoSelecionado}`)}>
                 <FaMoneyBillWave /> <span>Despesas</span>
               </button>
-              <button className="btn btn-secondary" onClick={() => navigate(`/totais-grupos?evento=${grupoSelecionado}`)}>
-                <FaUsers /> <span>Totais por grupo</span>
+              <button className="btn btn-secondary" onClick={() => navigate(`/convidar-amigos/${grupoSelecionado}`)}>
+                <FaUserPlus /> <span>Convidar amigos</span>
               </button>
             </>
           )}

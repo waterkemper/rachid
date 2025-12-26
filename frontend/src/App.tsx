@@ -19,7 +19,6 @@ import NovoEvento from './pages/NovoEvento';
 import AdicionarParticipantesEvento from './pages/AdicionarParticipantesEvento';
 import Despesas from './pages/Despesas';
 import Participacoes from './pages/Participacoes';
-import TotaisGrupos from './pages/TotaisGrupos';
 import Relatorio from './pages/Relatorio';
 import Conta from './pages/Conta';
 import Ajuda from './pages/Ajuda';
@@ -242,14 +241,6 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Participacoes />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/totais-grupos"
-          element={
-            <ProtectedRoute>
-              <TotaisGrupos />
             </ProtectedRoute>
           }
         />

@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageFocus } from '../hooks/usePageFocus';
-import { despesaApi, grupoApi, participanteApi, participacaoApi, grupoParticipantesApi } from '../services/api';
+import { despesaApi, grupoApi, participanteApi, grupoParticipantesApi } from '../services/api';
 import { Despesa, Grupo, Participante } from '../types';
 import Modal from '../components/Modal';
-import AdicionarParticipanteRapido from '../components/AdicionarParticipanteRapido';
-import { FaPlus, FaEdit, FaTrash, FaUserPlus, FaChartBar, FaUsers } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaChartBar, FaUsers, FaShare } from 'react-icons/fa';
 import './Despesas.css';
 
 const Despesas: React.FC = () => {
@@ -20,7 +19,6 @@ const Despesas: React.FC = () => {
   const eventoIdFromUrl = searchParams.get('evento');
   const [filtroGrupo, setFiltroGrupo] = useState<number | ''>(eventoIdFromUrl ? Number(eventoIdFromUrl) : '');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isModalParticipanteRapidoOpen, setIsModalParticipanteRapidoOpen] = useState(false);
   const [editingDespesa, setEditingDespesa] = useState<Despesa | null>(null);
   const [participantesSelecionados, setParticipantesSelecionados] = useState<number[]>([]);
   const [participantesExpandido, setParticipantesExpandido] = useState(false);
@@ -258,61 +256,6 @@ const Despesas: React.FC = () => {
     }
   };
 
-  const handleParticipanteAdicionado = async (participanteId: number) => {
-    try {
-      // Recarregar lista de participantes
-      await loadData();
-      
-      // Determinar qual evento usar (prioridade: filtroGrupo > formData.grupo_id)
-      const eventoId = filtroGrupo !== '' ? Number(filtroGrupo) : (formData.grupo_id > 0 ? formData.grupo_id : null);
-      
-      if (eventoId) {
-        // Adicionar participante ao evento
-        try {
-          await grupoApi.adicionarParticipante(eventoId, participanteId);
-          
-          // Recarregar despesas primeiro para ter a lista atualizada
-          await loadDespesas();
-          
-          // Adicionar participante a todas as despesas existentes do evento
-          const despesasAtualizadas = await despesaApi.getAll(eventoId);
-          for (const despesa of despesasAtualizadas) {
-            // Verificar se o participante já está na despesa
-            const jaTemParticipacao = despesa.participacoes?.some(p => p.participante_id === participanteId);
-            if (!jaTemParticipacao) {
-              try {
-                await participacaoApi.toggle(despesa.id, participanteId);
-              } catch (err) {
-                console.error(`Erro ao adicionar participante à despesa ${despesa.id}:`, err);
-              }
-            }
-          }
-          
-          // Recarregar despesas novamente após adicionar participações
-          await loadDespesas();
-        } catch (err: any) {
-          // Se já estiver no evento, não é erro crítico
-          if (err?.response?.status !== 400) {
-            console.error('Erro ao adicionar participante ao evento:', err);
-          }
-        }
-        
-        // Recarregar participantes do evento
-        await loadParticipantesDoEvento(eventoId);
-      } else if (formData.grupo_id > 0) {
-        // Se não houver filtroGrupo mas houver grupo no formulário, apenas recarregar
-        await loadParticipantesDoEvento(formData.grupo_id);
-      }
-      
-      // Atualizar o select de pagador se estiver aberto
-      if (isModalOpen && formData.participante_pagador_id === 0) {
-        setFormData({ ...formData, participante_pagador_id: participanteId });
-      }
-    } catch (err) {
-      console.error('Erro ao processar participante adicionado:', err);
-    }
-  };
-
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -365,14 +308,11 @@ const Despesas: React.FC = () => {
               <button className="btn btn-secondary" onClick={() => navigate(`/participacoes?evento=${filtroGrupo}`)}>
                 <FaChartBar /> <span>Ver resultado</span>
               </button>
-              <button className="btn btn-secondary" onClick={() => navigate(`/totais-grupos?evento=${filtroGrupo}`)}>
-                <FaUsers /> <span>Totais por grupo</span>
+              <button className="btn btn-secondary" onClick={() => navigate(`/convidar-amigos/${filtroGrupo}`)}>
+                <FaShare /> <span>Convidar amigos</span>
               </button>
             </>
           )}
-          <button className="btn btn-secondary" onClick={() => setIsModalParticipanteRapidoOpen(true)}>
-            <FaUserPlus /> <span>Participante Rápido</span>
-          </button>
           <button className="btn btn-primary" onClick={() => handleOpenModal()}>
             <FaPlus /> <span>Nova Despesa</span>
           </button>
@@ -577,21 +517,7 @@ const Despesas: React.FC = () => {
             />
           </div>
           <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-              <label>Quem Pagou *</label>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{ padding: '4px 8px', fontSize: '12px' }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setIsModalOpen(false);
-                  setIsModalParticipanteRapidoOpen(true);
-                }}
-              >
-                + Novo Participante
-              </button>
-            </div>
+            <label>Quem Pagou *</label>
             <select
               value={formData.participante_pagador_id || ''}
               onChange={(e) => {
@@ -754,17 +680,6 @@ const Despesas: React.FC = () => {
           </div>
         </form>
       </Modal>
-
-      <AdicionarParticipanteRapido
-        isOpen={isModalParticipanteRapidoOpen}
-        onClose={() => {
-          setIsModalParticipanteRapidoOpen(false);
-          if (isModalOpen) {
-            setIsModalOpen(true);
-          }
-        }}
-        onParticipanteAdicionado={handleParticipanteAdicionado}
-      />
     </div>
   );
 };
