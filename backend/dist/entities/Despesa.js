@@ -54,7 +54,7 @@ __decorate([
     __metadata("design:type", Participante_1.Participante)
 ], Despesa.prototype, "pagador", void 0);
 __decorate([
-    (0, typeorm_1.Column)('integer'),
+    (0, typeorm_1.Column)('integer', { nullable: true }),
     __metadata("design:type", Number)
 ], Despesa.prototype, "participante_pagador_id", void 0);
 __decorate([

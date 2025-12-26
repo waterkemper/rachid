@@ -47,6 +47,10 @@ __decorate([
     __metadata("design:type", Date)
 ], Grupo.prototype, "criadoEm", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'varchar', nullable: true, unique: true, name: 'share_token' }),
+    __metadata("design:type", String)
+], Grupo.prototype, "shareToken", void 0);
+__decorate([
     (0, typeorm_1.OneToMany)(() => Despesa_1.Despesa, despesa => despesa.grupo),
     __metadata("design:type", Array)
 ], Grupo.prototype, "despesas", void 0);

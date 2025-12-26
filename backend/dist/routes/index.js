@@ -9,16 +9,28 @@ const ParticipacaoController_1 = require("../controllers/ParticipacaoController"
 const GrupoParticipantesController_1 = require("../controllers/GrupoParticipantesController");
 const GrupoMaiorController_1 = require("../controllers/GrupoMaiorController");
 const AuthController_1 = require("../controllers/AuthController");
+const PublicEventoController_1 = require("../controllers/PublicEventoController");
+const TemplateController_1 = require("../controllers/TemplateController");
 const auth_1 = require("../middleware/auth");
 const AnalyticsController_1 = require("../controllers/AnalyticsController");
 const router = (0, express_1.Router)();
 // Rotas públicas (sem autenticação)
 router.post('/auth/login', AuthController_1.AuthController.login);
+router.post('/auth/google', AuthController_1.AuthController.googleLogin);
 router.post('/auth/logout', AuthController_1.AuthController.logout);
 router.post('/auth/create-user', AuthController_1.AuthController.createUser);
 router.post('/auth/solicitar-recuperacao-senha', AuthController_1.AuthController.solicitarRecuperacaoSenha);
 router.post('/auth/validar-token-recuperacao', AuthController_1.AuthController.validarTokenRecuperacao);
 router.post('/auth/resetar-senha', AuthController_1.AuthController.resetarSenha);
+// Rotas públicas de eventos (sem autenticação)
+router.get('/public/eventos/:token', PublicEventoController_1.PublicEventoController.getByToken);
+router.get('/public/eventos/:token/saldos', PublicEventoController_1.PublicEventoController.getSaldosByToken);
+router.get('/public/eventos/:token/saldos-por-grupo', PublicEventoController_1.PublicEventoController.getSaldosPorGrupoByToken);
+router.get('/public/eventos/:token/sugestoes', PublicEventoController_1.PublicEventoController.getSugestoesByToken);
+router.get('/public/eventos/:token/despesas', PublicEventoController_1.PublicEventoController.getDespesasByToken);
+// Rotas de templates (públicas, não requerem autenticação)
+router.get('/templates', TemplateController_1.TemplateController.getAll);
+router.get('/templates/:id', TemplateController_1.TemplateController.getById);
 // Rotas protegidas (requerem autenticação)
 router.get('/auth/me', auth_1.authMiddleware, AuthController_1.AuthController.me);
 router.post('/analytics/event', auth_1.authMiddleware, AnalyticsController_1.AnalyticsController.track);
@@ -35,6 +47,8 @@ router.delete('/grupos/:id', auth_1.authMiddleware, GrupoController_1.GrupoContr
 router.post('/grupos/:id/duplicar', auth_1.authMiddleware, GrupoController_1.GrupoController.duplicar);
 router.post('/grupos/:id/participantes', auth_1.authMiddleware, GrupoController_1.GrupoController.adicionarParticipante);
 router.delete('/grupos/:id/participantes', auth_1.authMiddleware, GrupoController_1.GrupoController.removerParticipante);
+router.post('/grupos/:id/gerar-link', auth_1.authMiddleware, GrupoController_1.GrupoController.gerarLink);
+router.get('/grupos/:id/link', auth_1.authMiddleware, GrupoController_1.GrupoController.obterLink);
 router.get('/despesas', auth_1.authMiddleware, DespesaController_1.DespesaController.getAll);
 router.get('/despesas/:id', auth_1.authMiddleware, DespesaController_1.DespesaController.getById);
 router.post('/despesas', auth_1.authMiddleware, DespesaController_1.DespesaController.create);
@@ -64,4 +78,6 @@ router.delete('/grupos-maiores/:id/grupos', auth_1.authMiddleware, GrupoMaiorCon
 router.post('/grupos-maiores/:id/participantes', auth_1.authMiddleware, GrupoMaiorController_1.GrupoMaiorController.adicionarParticipante);
 router.delete('/grupos-maiores/:id/participantes/:participanteId', auth_1.authMiddleware, GrupoMaiorController_1.GrupoMaiorController.removerParticipante);
 router.get('/grupos-maiores/:id/participantes', auth_1.authMiddleware, GrupoMaiorController_1.GrupoMaiorController.obterTodosParticipantes);
+// Rota pública para reivindicar participação (requer autenticação após cadastro)
+router.post('/public/eventos/:token/reivindicar', auth_1.authMiddleware, PublicEventoController_1.PublicEventoController.reivindicarParticipacao);
 exports.default = router;

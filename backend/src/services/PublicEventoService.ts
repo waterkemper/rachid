@@ -100,6 +100,11 @@ export class PublicEventoService {
     });
 
     despesas.forEach((despesa) => {
+      // Ignorar despesas sem pagador (placeholders)
+      if (!despesa.pagador || !despesa.participante_pagador_id) {
+        return;
+      }
+
       const pagadorId = despesa.pagador.id;
       const saldoPagador = saldos.get(pagadorId);
       if (saldoPagador) {
@@ -185,6 +190,11 @@ export class PublicEventoService {
       const participantesIds = grupoParticipantes.participantes.map((p) => p.participante_id);
 
       despesas.forEach((despesa) => {
+        // Ignorar despesas sem pagador (placeholders)
+        if (!despesa.participante_pagador_id) {
+          return;
+        }
+
         if (participantesIds.includes(despesa.participante_pagador_id)) {
           saldoGrupo.totalPagou += Number(despesa.valorTotal);
         }

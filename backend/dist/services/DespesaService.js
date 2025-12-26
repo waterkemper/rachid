@@ -49,24 +49,28 @@ class DespesaService {
         }
         else {
             // Por padrão: assumir que todos os participantes do evento participaram desta despesa
-            const grupo = await this.grupoRepository.findOne({
-                where: { id: data.grupo_id, usuario_id: data.usuario_id },
-                relations: ['participantes'],
-            });
-            if (!grupo) {
-                throw new Error('Grupo não encontrado ou não pertence ao usuário');
-            }
-            const participantesGrupo = (grupo.participantes || []);
-            for (const pg of participantesGrupo) {
-                const participacao = this.participacaoRepository.create({
-                    despesa_id: despesaSalva.id,
-                    participante_id: pg.participante_id,
-                    valorDevePagar: 0,
+            // Mas apenas se houver um pagador definido (não é placeholder)
+            if (data.participante_pagador_id) {
+                const grupo = await this.grupoRepository.findOne({
+                    where: { id: data.grupo_id, usuario_id: data.usuario_id },
+                    relations: ['participantes'],
                 });
-                await this.participacaoRepository.save(participacao);
+                if (!grupo) {
+                    throw new Error('Grupo não encontrado ou não pertence ao usuário');
+                }
+                const participantesGrupo = (grupo.participantes || []);
+                for (const pg of participantesGrupo) {
+                    const participacao = this.participacaoRepository.create({
+                        despesa_id: despesaSalva.id,
+                        participante_id: pg.participante_id,
+                        valorDevePagar: 0,
+                    });
+                    await this.participacaoRepository.save(participacao);
+                }
+                // Distribuir valores igualmente (com ajuste de arredondamento)
+                await ParticipacaoService_1.ParticipacaoService.recalcularValores(despesaSalva.id, data.usuario_id);
             }
-            // Distribuir valores igualmente (com ajuste de arredondamento)
-            await ParticipacaoService_1.ParticipacaoService.recalcularValores(despesaSalva.id, data.usuario_id);
+            // Se não houver pagador (placeholder), não criar participações
         }
         const despesaCompleta = await this.findById(despesaSalva.id, data.usuario_id);
         if (!despesaCompleta) {

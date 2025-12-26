@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const crypto_1 = __importDefault(require("crypto"));
+const google_auth_library_1 = require("google-auth-library");
 const data_source_1 = require("../database/data-source");
 const Usuario_1 = require("../entities/Usuario");
 const PasswordResetToken_1 = require("../entities/PasswordResetToken");
@@ -15,6 +16,10 @@ class AuthService {
     static async login(email, senha) {
         const usuario = await this.repository.findOne({ where: { email } });
         if (!usuario) {
+            return null;
+        }
+        // Se usuário não tem senha (OAuth), não pode fazer login tradicional
+        if (!usuario.senha) {
             return null;
         }
         const senhaValida = await bcrypt_1.default.compare(senha, usuario.senha);
@@ -37,13 +42,88 @@ class AuthService {
             ddd: data.ddd,
             telefone: data.telefone,
         });
-        return await this.repository.save(usuario);
+        const usuarioSalvo = await this.repository.save(usuario);
+        // Enviar email de boas-vindas (não bloquear se falhar)
+        EmailService_1.EmailService.enviarEmailBoasVindas(usuarioSalvo.email, usuarioSalvo.nome).catch((error) => {
+            console.error('Erro ao enviar email de boas-vindas:', error);
+        });
+        return usuarioSalvo;
     }
     static async findById(id) {
         return await this.repository.findOne({ where: { id } });
     }
     static async findByEmail(email) {
         return await this.repository.findOne({ where: { email } });
+    }
+    static async findByGoogleId(googleId) {
+        return await this.repository.findOne({ where: { google_id: googleId } });
+    }
+    /**
+     * Login via Google OAuth
+     * Valida o token ID do Google e cria/busca usuário
+     */
+    static async loginWithGoogle(tokenId) {
+        const clientId = process.env.GOOGLE_CLIENT_ID;
+        if (!clientId) {
+            throw new Error('GOOGLE_CLIENT_ID não configurado');
+        }
+        const client = new google_auth_library_1.OAuth2Client(clientId);
+        // Validar token com Google
+        let ticket;
+        try {
+            ticket = await client.verifyIdToken({
+                idToken: tokenId,
+                audience: clientId,
+            });
+        }
+        catch (error) {
+            throw new Error('Token do Google inválido ou expirado');
+        }
+        const payload = ticket.getPayload();
+        if (!payload) {
+            throw new Error('Não foi possível obter dados do Google');
+        }
+        const { sub: googleId, email, name } = payload;
+        if (!email || !googleId) {
+            throw new Error('Email ou Google ID não disponível no token');
+        }
+        // Buscar usuário por google_id
+        let usuario = await this.findByGoogleId(googleId);
+        // Se não encontrou por google_id, buscar por email
+        if (!usuario) {
+            usuario = await this.findByEmail(email);
+            // Se encontrou por email mas não tem google_id, vincular
+            if (usuario && !usuario.google_id) {
+                usuario.google_id = googleId;
+                usuario.auth_provider = 'google';
+                usuario = await this.repository.save(usuario);
+            }
+        }
+        // Se ainda não encontrou, criar novo usuário
+        const isNewUser = !usuario;
+        if (!usuario) {
+            usuario = this.repository.create({
+                email,
+                nome: name || email.split('@')[0],
+                google_id: googleId,
+                auth_provider: 'google',
+                senha: undefined, // Usuários OAuth não têm senha
+            });
+            usuario = await this.repository.save(usuario);
+        }
+        // Enviar email de boas-vindas para novos usuários Google (não bloquear se falhar)
+        if (isNewUser) {
+            EmailService_1.EmailService.enviarEmailBoasVindasGoogle(usuario.email, usuario.nome).catch((error) => {
+                console.error('Erro ao enviar email de boas-vindas Google:', error);
+            });
+        }
+        // Gerar token JWT
+        const token = (0, jwt_1.generateToken)({
+            usuarioId: usuario.id,
+            email: usuario.email,
+        });
+        const { senha: _, ...usuarioSemSenha } = usuario;
+        return { token, usuario: usuarioSemSenha };
     }
     /**
      * Solicita recuperação de senha - gera token e envia email
@@ -64,8 +144,10 @@ class AuthService {
             usado: false,
         });
         await this.tokenRepository.save(resetToken);
-        // Enviar email
-        await EmailService_1.EmailService.enviarEmailRecuperacaoSenha(email, token);
+        // Enviar email (não bloquear se falhar)
+        EmailService_1.EmailService.enviarEmailRecuperacaoSenha(usuario.email, usuario.nome, token).catch((error) => {
+            console.error('Erro ao enviar email de recuperação de senha:', error);
+        });
     }
     /**
      * Valida token de recuperação de senha
@@ -103,12 +185,21 @@ class AuthService {
         if (!resetToken) {
             return false;
         }
+        // Buscar usuário para obter dados do email
+        const usuario = await this.findById(validacao.usuarioId);
+        if (!usuario) {
+            return false;
+        }
         // Atualizar senha do usuário
         const senhaHash = await bcrypt_1.default.hash(novaSenha, 10);
         await this.repository.update(validacao.usuarioId, { senha: senhaHash });
         // Marcar token como usado
         resetToken.usado = true;
         await this.tokenRepository.save(resetToken);
+        // Enviar email de confirmação (não bloquear se falhar)
+        EmailService_1.EmailService.enviarEmailSenhaAlterada(usuario.email, usuario.nome).catch((error) => {
+            console.error('Erro ao enviar email de confirmação de alteração de senha:', error);
+        });
         return true;
     }
 }

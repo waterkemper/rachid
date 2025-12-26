@@ -124,5 +124,29 @@ class AuthController {
             res.status(500).json({ error: 'Erro ao resetar senha' });
         }
     }
+    static async googleLogin(req, res) {
+        try {
+            const { tokenId } = req.body;
+            if (!tokenId) {
+                return res.status(400).json({ error: 'Token ID do Google é obrigatório' });
+            }
+            const resultado = await AuthService_1.AuthService.loginWithGoogle(tokenId);
+            // Configurar cookie HTTP-only (para web)
+            res.cookie('token', resultado.token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict',
+                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
+            });
+            // Retornar token no body também (para mobile)
+            res.json({ usuario: resultado.usuario, token: resultado.token });
+        }
+        catch (error) {
+            console.error('Erro no login Google:', error);
+            const errorMessage = error.message || 'Erro ao fazer login com Google';
+            const statusCode = errorMessage.includes('inválido') || errorMessage.includes('expirado') ? 401 : 500;
+            res.status(statusCode).json({ error: errorMessage });
+        }
+    }
 }
 exports.AuthController = AuthController;

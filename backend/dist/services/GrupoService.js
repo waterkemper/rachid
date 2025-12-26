@@ -7,13 +7,68 @@ const ParticipanteGrupo_1 = require("../entities/ParticipanteGrupo");
 const GrupoParticipantesEvento_1 = require("../entities/GrupoParticipantesEvento");
 const Despesa_1 = require("../entities/Despesa");
 const ParticipanteGrupoEvento_1 = require("../entities/ParticipanteGrupoEvento");
+const TemplateService_1 = require("./TemplateService");
+const DespesaService_1 = require("./DespesaService");
 class GrupoService {
     static async findAll(usuarioId) {
-        return await this.grupoRepository.find({
-            where: { usuario_id: usuarioId },
-            order: { data: 'DESC' },
-            relations: ['participantes', 'participantes.participante'],
-        });
+        try {
+            // Buscar grupos com relações
+            const grupos = await this.grupoRepository.find({
+                where: { usuario_id: usuarioId },
+                order: { data: 'DESC' },
+                relations: ['participantes', 'participantes.participante'],
+            });
+            // Filtrar participantes órfãos (caso existam referências quebradas)
+            grupos.forEach(grupo => {
+                if (grupo.participantes) {
+                    grupo.participantes = grupo.participantes.filter(pg => pg.participante !== null && pg.participante !== undefined);
+                }
+            });
+            return grupos;
+        }
+        catch (error) {
+            console.error('Erro em GrupoService.findAll:', error);
+            console.error('Stack:', error.stack);
+            console.error('Código:', error.code);
+            console.error('Mensagem:', error.message);
+            console.error('Query:', error.query);
+            // Se o erro for relacionado a relações quebradas, tentar buscar sem relações
+            if (error.message?.includes('relation') ||
+                error.message?.includes('foreign key') ||
+                error.message?.includes('violates foreign key') ||
+                error.code === '23503') {
+                console.warn('Tentando buscar grupos sem relações devido a erro de relação');
+                try {
+                    const gruposSemRelacoes = await this.grupoRepository.find({
+                        where: { usuario_id: usuarioId },
+                        order: { data: 'DESC' },
+                    });
+                    // Carregar participantes manualmente com tratamento de erro
+                    for (const grupo of gruposSemRelacoes) {
+                        try {
+                            grupo.participantes = await this.participanteGrupoRepository.find({
+                                where: { grupo_id: grupo.id },
+                                relations: ['participante'],
+                            });
+                            // Filtrar órfãos
+                            if (grupo.participantes) {
+                                grupo.participantes = grupo.participantes.filter(pg => pg.participante !== null && pg.participante !== undefined);
+                            }
+                        }
+                        catch (participanteError) {
+                            console.warn(`Erro ao carregar participantes do grupo ${grupo.id}:`, participanteError);
+                            grupo.participantes = [];
+                        }
+                    }
+                    return gruposSemRelacoes;
+                }
+                catch (fallbackError) {
+                    console.error('Erro no fallback:', fallbackError);
+                    throw error; // Lança o erro original
+                }
+            }
+            throw error;
+        }
     }
     static async findById(id, usuarioId) {
         return await this.grupoRepository.findOne({
@@ -151,6 +206,64 @@ class GrupoService {
             usuario_id: usuarioId,
         });
         return await this.findById(novo.id, usuarioId);
+    }
+    static async gerarShareToken(grupoId, usuarioId) {
+        const grupo = await this.findById(grupoId, usuarioId);
+        if (!grupo) {
+            throw new Error('Grupo não encontrado ou não pertence ao usuário');
+        }
+        // Gerar UUID v4
+        const { randomUUID } = require('crypto');
+        const token = randomUUID();
+        grupo.shareToken = token;
+        await this.grupoRepository.save(grupo);
+        return token;
+    }
+    static async obterShareToken(grupoId, usuarioId) {
+        const grupo = await this.findById(grupoId, usuarioId);
+        if (!grupo) {
+            return null;
+        }
+        return grupo.shareToken || null;
+    }
+    static async createFromTemplate(data) {
+        // Buscar template
+        const template = TemplateService_1.TemplateService.getById(data.templateId);
+        if (!template) {
+            throw new Error('Template não encontrado');
+        }
+        // Criar evento com nome/descrição do template (ou usar valores fornecidos)
+        const grupo = this.grupoRepository.create({
+            nome: data.nome || template.nome,
+            descricao: data.descricao || template.descricao,
+            data: data.data || new Date(),
+            usuario_id: data.usuario_id,
+        });
+        const grupoSalvo = await this.grupoRepository.save(grupo);
+        // Adicionar participantes se fornecidos
+        if (data.participanteIds && data.participanteIds.length > 0) {
+            for (const participanteId of data.participanteIds) {
+                const participanteGrupo = this.participanteGrupoRepository.create({
+                    grupo_id: grupoSalvo.id,
+                    participante_id: participanteId,
+                });
+                await this.participanteGrupoRepository.save(participanteGrupo);
+            }
+        }
+        // Criar despesas placeholder para cada despesa do template
+        for (const descricaoDespesa of template.despesas) {
+            await DespesaService_1.DespesaService.create({
+                grupo_id: grupoSalvo.id,
+                descricao: descricaoDespesa,
+                valorTotal: 0,
+                // participante_pagador_id não fornecido (null) para placeholder
+                data: data.data || new Date(),
+                participacoes: [], // Sem participações para placeholders
+                usuario_id: data.usuario_id,
+            });
+        }
+        // Retornar grupo completo
+        return await this.findById(grupoSalvo.id, data.usuario_id) || grupoSalvo;
     }
 }
 exports.GrupoService = GrupoService;

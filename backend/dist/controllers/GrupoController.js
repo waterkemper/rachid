@@ -10,7 +10,19 @@ class GrupoController {
             res.json(grupos);
         }
         catch (error) {
-            res.status(500).json({ error: 'Erro ao buscar grupos' });
+            console.error('Erro ao buscar grupos:', error);
+            console.error('Stack trace:', error.stack);
+            // Log detalhes do erro para debug
+            if (error.message) {
+                console.error('Mensagem de erro:', error.message);
+            }
+            if (error.code) {
+                console.error('Código de erro:', error.code);
+            }
+            res.status(500).json({
+                error: 'Erro ao buscar grupos',
+                details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            });
         }
     }
     static async getById(req, res) {
@@ -29,8 +41,21 @@ class GrupoController {
     }
     static async create(req, res) {
         try {
-            const { nome, descricao, data, participanteIds } = req.body;
+            const { nome, descricao, data, participanteIds, templateId } = req.body;
             const usuarioId = req.usuarioId;
+            // Se templateId fornecido, usar createFromTemplate
+            if (templateId) {
+                const grupo = await GrupoService_1.GrupoService.createFromTemplate({
+                    templateId,
+                    nome, // Permite sobrescrever nome do template
+                    descricao, // Permite sobrescrever descrição do template
+                    data: data ? new Date(data) : undefined,
+                    participanteIds,
+                    usuario_id: usuarioId,
+                });
+                return res.status(201).json(grupo);
+            }
+            // Criação normal (sem template)
             if (!nome) {
                 return res.status(400).json({ error: 'Nome é obrigatório' });
             }
@@ -44,6 +69,9 @@ class GrupoController {
             res.status(201).json(grupo);
         }
         catch (error) {
+            if (error.message?.includes('Template não encontrado')) {
+                return res.status(404).json({ error: error.message });
+            }
             res.status(500).json({ error: 'Erro ao criar grupo' });
         }
     }
@@ -135,6 +163,34 @@ class GrupoController {
         }
         catch (error) {
             res.status(500).json({ error: 'Erro ao duplicar grupo' });
+        }
+    }
+    static async gerarLink(req, res) {
+        try {
+            const usuarioId = req.usuarioId;
+            const id = parseInt(req.params.id);
+            const token = await GrupoService_1.GrupoService.gerarShareToken(id, usuarioId);
+            res.json({ token, link: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/evento/${token}` });
+        }
+        catch (error) {
+            if (error.message?.includes('não encontrado')) {
+                return res.status(404).json({ error: error.message });
+            }
+            res.status(500).json({ error: 'Erro ao gerar link de compartilhamento' });
+        }
+    }
+    static async obterLink(req, res) {
+        try {
+            const usuarioId = req.usuarioId;
+            const id = parseInt(req.params.id);
+            const token = await GrupoService_1.GrupoService.obterShareToken(id, usuarioId);
+            if (!token) {
+                return res.json({ token: null, link: null });
+            }
+            res.json({ token, link: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/evento/${token}` });
+        }
+        catch (error) {
+            res.status(500).json({ error: 'Erro ao obter link de compartilhamento' });
         }
     }
 }
