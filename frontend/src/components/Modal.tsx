@@ -15,11 +15,13 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{title}</h2>
-          <button className="close-btn" onClick={onClose}>
+          <button className="close-btn" onClick={onClose} aria-label="Fechar">
             ×
           </button>
         </div>
-        {children}
+        <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+          {children}
+        </div>
       </div>
     </div>
   );
