@@ -612,12 +612,12 @@ const AdicionarParticipantesEvento: React.FC = () => {
                 <strong>Exemplo:</strong>
               </div>
               <div className="exemplo-subgrupos-item">
-                <span className="exemplo-subgrupos-nome">Família Cris</span>
-                <span className="exemplo-subgrupos-pessoas">(Cris + Elo)</span>
+                <span className="exemplo-subgrupos-nome">Família João</span>
+                <span className="exemplo-subgrupos-pessoas">(João + Maria)</span>
               </div>
               <div className="exemplo-subgrupos-item">
-                <span className="exemplo-subgrupos-nome">Família João</span>
-                <span className="exemplo-subgrupos-pessoas">(João + Fernanda)</span>
+                <span className="exemplo-subgrupos-nome">Família Pedro</span>
+                <span className="exemplo-subgrupos-pessoas">(Pedro + Ana)</span>
               </div>
               <div className="exemplo-subgrupos-resultado">
                 <span className="exemplo-subgrupos-emoji">👉</span>

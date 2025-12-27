@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, Image, Platform, Alert } from 'react-native';
 import { TextInput, Button, Text, Card } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -7,6 +7,22 @@ import { RootStackParamList } from '../../navigation/AppNavigator';
 import { authApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { customColors } from '../../theme';
+
+// Importação condicional do Google Sign-In (só funciona em development builds ou produção)
+let GoogleSignin: any = null;
+let statusCodes: any = null;
+let isGoogleSignInAvailable = false;
+
+try {
+  const googleSignInModule = require('@react-native-google-signin/google-signin');
+  GoogleSignin = googleSignInModule.GoogleSignin;
+  statusCodes = googleSignInModule.statusCodes;
+  isGoogleSignInAvailable = true;
+} catch (error) {
+  // Módulo não disponível (Expo Go) - Google Sign-In desabilitado
+  console.log('⚠️ Google Sign-In não disponível (Expo Go). Funciona apenas em development builds ou produção.');
+  isGoogleSignInAvailable = false;
+}
 
 type CadastroScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Cadastro'>;
 
@@ -21,6 +37,66 @@ const CadastroScreen: React.FC = () => {
   const [carregando, setCarregando] = useState(false);
   const { login } = useAuth();
   const navigation = useNavigation<CadastroScreenNavigationProp>();
+
+  useEffect(() => {
+    // Configurar Google Sign-In apenas se estiver disponível
+    if (isGoogleSignInAvailable && GoogleSignin) {
+      try {
+        GoogleSignin.configure({
+          // O webClientId será configurado via variável de ambiente ou constante
+          // Por enquanto, deixamos vazio - deve ser configurado no código ou .env
+          webClientId: '', // Deve ser configurado com o Client ID do Google Cloud Console
+        });
+      } catch (error) {
+        console.error('Erro ao configurar Google Sign-In:', error);
+      }
+    }
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    if (!isGoogleSignInAvailable || !GoogleSignin) {
+      Alert.alert('Aviso', 'Login com Google não disponível no Expo Go. Use um development build ou produção.');
+      return;
+    }
+
+    setErro('');
+    setCarregando(true);
+
+    try {
+      // Verificar se Google Play Services está disponível (Android)
+      if (Platform.OS === 'android') {
+        await GoogleSignin.hasPlayServices();
+      }
+      
+      // Fazer login
+      const userInfo = await GoogleSignin.signIn();
+      
+      if (userInfo.idToken) {
+        const { usuario, token } = await authApi.loginWithGoogle(userInfo.idToken);
+        await login(usuario, token);
+      } else {
+        throw new Error('Token ID do Google não disponível');
+      }
+    } catch (error: any) {
+      console.error('❌ Erro no login Google:', error);
+      
+      if (statusCodes) {
+        if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+          setErro('Login cancelado');
+        } else if (error.code === statusCodes.IN_PROGRESS) {
+          setErro('Login em progresso');
+        } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+          setErro('Google Play Services não disponível');
+        } else {
+          setErro(error.response?.data?.error || error.message || 'Erro ao fazer login com Google');
+        }
+      } else {
+        setErro(error.response?.data?.error || error.message || 'Erro ao fazer login com Google');
+      }
+    } finally {
+      setCarregando(false);
+    }
+  };
 
   const handleSubmit = async () => {
     setErro('');
@@ -231,6 +307,28 @@ const CadastroScreen: React.FC = () => {
             {carregando ? 'Criando conta...' : 'Criar conta e continuar'}
           </Button>
 
+          {isGoogleSignInAvailable && (
+            <>
+              <View style={styles.dividerContainer}>
+                <View style={styles.divider} />
+                <Text style={styles.dividerText}>ou</Text>
+                <View style={styles.divider} />
+              </View>
+
+              <Button
+                mode="outlined"
+                onPress={handleGoogleSignIn}
+                disabled={carregando}
+                style={styles.googleButton}
+                contentStyle={styles.buttonContent}
+                icon="google"
+                textColor={customColors.text}
+              >
+                Criar conta com Google
+              </Button>
+            </>
+          )}
+
           <Button
             mode="text"
             onPress={() => navigation.navigate('Login')}
@@ -329,6 +427,27 @@ const styles = StyleSheet.create({
   error: {
     color: 'rgba(254, 226, 226, 0.98)',
     textAlign: 'center',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(148, 163, 184, 0.16)',
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    color: 'rgba(226, 232, 240, 0.7)',
+    fontSize: 14,
+  },
+  googleButton: {
+    marginTop: 10,
+    marginBottom: 16,
+    borderRadius: 999,
+    borderColor: 'rgba(148, 163, 184, 0.32)',
   },
 });
 

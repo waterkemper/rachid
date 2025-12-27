@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google';
 import { authApi, publicEventoApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import logoUrl from '../assets/logo.png';
@@ -79,6 +80,41 @@ const Cadastro: React.FC = () => {
       navigate('/novo-evento');
     } catch (error: any) {
       setErro(error.response?.data?.error || 'Erro ao criar conta');
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  const handleGoogleSignIn = async (credentialResponse: any) => {
+    if (!credentialResponse.credential) return;
+
+    setErro('');
+    setCarregando(true);
+
+    try {
+      const usuario = await authApi.loginWithGoogle(credentialResponse.credential);
+      login(usuario);
+
+      // Verificar se há token de reivindicação na URL
+      const token = searchParams.get('token');
+      if (token) {
+        try {
+          const resultado = await publicEventoApi.reivindicar(token, usuario.email);
+          if (resultado.transferidos > 0) {
+            // Redirecionar para eventos com mensagem de sucesso
+            navigate('/eventos?reivindicado=true');
+            return;
+          }
+        } catch (err) {
+          // Se falhar a reivindicação, continua normalmente
+          console.error('Erro ao reivindicar participação:', err);
+        }
+      }
+
+      // Redirecionar para criar evento
+      navigate('/novo-evento');
+    } catch (error: any) {
+      setErro(error.response?.data?.error || 'Erro ao fazer login com Google');
     } finally {
       setCarregando(false);
     }
@@ -213,6 +249,21 @@ const Cadastro: React.FC = () => {
             <button type="submit" className="btn cadastro-btn-primary" disabled={carregando}>
               {carregando ? 'Criando conta...' : 'Criar conta e continuar'}
             </button>
+
+            <div style={{ marginTop: '20px', marginBottom: '20px', textAlign: 'center' }}>
+              <div style={{ marginBottom: '12px', color: 'rgba(226, 232, 240, 0.7)', fontSize: '14px' }}>
+                ou
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <GoogleLogin
+                  onSuccess={handleGoogleSignIn}
+                  onError={() => {
+                    setErro('Erro ao fazer login com Google');
+                  }}
+                  useOneTap={false}
+                />
+              </div>
+            </div>
 
             <div className="cadastro-footer">
               <span>Ao continuar, você será levado para criar seu primeiro evento.</span>

@@ -352,14 +352,18 @@ export const formatarSugestoesPagamentoIndividual = (
   participantes: Participante[],
   saldos: SaldoParticipante[],
   saldosGrupos: SaldoGrupo[],
-  incluirDetalhamento: boolean = true
+  link?: string
 ): string => {
   // Calcular total de despesas
   const totalDespesas = despesas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
   const totalFormatado = formatCurrency(totalDespesas);
 
   if (sugestoes.length === 0) {
-    return `💰 *Sugestões de Pagamento - ${evento.nome.trim()}*\n\n*Total do evento: ${totalFormatado}*\n\nNenhum pagamento necessário. Todos os saldos estão quitados!`;
+    let mensagem = `💰 *Sugestões de Pagamento - ${evento.nome.trim()}*\n\n*Total do evento: ${totalFormatado}*\n\nNenhum pagamento necessário. Todos os saldos estão quitados!`;
+    if (link) {
+      mensagem += `\n\n📋 Confira o detalhamento:\n${link}`;
+    }
+    return mensagem;
   }
 
   let mensagem = `💰 *Sugestões de Pagamento - ${evento.nome.trim()}*\n\n`;
@@ -384,11 +388,8 @@ export const formatarSugestoesPagamentoIndividual = (
     }
   });
 
-  // Adicionar saldos dos participantes
-  mensagem += gerarSaldosParticipantes(saldos, saldosGrupos);
-
-  if (incluirDetalhamento) {
-    mensagem += gerarDetalhamento(despesas, [], participantes);
+  if (link) {
+    mensagem += `\n\n📋 Confira o detalhamento:\n${link}`;
   }
 
   return mensagem;
@@ -405,14 +406,18 @@ export const formatarSugestoesPagamentoSubgrupos = (
   participantes: Participante[],
   saldos: SaldoParticipante[],
   saldosGrupos: SaldoGrupo[],
-  incluirDetalhamento: boolean = true
+  link?: string
 ): string => {
   // Calcular total de despesas
   const totalDespesas = despesas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
   const totalFormatado = formatCurrency(totalDespesas);
 
   if (sugestoes.length === 0) {
-    return `💰 *Sugestões de Pagamento - ${evento.nome.trim()}*\n\n*Total do evento: ${totalFormatado}*\n\nNenhum pagamento necessário. Todos os saldos estão quitados!`;
+    let mensagem = `💰 *Sugestões de Pagamento - ${evento.nome.trim()}*\n\n*Total do evento: ${totalFormatado}*\n\nNenhum pagamento necessário. Todos os saldos estão quitados!`;
+    if (link) {
+      mensagem += `\n\n📋 Confira o detalhamento:\n${link}`;
+    }
+    return mensagem;
   }
 
   let mensagem = `💰 *Sugestões de Pagamento - ${evento.nome.trim()}*\n\n`;
@@ -437,11 +442,8 @@ export const formatarSugestoesPagamentoSubgrupos = (
     }
   });
 
-  // Adicionar saldos dos participantes
-  mensagem += gerarSaldosParticipantes(saldos, saldosGrupos);
-
-  if (incluirDetalhamento) {
-    mensagem += gerarDetalhamento(despesas, subgrupos, participantes);
+  if (link) {
+    mensagem += `\n\n📋 Confira o detalhamento:\n${link}`;
   }
 
   return mensagem;
@@ -458,7 +460,7 @@ export const formatarSugestoesPagamento = (
   saldos: SaldoParticipante[],
   saldosGrupos: SaldoGrupo[],
   subgrupos?: GrupoParticipantesEvento[],
-  incluirDetalhamento: boolean = true
+  link?: string
 ): string => {
   // Se há subgrupos e as sugestões parecem ser entre grupos (nomes podem ser de grupos)
   const temSubgrupos = subgrupos && subgrupos.length > 0;
@@ -479,7 +481,7 @@ export const formatarSugestoesPagamento = (
         participantes,
         saldos,
         saldosGrupos,
-        incluirDetalhamento
+        link
       );
     }
   }
@@ -491,7 +493,7 @@ export const formatarSugestoesPagamento = (
     participantes,
     saldos,
     saldosGrupos,
-    incluirDetalhamento
+    link
   );
 };
 

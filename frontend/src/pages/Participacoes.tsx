@@ -304,9 +304,10 @@ const Participacoes: React.FC = () => {
       setParticipantes(participantesParaFormatar);
 
       // Obter ou gerar link de compartilhamento primeiro
-      let textoInicio = '📊 Pessoal, organizei as contas deste evento em oRachid.\n';
+      let textoInicio = '📊 Pessoal, organizei as contas do evento em oRachid.\n';
       textoInicio += 'Ele calcula tudo automaticamente (inclusive por famílias) e mostra quem paga quem, sem confusão.\n\n';
       
+      let linkCompartilhamento = '';
       try {
         let linkData = await grupoApi.obterLink(Number(grupoSelecionado));
         if (!linkData.link) {
@@ -315,6 +316,7 @@ const Participacoes: React.FC = () => {
         }
         
         if (linkData.link) {
+          linkCompartilhamento = linkData.link;
           textoInicio += '🔗 *Visualize o evento online:*\n';
           textoInicio += linkData.link + '\n';
           textoInicio += '👉 Dá pra ver o resumo e seus saldos sem criar conta.\n\n';
@@ -333,7 +335,7 @@ const Participacoes: React.FC = () => {
         saldos,
         saldosGrupos,
         subgruposParaFormatar.length > 0 ? subgruposParaFormatar : undefined,
-        true
+        linkCompartilhamento
       );
 
       // Adicionar texto inicial no início da mensagem
