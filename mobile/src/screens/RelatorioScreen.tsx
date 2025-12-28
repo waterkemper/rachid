@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Alert, TouchableOpacity, Platform } from 'react-native';
 import { Card, Text, Button, ActivityIndicator, Menu, TextInput, Modal, Portal, Divider, IconButton } from 'react-native-paper';
 import { useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -25,6 +25,10 @@ const RelatorioScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [carregandoRelatorio, setCarregandoRelatorio] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Ref para rastrear o último evento que teve dados carregados
+  const ultimoEventoCarregado = useRef<number | null>(null);
+  // Ref para evitar recarregamento durante a sincronização de foco
+  const sincronizandoFoco = useRef(false);
   const [menuEventoVisible, setMenuEventoVisible] = useState(false);
   const [modalDetalhesVisible, setModalDetalhesVisible] = useState(false);
   const [participanteSelecionado, setParticipanteSelecionado] = useState<SaldoParticipante | null>(null);
@@ -119,6 +123,7 @@ const RelatorioScreen: React.FC = () => {
       const loadSelectedEvent = async () => {
         // Sempre verificar storage quando a tela recebe foco para sincronizar com outras tabs
         if (grupos.length > 0) {
+          sincronizandoFoco.current = true;
           try {
             const savedEventId = await AsyncStorage.getItem(STORAGE_KEY_SELECTED_EVENT);
             if (savedEventId) {
@@ -132,9 +137,11 @@ const RelatorioScreen: React.FC = () => {
                 // Se o evento selecionado atual também não existe, limpar
                 if (grupoSelecionado && !grupos.some(g => g.id === grupoSelecionado)) {
                   setGrupoSelecionado(null);
+                  ultimoEventoCarregado.current = null;
                 }
               } else if (!eventoIdFromRoute || eventoIdFromRoute !== eventId) {
                 // Se não há eventoIdFromRoute ou se o evento salvo é diferente do selecionado, atualizar
+                // IMPORTANTE: Só atualizar se realmente mudou para evitar recarregamentos desnecessários
                 if (grupoSelecionado !== eventId) {
                   setGrupoSelecionado(eventId);
                 }
@@ -142,9 +149,12 @@ const RelatorioScreen: React.FC = () => {
             } else if (grupoSelecionado && !grupos.some(g => g.id === grupoSelecionado)) {
               // Se não há evento salvo mas o selecionado não existe mais, limpar
               setGrupoSelecionado(null);
+              ultimoEventoCarregado.current = null;
             }
           } catch (error) {
             console.error('Erro ao carregar evento selecionado:', error);
+          } finally {
+            sincronizandoFoco.current = false;
           }
         }
       };
@@ -154,9 +164,15 @@ const RelatorioScreen: React.FC = () => {
 
   useEffect(() => {
     if (grupoSelecionado) {
-      loadRelatorio();
-      // Salvar evento selecionado sempre que mudar
-      AsyncStorage.setItem(STORAGE_KEY_SELECTED_EVENT, grupoSelecionado.toString());
+      // Só recarregar se o evento realmente mudou (não é apenas uma sincronização de foco)
+      if (ultimoEventoCarregado.current !== grupoSelecionado) {
+        loadRelatorio();
+        // Salvar evento selecionado sempre que mudar
+        AsyncStorage.setItem(STORAGE_KEY_SELECTED_EVENT, grupoSelecionado.toString());
+      }
+    } else {
+      // Se grupoSelecionado for null, limpar o ref também
+      ultimoEventoCarregado.current = null;
     }
   }, [grupoSelecionado]);
 
@@ -204,6 +220,7 @@ const RelatorioScreen: React.FC = () => {
     if (!eventoExiste) {
       // Se o evento não existe mais, limpar seleção e storage
       setGrupoSelecionado(null);
+      ultimoEventoCarregado.current = null;
       await AsyncStorage.removeItem(STORAGE_KEY_SELECTED_EVENT);
       setError('Evento não encontrado. Por favor, selecione outro evento.');
       return;
@@ -248,12 +265,16 @@ const RelatorioScreen: React.FC = () => {
         const sugestoesData = await relatorioApi.getSugestoesPagamento(grupoSelecionado);
         setSugestoes(sugestoesData);
       }
+      
+      // Marcar que este evento foi carregado
+      ultimoEventoCarregado.current = grupoSelecionado;
     } catch (err: any) {
       const errorMessage = err?.response?.data?.error || 'Erro ao carregar relatório';
       setError(errorMessage);
       // Se o erro for 404 ou 500 relacionado a evento não encontrado, limpar seleção
       if (err?.response?.status === 404 || errorMessage.includes('não encontrado')) {
         setGrupoSelecionado(null);
+        ultimoEventoCarregado.current = null;
         await AsyncStorage.removeItem(STORAGE_KEY_SELECTED_EVENT);
       }
     } finally {
