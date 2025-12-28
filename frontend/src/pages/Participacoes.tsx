@@ -5,7 +5,7 @@ import { grupoApi, despesaApi, grupoParticipantesApi, relatorioApi, participante
 import { Grupo, Despesa, Participante, GrupoParticipantesEvento, SugestaoPagamento, SaldoParticipante, SaldoGrupo } from '../types';
 import Modal from '../components/Modal';
 import { formatarSugestoesPagamento } from '../utils/whatsappFormatter';
-import { FaUsers, FaMoneyBillWave, FaShareAlt, FaUserPlus } from 'react-icons/fa';
+import { FaUsers, FaMoneyBillWave, FaShareAlt, FaUserPlus, FaCopy } from 'react-icons/fa';
 import { FaWhatsapp } from 'react-icons/fa6';
 import './Participacoes.css';
 
@@ -32,6 +32,9 @@ const Participacoes: React.FC = () => {
   const [grupoSelecionadoDetalhes, setGrupoSelecionadoDetalhes] = useState<SaldoGrupo | null>(null);
   const [despesasGrupoDetalhes, setDespesasGrupoDetalhes] = useState<Despesa[]>([]);
   const [loadingGrupoDetalhes, setLoadingGrupoDetalhes] = useState(false);
+  
+  // Estado para controlar collapse do detalhamento
+  const [detalhamentoExpanded, setDetalhamentoExpanded] = useState(false);
   
   // Estados para modal WhatsApp
   const [modalWhatsAppVisible, setModalWhatsAppVisible] = useState(false);
@@ -536,25 +539,55 @@ const Participacoes: React.FC = () => {
         <>
           {/* 1. Tabela de Sugestões de Pagamento */}
           <div className="card" style={{ marginBottom: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <h3 style={{ margin: 0 }}>Sugestões de Pagamento</h3>
-              {sugestoes.length > 0 && (
-                <button
-                  className="btn btn-primary"
-                  onClick={handleCompartilharWhatsApp}
-                  style={{ 
-                    padding: '8px 16px',
-                    display: 'flex',
+            <div style={{ marginBottom: '15px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <h3 style={{ margin: 0 }}>Sugestões de Pagamento</h3>
+                  <span style={{ 
+                    padding: '4px 10px', 
+                    backgroundColor: 'rgba(99, 102, 241, 0.2)', 
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: 'rgba(148, 163, 184, 0.9)',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '8px',
-                    backgroundColor: '#25D366'
-                  }}
-                >
-                  <FaShareAlt />
-                  <FaWhatsapp />
-                  <span>Compartilhar</span>
-                </button>
-              )}
+                    gap: '4px'
+                  }}>
+                    🧩 Por família
+                  </span>
+                </div>
+                {sugestoes.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleCompartilharWhatsApp}
+                      style={{ 
+                        padding: '8px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        backgroundColor: '#25D366'
+                      }}
+                    >
+                      <FaShareAlt />
+                      <FaWhatsapp />
+                      <span>Compartilhar resumo (WhatsApp)</span>
+                    </button>
+                    <span style={{ fontSize: '11px', color: 'rgba(226, 232, 240, 0.6)', whiteSpace: 'nowrap' }}>
+                      Qualquer pessoa pode visualizar sem criar conta
+                    </span>
+                  </div>
+                )}
+              </div>
+              <p style={{ 
+                fontSize: '13px', 
+                color: 'rgba(226, 232, 240, 0.7)', 
+                margin: 0,
+                fontStyle: 'italic'
+              }}>
+                O Rachid reduz o número de transferências agrupando pagamentos entre famílias.
+              </p>
             </div>
             {sugestoes.length === 0 ? (
               <p style={{ textAlign: 'center', color: 'rgba(226, 232, 240, 0.6)', padding: '20px' }}>
@@ -634,7 +667,67 @@ const Participacoes: React.FC = () => {
                       </div>
                       {chavesPix.length > 0 && (
                         <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginTop: '4px' }}>
-                          💳 PIX: {chavesPix.length === 1 ? chavesPix[0] : chavesPix.join(' ou ')}
+                          💳 PIX:{' '}
+                          {chavesPix.length === 1 ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                              {chavesPix[0]}
+                              <button
+                                className="btn btn-secondary btn-small"
+                                style={{ 
+                                  padding: '4px 8px', 
+                                  fontSize: '12px', 
+                                  minWidth: 'auto',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  lineHeight: '1'
+                                }}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    await navigator.clipboard.writeText(chavesPix[0]);
+                                    alert('PIX copiado para a área de transferência!');
+                                  } catch (err) {
+                                    alert('Erro ao copiar PIX');
+                                  }
+                                }}
+                                title="Copiar PIX"
+                              >
+                                <FaCopy />
+                              </button>
+                            </span>
+                          ) : (
+                            <span>
+                              {chavesPix.map((pix, pixIndex) => (
+                                <span key={pixIndex} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginRight: '8px' }}>
+                                  {pix}
+                                  <button
+                                    className="btn btn-secondary btn-small"
+                                    style={{ 
+                                      padding: '4px 8px', 
+                                      fontSize: '12px', 
+                                      minWidth: 'auto',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      lineHeight: '1'
+                                    }}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        await navigator.clipboard.writeText(pix);
+                                        alert('PIX copiado para a área de transferência!');
+                                      } catch (err) {
+                                        alert('Erro ao copiar PIX');
+                                      }
+                                    }}
+                                    title="Copiar PIX"
+                                  >
+                                    <FaCopy />
+                                  </button>
+                                  {pixIndex < chavesPix.length - 1 && ' ou '}
+                                </span>
+                              ))}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -665,6 +758,7 @@ const Participacoes: React.FC = () => {
                             padding: '16px',
                             backgroundColor: 'rgba(99, 102, 241, 0.15)',
                             borderBottom: '2px solid rgba(99, 102, 241, 0.3)',
+                            borderLeft: saldo >= 0 ? '4px solid rgba(34, 197, 94, 0.6)' : '4px solid rgba(239, 68, 68, 0.4)',
                             marginTop: index > 0 ? '16px' : '0',
                             marginBottom: '12px',
                             borderRadius: '8px'
@@ -804,6 +898,7 @@ const Participacoes: React.FC = () => {
                           style={{
                             padding: '16px',
                             borderBottom: '1px solid rgba(148, 163, 184, 0.2)',
+                            borderLeft: saldo.saldo >= 0 ? '4px solid rgba(34, 197, 94, 0.6)' : '4px solid rgba(239, 68, 68, 0.4)',
                             cursor: 'pointer',
                             transition: 'background-color 0.2s',
                             paddingLeft: gruposOrdenados.length > 0 ? '32px' : '16px'
@@ -843,12 +938,67 @@ const Participacoes: React.FC = () => {
             })()}
           </div>
 
+          {/* Feature Teaser Pro */}
+          <div className="card" style={{ 
+            marginTop: '20px',
+            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+            border: '1px solid rgba(99, 102, 241, 0.3)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+              <span style={{ fontSize: '24px' }}>📊</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ 
+                  fontSize: '16px', 
+                  fontWeight: '600', 
+                  color: 'rgba(255, 255, 255, 0.95)',
+                  marginBottom: '4px'
+                }}>
+                  Relatórios avançados (Pro)
+                </div>
+                <div style={{ 
+                  fontSize: '13px', 
+                  color: 'rgba(226, 232, 240, 0.7)',
+                  marginBottom: '12px'
+                }}>
+                  Veja histórico por família, exporte PDF/CSV e acompanhe eventos recorrentes.
+                </div>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    // TODO: Implementar navegação para página Pro ou modal
+                    alert('Em breve: Relatórios Pro disponíveis!');
+                  }}
+                  style={{
+                    padding: '6px 14px',
+                    fontSize: '13px'
+                  }}
+                >
+                  Conhecer o Pro
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* 3. Detalhamento de Despesas */}
           {despesas.length > 0 && (
             <div className="card" style={{ marginTop: '30px' }}>
-              <h3 style={{ marginBottom: '20px' }}>📋 Detalhamento</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ margin: 0 }}>📋 Detalhamento</h3>
+                {despesas.length > 8 && (
+                  <button
+                    className="btn btn-secondary btn-small"
+                    onClick={() => setDetalhamentoExpanded(!detalhamentoExpanded)}
+                    style={{
+                      padding: '4px 12px',
+                      fontSize: '12px'
+                    }}
+                  >
+                    {detalhamentoExpanded ? 'Ocultar detalhamento' : 'Mostrar detalhamento completo'}
+                  </button>
+                )}
+              </div>
               <div className="evento-publico-detalhamento">
-                {despesas.map((despesa) => (
+                {(detalhamentoExpanded || despesas.length <= 8 ? despesas : despesas.slice(0, 8)).map((despesa) => (
                   <div key={despesa.id} className="evento-publico-despesa-item">
                     <div className="evento-publico-despesa-header">
                       <span className="evento-publico-despesa-nome">{despesa.descricao}</span>
@@ -880,6 +1030,17 @@ const Participacoes: React.FC = () => {
                     </div>
                   </div>
                 ))}
+                {!detalhamentoExpanded && despesas.length > 8 && (
+                  <div style={{ 
+                    textAlign: 'center', 
+                    padding: '16px',
+                    color: 'rgba(226, 232, 240, 0.6)',
+                    fontSize: '13px',
+                    fontStyle: 'italic'
+                  }}>
+                    +{despesas.length - 8} despesas ocultas. Clique em "Mostrar detalhamento completo" para ver todas.
+                  </div>
+                )}
               </div>
             </div>
           )}

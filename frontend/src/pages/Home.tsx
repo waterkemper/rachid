@@ -122,7 +122,7 @@ const Home: React.FC = () => {
                   <div className="home-preview-dot">2</div>
                   <div className="home-preview-step-content">
                     <div className="home-preview-step-title">Adicionar participantes</div>
-                    <div className="home-preview-step-desc">Pessoas, subgrupos e grupos maiores</div>
+                    <div className="home-preview-step-desc">Pessoas e subgrupos</div>
                   </div>
                 </div>
 
@@ -165,7 +165,7 @@ const Home: React.FC = () => {
                 <span className="home-card-badge">Evento</span>
               </div>
               <div className="home-card-title">Crie o evento</div>
-              <div className="home-card-desc">Nome e data. Se quiser, já sugira um grupo maior para preencher a lista.</div>
+              <div className="home-card-desc">Nome e data.</div>
             </div>
 
             <div className="home-card">
@@ -174,7 +174,7 @@ const Home: React.FC = () => {
                 <span className="home-card-badge">Participantes</span>
               </div>
               <div className="home-card-title">Adicione quem participou</div>
-              <div className="home-card-desc">Inclua pessoas, crie subgrupos (famílias/casais) e reutilize grupos maiores.</div>
+              <div className="home-card-desc">Inclua pessoas e crie subgrupos (famílias/casais).</div>
             </div>
 
             <div className="home-card">
@@ -212,11 +212,6 @@ const Home: React.FC = () => {
             <div className="home-feature">
               <div className="home-feature-title">Subgrupos (famílias e grupos)</div>
               <div className="home-feature-desc">Crie subgrupos quando pessoas pagam juntas. O sistema calcula entre grupos, não entre indivíduos. Ideal para famílias, casais e times.</div>
-            </div>
-
-            <div className="home-feature">
-              <div className="home-feature-title">Grupos maiores (grupos de grupos)</div>
-              <div className="home-feature-desc">Ex.: "Pais da escola" contendo famílias; "Basquete" contendo várias pessoas.</div>
             </div>
 
             <div className="home-feature">

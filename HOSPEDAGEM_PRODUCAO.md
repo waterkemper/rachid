@@ -18,6 +18,66 @@ Com o domínio `orachid.com.br`, recomendo:
 
 **Recomendação**: Usar subdomínio `api.orachid.com.br` (mais organizado e fácil de configurar)
 
+---
+
+## 🆕 Opção 0: EC2 com Docker (Self-Hosted)
+
+### Visão Geral
+
+Deploy completo em EC2 usando Docker e Docker Compose, com Apache como reverse proxy.
+
+**Documentação Completa**: Veja [`DEPLOYMENT.md`](DEPLOYMENT.md) para instruções detalhadas.
+
+### Vantagens
+
+- ✅ Controle total sobre a infraestrutura
+- ✅ Custo fixo (EC2 instance)
+- ✅ Docker para isolamento e portabilidade
+- ✅ CI/CD com GitHub Actions
+- ✅ Escalável conforme necessário
+
+### Arquitetura
+
+- **Frontend**: Container Docker (nginx)
+- **Backend**: Container Docker (Node.js)
+- **Database**: Container Docker (PostgreSQL 17)
+- **Reverse Proxy**: Apache no host
+- **CI/CD**: GitHub Actions
+
+### Requisitos
+
+- EC2 instance
+- Docker e Docker Compose instalados
+- Apache instalado
+- Domínios configurados apontando para EC2
+
+### Quick Start
+
+```bash
+# 1. Clone repositório
+git clone <repo-url> ~/rachid
+cd ~/rachid
+
+# 2. Configure .env (veja ENV_TEMPLATE.md)
+nano .env
+
+# 3. Deploy
+./scripts/deploy.sh
+
+# 4. Configure Apache (veja apache/README.md)
+sudo cp apache/*.conf /etc/apache2/sites-available/
+sudo a2ensite orachid-*.conf
+sudo systemctl restart apache2
+```
+
+**Para documentação completa, veja:**
+- [`DEPLOYMENT.md`](DEPLOYMENT.md) - Guia completo de deployment
+- [`DOCKER_SETUP.md`](DOCKER_SETUP.md) - Documentação do Docker
+- [`ENV_TEMPLATE.md`](ENV_TEMPLATE.md) - Template de variáveis de ambiente
+- [`apache/README.md`](apache/README.md) - Configuração do Apache
+
+---
+
 ## Opção 1: Vercel (Frontend) + Railway (Backend + Banco) ⭐ RECOMENDADO
 
 ### Por que esta opção?

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert, TouchableOpacity, Platform } from 'react-native';
-import { Card, Text, Button, ActivityIndicator, Menu, TextInput, Modal, Portal, Divider } from 'react-native-paper';
+import { Card, Text, Button, ActivityIndicator, Menu, TextInput, Modal, Portal, Divider, IconButton } from 'react-native-paper';
 import { useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
@@ -643,9 +643,59 @@ const RelatorioScreen: React.FC = () => {
                             {formatCurrency(sugestao.valor)}
                           </Text>
                           {chavesPix.length > 0 && (
-                            <Text variant="bodySmall" style={styles.pixInfo}>
-                              💳 PIX: {chavesPix.length === 1 ? chavesPix[0] : chavesPix.join(' ou ')}
-                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
+                              <Text variant="bodySmall" style={styles.pixInfo}>
+                                💳 PIX:
+                              </Text>
+                              {chavesPix.length === 1 ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 4 }}>
+                                  <Text variant="bodySmall" style={styles.pixInfo}>
+                                    {chavesPix[0]}
+                                  </Text>
+                                  <IconButton
+                                    icon="content-copy"
+                                    size={16}
+                                    iconColor={customColors.primary}
+                                    onPress={async () => {
+                                      try {
+                                        await Clipboard.setStringAsync(chavesPix[0]);
+                                        Alert.alert('Sucesso', 'PIX copiado para a área de transferência!');
+                                      } catch (err) {
+                                        Alert.alert('Erro', 'Erro ao copiar PIX');
+                                      }
+                                    }}
+                                    style={{ margin: 0, padding: 0 }}
+                                  />
+                                </View>
+                              ) : (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginLeft: 4 }}>
+                                  {chavesPix.map((pix, pixIndex) => (
+                                    <View key={pixIndex} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                      <Text variant="bodySmall" style={styles.pixInfo}>
+                                        {pix}
+                                      </Text>
+                                      <IconButton
+                                        icon="content-copy"
+                                        size={16}
+                                        iconColor={customColors.primary}
+                                        onPress={async () => {
+                                          try {
+                                            await Clipboard.setStringAsync(pix);
+                                            Alert.alert('Sucesso', 'PIX copiado para a área de transferência!');
+                                          } catch (err) {
+                                            Alert.alert('Erro', 'Erro ao copiar PIX');
+                                          }
+                                        }}
+                                        style={{ margin: 0, padding: 0 }}
+                                      />
+                                      {pixIndex < chavesPix.length - 1 && (
+                                        <Text variant="bodySmall" style={styles.pixInfo}> ou </Text>
+                                      )}
+                                    </View>
+                                  ))}
+                                </View>
+                              )}
+                            </View>
                           )}
                         </View>
                       );

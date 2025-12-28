@@ -1,5 +1,6 @@
 node_modules
 dist
+.vite
 npm-debug.log
 .env
 .env.local
@@ -16,13 +17,7 @@ README.md
 .DS_Store
 coverage
 .nyc_output
-database.sqlite
-*.sqlite
-*.sqlite3
-TROUBLESHOOTING.md
-DEPLOY_RAILWAY.md
-FIX_502_ERROR.md
-ENV_VARIABLES.md
-SENDGRID_SETUP.md
-railway.json
-nixpacks.toml
+scc.png
+APP_DEPLOY.md
+vercel.json
+
