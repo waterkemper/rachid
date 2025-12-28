@@ -554,7 +554,7 @@ const Participacoes: React.FC = () => {
                     alignItems: 'center',
                     gap: '4px'
                   }}>
-                    🧩 Por família
+                    🧩 Por grupo de pessoas
                   </span>
                 </div>
                 {sugestoes.length > 0 && (
@@ -1016,7 +1016,7 @@ const Participacoes: React.FC = () => {
                       {despesa.participacoes && despesa.participacoes.length > 0 && (
                         <>
                           <div className="evento-publico-despesa-detalhe">
-                            <span className="evento-publico-despesa-label">Dividido entre:</span>
+                            <span className="evento-publico-despesa-label">Dividido entre ({despesa.participacoes.length} {despesa.participacoes.length === 1 ? 'pessoa' : 'pessoas'}):</span>
                             <span>{despesa.participacoes.map(p => p.participante?.nome || 'Desconhecido').join(', ')}</span>
                           </div>
                           <div className="evento-publico-despesa-detalhe">

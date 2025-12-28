@@ -558,6 +558,9 @@ const RelatorioScreen: React.FC = () => {
               <Card style={styles.card}>
                 <Card.Title 
                   title="Sugestões de Pagamento"
+                  subtitle="🧩 Por grupo de pessoas"
+                  titleStyle={{ marginBottom: 4 }}
+                  subtitleStyle={{ fontSize: 12, color: customColors.textSecondary }}
                   right={(props) => (
                     sugestoes.length > 0 ? (
                       <Button
@@ -574,6 +577,13 @@ const RelatorioScreen: React.FC = () => {
                     ) : null
                   )}
                 />
+                {sugestoes.length > 0 && (
+                  <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+                    <Text variant="bodySmall" style={{ fontSize: 12, color: customColors.textSecondary, fontStyle: 'italic' }}>
+                      O Rachid reduz o número de transferências agrupando pagamentos entre famílias.
+                    </Text>
+                  </View>
+                )}
                 <Card.Content>
                   {sugestoes.length === 0 ? (
                     <Text style={styles.emptyText}>Nenhuma sugestão encontrada</Text>
@@ -861,7 +871,9 @@ const RelatorioScreen: React.FC = () => {
                           {despesa.participacoes && despesa.participacoes.length > 0 && (
                             <>
                               <View style={styles.detalhamentoDetalheDividido}>
-                                <Text variant="bodySmall" style={styles.detalhamentoLabel}>Dividido entre:</Text>
+                                <Text variant="bodySmall" style={styles.detalhamentoLabel}>
+                                  Dividido entre ({despesa.participacoes.length} {despesa.participacoes.length === 1 ? 'pessoa' : 'pessoas'}):
+                                </Text>
                                 <Text variant="bodySmall" style={styles.detalhamentoParticipantes}>
                                   {despesa.participacoes.map(p => p.participante?.nome || 'Desconhecido').join(', ')}
                                 </Text>
