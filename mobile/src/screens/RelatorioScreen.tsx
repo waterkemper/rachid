@@ -27,8 +27,9 @@ const RelatorioScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   // Ref para rastrear o último evento que teve dados carregados
   const ultimoEventoCarregado = useRef<number | null>(null);
-  // Ref para evitar recarregamento durante a sincronização de foco
-  const sincronizandoFoco = useRef(false);
+  // Refs para evitar recarregamentos desnecessários
+  const grupoSelecionadoRef = useRef<number | null>(null);
+  const gruposRef = useRef<Grupo[]>([]);
   const [menuEventoVisible, setMenuEventoVisible] = useState(false);
   const [modalDetalhesVisible, setModalDetalhesVisible] = useState(false);
   const [participanteSelecionado, setParticipanteSelecionado] = useState<SaldoParticipante | null>(null);
@@ -141,6 +142,15 @@ const RelatorioScreen: React.FC = () => {
     setDespesasDetalhes([]);
   };
 
+  // Atualizar refs quando os valores mudarem
+  useEffect(() => {
+    gruposRef.current = grupos;
+  }, [grupos]);
+
+  useEffect(() => {
+    grupoSelecionadoRef.current = grupoSelecionado;
+  }, [grupoSelecionado]);
+
   useEffect(() => {
     loadGrupos();
   }, []);
@@ -149,11 +159,11 @@ const RelatorioScreen: React.FC = () => {
     if (eventoIdFromRoute) {
       // Validar se o evento existe antes de selecionar
       const eventoExiste = grupos.some(g => g.id === eventoIdFromRoute);
-      if (eventoExiste) {
+      if (eventoExiste && grupoSelecionadoRef.current !== eventoIdFromRoute) {
         setGrupoSelecionado(eventoIdFromRoute);
         // Salvar no storage
         AsyncStorage.setItem(STORAGE_KEY_SELECTED_EVENT, eventoIdFromRoute.toString());
-      } else {
+      } else if (!eventoExiste) {
         // Se o evento não existe, limpar storage
         AsyncStorage.removeItem(STORAGE_KEY_SELECTED_EVENT);
       }
@@ -165,44 +175,45 @@ const RelatorioScreen: React.FC = () => {
     React.useCallback(() => {
       const loadSelectedEvent = async () => {
         // Sempre verificar storage quando a tela recebe foco para sincronizar com outras tabs
-        if (grupos.length > 0) {
-          sincronizandoFoco.current = true;
+        const gruposAtuais = gruposRef.current;
+        const grupoSelecionadoAtual = grupoSelecionadoRef.current;
+        
+        if (gruposAtuais.length > 0) {
           try {
             const savedEventId = await AsyncStorage.getItem(STORAGE_KEY_SELECTED_EVENT);
+            
             if (savedEventId) {
               const eventId = parseInt(savedEventId, 10);
               // Verificar se o evento ainda existe na lista
-              const eventoExiste = grupos.some(g => g.id === eventId);
+              const eventoExiste = gruposAtuais.some(g => g.id === eventId);
               
               if (!eventoExiste) {
                 // Se o evento não existe mais, limpar o storage
                 await AsyncStorage.removeItem(STORAGE_KEY_SELECTED_EVENT);
                 // Se o evento selecionado atual também não existe, limpar
-                if (grupoSelecionado && !grupos.some(g => g.id === grupoSelecionado)) {
+                if (grupoSelecionadoAtual && !gruposAtuais.some(g => g.id === grupoSelecionadoAtual)) {
                   setGrupoSelecionado(null);
                   ultimoEventoCarregado.current = null;
                 }
-              } else if (!eventoIdFromRoute || eventoIdFromRoute !== eventId) {
-                // Se não há eventoIdFromRoute ou se o evento salvo é diferente do selecionado, atualizar
+              } else {
                 // IMPORTANTE: Só atualizar se realmente mudou para evitar recarregamentos desnecessários
-                if (grupoSelecionado !== eventId) {
+                // Usar === para garantir comparação estrita
+                if (grupoSelecionadoAtual !== eventId) {
                   setGrupoSelecionado(eventId);
                 }
               }
-            } else if (grupoSelecionado && !grupos.some(g => g.id === grupoSelecionado)) {
+            } else if (grupoSelecionadoAtual && !gruposAtuais.some(g => g.id === grupoSelecionadoAtual)) {
               // Se não há evento salvo mas o selecionado não existe mais, limpar
               setGrupoSelecionado(null);
               ultimoEventoCarregado.current = null;
             }
           } catch (error) {
             console.error('Erro ao carregar evento selecionado:', error);
-          } finally {
-            sincronizandoFoco.current = false;
           }
         }
       };
       loadSelectedEvent();
-    }, [eventoIdFromRoute, grupos.length, grupoSelecionado])
+    }, [])
   );
 
   useEffect(() => {

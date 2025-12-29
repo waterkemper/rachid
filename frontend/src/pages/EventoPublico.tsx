@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { publicEventoApi, EventoPublico as EventoPublicoType } from '../services/api';
-import { SaldoParticipante, SugestaoPagamento, SaldoGrupo, Despesa } from '../types';
+import { SaldoParticipante, SugestaoPagamento, SaldoGrupo, Despesa, Grupo } from '../types';
+import { formatarSugestoesPagamento } from '../utils/whatsappFormatter';
 import './EventoPublico.css';
 
 const EventoPublico: React.FC = () => {
@@ -15,6 +16,16 @@ const EventoPublico: React.FC = () => {
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Estados para modais e compartilhamento
+  const [modalWhatsAppVisible, setModalWhatsAppVisible] = useState(false);
+  const [mensagemWhatsApp, setMensagemWhatsApp] = useState('');
+  const [carregandoMensagem, setCarregandoMensagem] = useState(false);
+  const [modalDetalhesVisible, setModalDetalhesVisible] = useState(false);
+  const [participanteSelecionado, setParticipanteSelecionado] = useState<SaldoParticipante | null>(null);
+  const [grupoSelecionadoDetalhes, setGrupoSelecionadoDetalhes] = useState<SaldoGrupo | null>(null);
+  const [despesasDetalhes, setDespesasDetalhes] = useState<Despesa[]>([]);
+  const [loadingDetalhes, setLoadingDetalhes] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!token) return;
@@ -62,6 +73,153 @@ const EventoPublico: React.FC = () => {
 
   const handleCriarConta = () => {
     navigate(`/cadastro?token=${token}`);
+  };
+
+  const handleCompartilharWhatsApp = async () => {
+    if (!token || sugestoes.length === 0) {
+      alert('Não há sugestões de pagamento para compartilhar');
+      return;
+    }
+
+    try {
+      setCarregandoMensagem(true);
+      setModalWhatsAppVisible(true);
+
+      // Construir objeto evento para formatação
+      const eventoParaFormatar: Grupo = {
+        id: evento?.id || 0,
+        nome: evento?.nome || '',
+        descricao: evento?.descricao,
+        data: evento?.data || '',
+        usuarioId: 0,
+        createdAt: '',
+        updatedAt: '',
+      };
+
+      // Obter link de compartilhamento
+      const ogUrl = getAbsoluteUrl(`/evento/${token}`);
+      
+      // Gerar mensagem formatada
+      const mensagem = formatarSugestoesPagamento(
+        eventoParaFormatar,
+        sugestoes,
+        despesas,
+        evento?.participantes || [],
+        saldos,
+        saldosGrupos,
+        undefined, // subgrupos não disponíveis na API pública
+        ogUrl
+      );
+
+      // Adicionar texto inicial
+      let textoInicio = '📊 Pessoal, organizei as contas do evento em oRachid.\n';
+      textoInicio += 'Ele calcula tudo automaticamente (inclusive por famílias) e mostra quem paga quem, sem confusão.\n\n';
+      textoInicio += '🔗 *Visualize o evento online:*\n';
+      textoInicio += ogUrl + '\n';
+      textoInicio += '👉 Dá pra ver o resumo e seus saldos sem criar conta.\n\n';
+
+      setMensagemWhatsApp(textoInicio + mensagem);
+    } catch (err) {
+      alert('Erro ao gerar mensagem para WhatsApp');
+      console.error(err);
+    } finally {
+      setCarregandoMensagem(false);
+    }
+  };
+
+  const handleCopiarMensagem = async () => {
+    try {
+      await navigator.clipboard.writeText(mensagemWhatsApp);
+      alert('Mensagem copiada para a área de transferência!');
+    } catch (err) {
+      console.error('Erro ao copiar:', err);
+      alert('Erro ao copiar mensagem. Por favor, copie manualmente.');
+    }
+  };
+
+  const handleCloseWhatsApp = () => {
+    setModalWhatsAppVisible(false);
+    setMensagemWhatsApp('');
+  };
+
+  const handleOpenDetalhes = async (saldo: SaldoParticipante) => {
+    setGrupoSelecionadoDetalhes(null);
+    setParticipanteSelecionado(saldo);
+    setModalDetalhesVisible(true);
+    setLoadingDetalhes(true);
+    
+    try {
+      // Filtrar despesas relacionadas ao participante
+      const despesasRelacionadas = despesas.filter(despesa => {
+        // Despesas que o participante pagou
+        if (despesa.pagador?.id === saldo.participanteId) {
+          return true;
+        }
+        // Despesas em que o participante deve pagar
+        if (despesa.participacoes?.some((p: any) => p.participante_id === saldo.participanteId)) {
+          return true;
+        }
+        return false;
+      });
+      
+      setDespesasDetalhes(despesasRelacionadas);
+    } catch (err) {
+      alert('Erro ao carregar detalhes do participante');
+    } finally {
+      setLoadingDetalhes(false);
+    }
+  };
+
+  const handleOpenDetalhesGrupo = async (grupoInfo: { grupoId: number; grupoNome: string; totalPagou: number; totalDeve: number; saldo: number }) => {
+    // Encontrar o grupo completo em saldosGrupos
+    const grupoCompleto = saldosGrupos.find(g => g.grupoId === grupoInfo.grupoId);
+    if (!grupoCompleto) return;
+    
+    setParticipanteSelecionado(null);
+    setGrupoSelecionadoDetalhes(grupoCompleto);
+    setModalDetalhesVisible(true);
+    setLoadingDetalhes(true);
+    
+    try {
+      // Obter IDs dos participantes do grupo
+      const participantesIdsGrupo = new Set(grupoCompleto.participantes.map(p => p.participanteId));
+      
+      // Filtrar despesas relacionadas aos participantes do grupo
+      const despesasRelacionadas = despesas.filter(despesa => {
+        // Despesas que algum participante do grupo pagou
+        if (despesa.pagador?.id && participantesIdsGrupo.has(despesa.pagador.id)) {
+          return true;
+        }
+        // Despesas em que algum participante do grupo deve pagar
+        if (despesa.participacoes?.some((p: any) => participantesIdsGrupo.has(p.participante_id))) {
+          return true;
+        }
+        return false;
+      });
+      
+      setDespesasDetalhes(despesasRelacionadas);
+    } catch (err) {
+      alert('Erro ao carregar detalhes do grupo');
+    } finally {
+      setLoadingDetalhes(false);
+    }
+  };
+
+  const handleCloseDetalhes = () => {
+    setModalDetalhesVisible(false);
+    setParticipanteSelecionado(null);
+    setGrupoSelecionadoDetalhes(null);
+    setDespesasDetalhes([]);
+  };
+
+  const handleCopiarPix = async (pix: string) => {
+    try {
+      await navigator.clipboard.writeText(pix);
+      alert('PIX copiado para a área de transferência!');
+    } catch (err) {
+      console.error('Erro ao copiar PIX:', err);
+      alert('Erro ao copiar PIX');
+    }
   };
 
   // Função para organizar saldos por grupo (igual a Participacoes)
@@ -215,8 +373,45 @@ const EventoPublico: React.FC = () => {
           <>
             {/* 1. Tabela de Sugestões de Pagamento */}
             <div className="card" style={{ marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                <h3 style={{ margin: 0 }}>Sugestões de Pagamento</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>Sugestões de Pagamento</h3>
+                  {sugestoes.length > 0 && (
+                    <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'rgba(226, 232, 240, 0.6)', fontStyle: 'italic' }}>
+                      🧩 Por grupo de pessoas - O Rachid reduz o número de transferências agrupando pagamentos entre famílias.
+                    </p>
+                  )}
+                </div>
+                {sugestoes.length > 0 && (
+                  <button
+                    onClick={handleCompartilharWhatsApp}
+                    style={{
+                      padding: '10px 20px',
+                      backgroundColor: '#25D366',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      fontSize: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#20BA5A';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#25D366';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
+                  >
+                    <span>📤</span>
+                    Compartilhar
+                  </button>
+                )}
               </div>
               {sugestoes.length === 0 ? (
                 <p style={{ textAlign: 'center', color: 'rgba(226, 232, 240, 0.6)', padding: '20px' }}>
@@ -266,8 +461,66 @@ const EventoPublico: React.FC = () => {
                           {formatCurrency(sugestao.valor)}
                         </div>
                         {chavesPix.length > 0 && (
-                          <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginTop: '4px' }}>
-                            💳 PIX: {chavesPix.length === 1 ? chavesPix[0] : chavesPix.join(' ou ')}
+                          <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span>💳 PIX:</span>
+                            {chavesPix.length === 1 ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <span>{chavesPix[0]}</span>
+                                <button
+                                  onClick={() => handleCopiarPix(chavesPix[0])}
+                                  style={{
+                                    padding: '4px 8px',
+                                    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                                    border: '1px solid rgba(99, 102, 241, 0.3)',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    color: 'rgba(255, 255, 255, 0.9)',
+                                    fontSize: '12px',
+                                    transition: 'all 0.2s',
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.3)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.2)';
+                                  }}
+                                  title="Copiar PIX"
+                                >
+                                  📋
+                                </button>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                {chavesPix.map((pix, pixIndex) => (
+                                  <div key={pixIndex} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <span>{pix}</span>
+                                    <button
+                                      onClick={() => handleCopiarPix(pix)}
+                                      style={{
+                                        padding: '4px 8px',
+                                        backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                                        border: '1px solid rgba(99, 102, 241, 0.3)',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        color: 'rgba(255, 255, 255, 0.9)',
+                                        fontSize: '12px',
+                                        transition: 'all 0.2s',
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.3)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.2)';
+                                      }}
+                                      title="Copiar PIX"
+                                    >
+                                      📋
+                                    </button>
+                                    {pixIndex < chavesPix.length - 1 && <span> ou </span>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -294,13 +547,26 @@ const EventoPublico: React.FC = () => {
                       return (
                         <div key={grupoId}>
                           <div
+                            onClick={() => handleOpenDetalhesGrupo({ grupoId, grupoNome, totalPagou, totalDeve, saldo })}
                             style={{
                               padding: '16px',
                               backgroundColor: 'rgba(99, 102, 241, 0.15)',
                               borderBottom: '2px solid rgba(99, 102, 241, 0.3)',
                               marginTop: index > 0 ? '16px' : '0',
                               marginBottom: '12px',
-                              borderRadius: '8px'
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.25)';
+                              e.currentTarget.style.transform = 'translateY(-2px)';
+                              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.15)';
+                              e.currentTarget.style.transform = 'translateY(0)';
+                              e.currentTarget.style.boxShadow = 'none';
                             }}
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
@@ -420,10 +686,21 @@ const EventoPublico: React.FC = () => {
                         {saldosSemGrupo.map((saldo) => (
                           <div
                             key={saldo.participanteId}
+                            onClick={() => handleOpenDetalhes(saldo)}
                             style={{
                               padding: '16px',
                               borderBottom: '1px solid rgba(148, 163, 184, 0.2)',
-                              paddingLeft: gruposOrdenados.length > 0 ? '32px' : '16px'
+                              paddingLeft: gruposOrdenados.length > 0 ? '32px' : '16px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)';
+                              e.currentTarget.style.transform = 'translateX(4px)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                              e.currentTarget.style.transform = 'translateX(0)';
                             }}
                           >
                             <div style={{ fontWeight: '600', fontSize: '16px', color: 'rgba(255, 255, 255, 0.92)', marginBottom: '8px' }}>
@@ -441,6 +718,9 @@ const EventoPublico: React.FC = () => {
                             </div>
                             <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '4px' }}>
                               Pagou: <span style={{ color: 'rgba(34, 197, 94, 0.9)' }}>{formatCurrency(saldo.totalPagou)}</span> | Deve: <span style={{ color: 'rgba(239, 68, 68, 0.9)' }}>{formatCurrency(saldo.totalDeve)}</span>
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'rgba(226, 232, 240, 0.5)', fontStyle: 'italic', marginTop: '4px' }}>
+                              Clique para ver detalhes
                             </div>
                           </div>
                         ))}
@@ -507,6 +787,434 @@ const EventoPublico: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Modal de compartilhar WhatsApp */}
+      {modalWhatsAppVisible && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+            padding: '20px',
+          }}
+          onClick={handleCloseWhatsApp}
+        >
+          <div
+            style={{
+              backgroundColor: 'rgba(11, 18, 32, 0.98)',
+              borderRadius: '18px',
+              padding: '24px',
+              maxWidth: '600px',
+              width: '100%',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              border: '1px solid rgba(148, 163, 184, 0.2)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ margin: 0, color: 'rgba(255, 255, 255, 0.95)' }}>Compartilhar via WhatsApp</h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'rgba(226, 232, 240, 0.7)' }}>
+                  Copie a mensagem e cole no WhatsApp
+                </p>
+              </div>
+              <button
+                onClick={handleCloseWhatsApp}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                }}
+              >
+                ×
+              </button>
+            </div>
+            {carregandoMensagem ? (
+              <div style={{ padding: '40px', textAlign: 'center' }}>
+                <div style={{ color: 'rgba(226, 232, 240, 0.7)' }}>Gerando mensagem...</div>
+              </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    maxHeight: '400px',
+                    overflowY: 'auto',
+                    marginBottom: '16px',
+                    padding: '12px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                    borderRadius: '8px',
+                    fontFamily: 'monospace',
+                    fontSize: '14px',
+                    lineHeight: '20px',
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    whiteSpace: 'pre-wrap',
+                  }}
+                >
+                  {mensagemWhatsApp}
+                </div>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={handleCloseWhatsApp}
+                    style={{
+                      padding: '10px 20px',
+                      backgroundColor: 'transparent',
+                      color: 'rgba(255, 255, 255, 0.9)',
+                      border: '1px solid rgba(148, 163, 184, 0.3)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                    }}
+                  >
+                    Fechar
+                  </button>
+                  <button
+                    onClick={handleCopiarMensagem}
+                    style={{
+                      padding: '10px 20px',
+                      backgroundColor: '#25D366',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    📋 Copiar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de detalhes */}
+      {modalDetalhesVisible && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+            padding: '20px',
+          }}
+          onClick={handleCloseDetalhes}
+        >
+          <div
+            style={{
+              backgroundColor: 'rgba(11, 18, 32, 0.98)',
+              borderRadius: '18px',
+              padding: '24px',
+              maxWidth: '700px',
+              width: '100%',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              border: '1px solid rgba(148, 163, 184, 0.2)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ margin: 0, color: 'rgba(255, 255, 255, 0.95)' }}>
+                  {grupoSelecionadoDetalhes?.grupoNome || participanteSelecionado?.participanteNome || 'Detalhes'}
+                </h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'rgba(226, 232, 240, 0.7)' }}>
+                  {grupoSelecionadoDetalhes
+                    ? `Participantes: ${grupoSelecionadoDetalhes.participantes.map(p => p.participanteNome).join(', ')}`
+                    : 'Despesas e Recebimentos'}
+                </p>
+              </div>
+              <button
+                onClick={handleCloseDetalhes}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                }}
+              >
+                ×
+              </button>
+            </div>
+            {loadingDetalhes ? (
+              <div style={{ padding: '40px', textAlign: 'center' }}>
+                <div style={{ color: 'rgba(226, 232, 240, 0.7)' }}>Carregando...</div>
+              </div>
+            ) : (
+              <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                {(grupoSelecionadoDetalhes || participanteSelecionado) && (
+                  <div
+                    style={{
+                      marginBottom: '16px',
+                      padding: '12px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                      borderRadius: '12px',
+                    }}
+                  >
+                    <h4 style={{ margin: '0 0 12px 0', color: 'rgba(255, 255, 255, 0.95)' }}>Resumo</h4>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ color: 'rgba(226, 232, 240, 0.8)' }}>Total Pago:</span>
+                      <span style={{ color: '#4caf50', fontWeight: '600' }}>
+                        {formatCurrency(
+                          grupoSelecionadoDetalhes?.totalPagou || participanteSelecionado?.totalPagou || 0
+                        )}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ color: 'rgba(226, 232, 240, 0.8)' }}>Total Devido:</span>
+                      <span style={{ color: '#f44336', fontWeight: '600' }}>
+                        {formatCurrency(
+                          grupoSelecionadoDetalhes?.totalDeve || participanteSelecionado?.totalDeve || 0
+                        )}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        marginTop: '12px',
+                        paddingTop: '12px',
+                        borderTop: '1px solid rgba(148, 163, 184, 0.2)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <span style={{ color: 'rgba(255, 255, 255, 0.95)', fontWeight: '600' }}>Saldo:</span>
+                      <span
+                        style={{
+                          color:
+                            (grupoSelecionadoDetalhes?.saldo || participanteSelecionado?.saldo || 0) >= 0
+                              ? '#4caf50'
+                              : '#f44336',
+                          fontWeight: 'bold',
+                          fontSize: '18px',
+                        }}
+                      >
+                        {formatCurrency(
+                          grupoSelecionadoDetalhes?.saldo || participanteSelecionado?.saldo || 0
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    marginTop: '16px',
+                    paddingTop: '16px',
+                    borderTop: '1px solid rgba(148, 163, 184, 0.2)',
+                  }}
+                >
+                  <h4 style={{ margin: '0 0 12px 0', color: 'rgba(255, 255, 255, 0.95)' }}>Detalhamento</h4>
+                  {despesasDetalhes.length === 0 ? (
+                    <p style={{ textAlign: 'center', color: 'rgba(226, 232, 240, 0.6)', padding: '20px' }}>
+                      Nenhuma despesa encontrada
+                    </p>
+                  ) : (
+                    despesasDetalhes.map((despesa) => {
+                      if (grupoSelecionadoDetalhes) {
+                        const participantesIdsGrupo = new Set(
+                          grupoSelecionadoDetalhes.participantes.map(p => p.participanteId)
+                        );
+                        const algumParticipantePagou =
+                          despesa.pagador?.id && participantesIdsGrupo.has(despesa.pagador.id);
+                        const participacoesDoGrupo =
+                          despesa.participacoes?.filter((p: any) =>
+                            participantesIdsGrupo.has(p.participante_id)
+                          ) || [];
+                        const totalGrupoDeve = participacoesDoGrupo.reduce(
+                          (sum, p: any) => sum + (p.valorDevePagar || 0),
+                          0
+                        );
+
+                        return (
+                          <div
+                            key={despesa.id}
+                            style={{
+                              marginBottom: '16px',
+                              padding: '12px',
+                              backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                              borderRadius: '12px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                marginBottom: '8px',
+                              }}
+                            >
+                              <span style={{ fontWeight: '600', color: 'rgba(255, 255, 255, 0.95)' }}>
+                                {despesa.descricao}
+                              </span>
+                              <span style={{ fontSize: '12px', color: 'rgba(226, 232, 240, 0.6)' }}>
+                                {formatarData(despesa.data)}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '14px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '12px' }}>
+                              Valor Total: {formatCurrency(despesa.valorTotal)}
+                            </div>
+                            {algumParticipantePagou && (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '12px',
+                                  marginTop: '8px',
+                                  padding: '8px',
+                                  backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                  borderRadius: '8px',
+                                }}
+                              >
+                                <span style={{ fontSize: '24px' }}>💵</span>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ color: 'rgba(226, 232, 240, 0.8)', fontSize: '14px' }}>
+                                    {despesa.pagador?.nome} (do grupo) pagou esta despesa
+                                  </div>
+                                  <div style={{ color: '#4caf50', fontWeight: 'bold', marginTop: '4px' }}>
+                                    + {formatCurrency(despesa.valorTotal)}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {participacoesDoGrupo.length > 0 && (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '12px',
+                                  marginTop: '8px',
+                                  padding: '8px',
+                                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                  borderRadius: '8px',
+                                }}
+                              >
+                                <span style={{ fontSize: '24px' }}>📋</span>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ color: 'rgba(226, 232, 240, 0.8)', fontSize: '14px' }}>
+                                    Grupo deve pagar ({participacoesDoGrupo.length}{' '}
+                                    {participacoesDoGrupo.length === 1 ? 'participante' : 'participantes'})
+                                  </div>
+                                  <div style={{ color: '#f44336', fontWeight: 'bold', marginTop: '4px' }}>
+                                    - {formatCurrency(totalGrupoDeve)}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      } else {
+                        const participantePagou = despesa.pagador?.id === participanteSelecionado?.participanteId;
+                        const participacao = despesa.participacoes?.find(
+                          (p: any) => p.participante_id === participanteSelecionado?.participanteId
+                        );
+
+                        return (
+                          <div
+                            key={despesa.id}
+                            style={{
+                              marginBottom: '16px',
+                              padding: '12px',
+                              backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                              borderRadius: '12px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                marginBottom: '8px',
+                              }}
+                            >
+                              <span style={{ fontWeight: '600', color: 'rgba(255, 255, 255, 0.95)' }}>
+                                {despesa.descricao}
+                              </span>
+                              <span style={{ fontSize: '12px', color: 'rgba(226, 232, 240, 0.6)' }}>
+                                {formatarData(despesa.data)}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '14px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '12px' }}>
+                              Valor Total: {formatCurrency(despesa.valorTotal)}
+                            </div>
+                            {participantePagou && (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '12px',
+                                  marginTop: '8px',
+                                  padding: '8px',
+                                  backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                  borderRadius: '8px',
+                                }}
+                              >
+                                <span style={{ fontSize: '24px' }}>💵</span>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ color: 'rgba(226, 232, 240, 0.8)', fontSize: '14px' }}>
+                                    Pagou esta despesa
+                                  </div>
+                                  <div style={{ color: '#4caf50', fontWeight: 'bold', marginTop: '4px' }}>
+                                    + {formatCurrency(despesa.valorTotal)}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {participacao && (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '12px',
+                                  marginTop: '8px',
+                                  padding: '8px',
+                                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                  borderRadius: '8px',
+                                }}
+                              >
+                                <span style={{ fontSize: '24px' }}>📋</span>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ color: 'rgba(226, 232, 240, 0.8)', fontSize: '14px' }}>
+                                    Deve pagar (sua parte)
+                                  </div>
+                                  <div style={{ color: '#f44336', fontWeight: 'bold', marginTop: '4px' }}>
+                                    - {formatCurrency(participacao.valorDevePagar)}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
     </>
   );
