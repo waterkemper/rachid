@@ -32,6 +32,7 @@ const RelatorioScreen: React.FC = () => {
   const [menuEventoVisible, setMenuEventoVisible] = useState(false);
   const [modalDetalhesVisible, setModalDetalhesVisible] = useState(false);
   const [participanteSelecionado, setParticipanteSelecionado] = useState<SaldoParticipante | null>(null);
+  const [grupoSelecionadoDetalhes, setGrupoSelecionadoDetalhes] = useState<SaldoGrupo | null>(null);
   const [despesasDetalhes, setDespesasDetalhes] = useState<Despesa[]>([]);
   const [loadingDetalhes, setLoadingDetalhes] = useState(false);
   const [totalDespesas, setTotalDespesas] = useState(0);
@@ -63,6 +64,7 @@ const RelatorioScreen: React.FC = () => {
   const handleOpenDetalhes = async (saldo: SaldoParticipante) => {
     if (!grupoSelecionado) return;
     
+    setGrupoSelecionadoDetalhes(null);
     setParticipanteSelecionado(saldo);
     setModalDetalhesVisible(true);
     setLoadingDetalhes(true);
@@ -92,9 +94,50 @@ const RelatorioScreen: React.FC = () => {
     }
   };
 
+  const handleOpenDetalhesGrupo = async (grupoInfo: { grupoId: number; grupoNome: string; totalPagou: number; totalDeve: number; saldo: number }) => {
+    if (!grupoSelecionado) return;
+    
+    // Encontrar o grupo completo em saldosGrupos
+    const grupoCompleto = saldosGrupos.find(g => g.grupoId === grupoInfo.grupoId);
+    if (!grupoCompleto) return;
+    
+    setParticipanteSelecionado(null);
+    setGrupoSelecionadoDetalhes(grupoCompleto);
+    setModalDetalhesVisible(true);
+    setLoadingDetalhes(true);
+    
+    try {
+      // Buscar todas as despesas do grupo
+      const todasDespesas = await despesaApi.getAll(grupoSelecionado);
+      
+      // Obter IDs dos participantes do grupo
+      const participantesIdsGrupo = new Set(grupoCompleto.participantes.map(p => p.participanteId));
+      
+      // Filtrar despesas relacionadas aos participantes do grupo
+      const despesasRelacionadas = todasDespesas.filter(despesa => {
+        // Despesas que algum participante do grupo pagou
+        if (despesa.pagador?.id && participantesIdsGrupo.has(despesa.pagador.id)) {
+          return true;
+        }
+        // Despesas em que algum participante do grupo deve pagar
+        if (despesa.participacoes?.some((p: any) => participantesIdsGrupo.has(p.participante_id))) {
+          return true;
+        }
+        return false;
+      });
+      
+      setDespesasDetalhes(despesasRelacionadas);
+    } catch (err) {
+      Alert.alert('Erro', 'Erro ao carregar detalhes do grupo');
+    } finally {
+      setLoadingDetalhes(false);
+    }
+  };
+
   const handleCloseDetalhes = () => {
     setModalDetalhesVisible(false);
     setParticipanteSelecionado(null);
+    setGrupoSelecionadoDetalhes(null);
     setDespesasDetalhes([]);
   };
 
@@ -749,7 +792,12 @@ const RelatorioScreen: React.FC = () => {
                         {gruposOrdenados.map(({ grupoId, grupoNome, totalPagou, totalDeve, saldo }, index) => {
                           const grupoCompleto = saldosGrupos.find(g => g.grupoId === grupoId);
                           return (
-                            <View key={grupoId} style={styles.grupoCard}>
+                            <TouchableOpacity
+                              key={grupoId}
+                              style={styles.grupoCard}
+                              onPress={() => handleOpenDetalhesGrupo({ grupoId, grupoNome, totalPagou, totalDeve, saldo })}
+                              activeOpacity={0.7}
+                            >
                               <View style={styles.grupoHeader}>
                                 <View style={styles.grupoHeaderLeft}>
                                   <Text variant="titleMedium" style={styles.grupoNome}>{grupoNome}</Text>
@@ -787,7 +835,7 @@ const RelatorioScreen: React.FC = () => {
                                   </Text>
                                 </View>
                               </View>
-                            </View>
+                            </TouchableOpacity>
                           );
                         })}
                         
@@ -928,8 +976,10 @@ const RelatorioScreen: React.FC = () => {
         >
           <Card style={styles.modalCard}>
             <Card.Title
-              title={participanteSelecionado?.participanteNome || 'Detalhes'}
-              subtitle="Despesas e Recebimentos"
+              title={grupoSelecionadoDetalhes?.grupoNome || participanteSelecionado?.participanteNome || 'Detalhes'}
+              subtitle={grupoSelecionadoDetalhes 
+                ? `Participantes: ${grupoSelecionadoDetalhes.participantes.map(p => p.participanteNome).join(', ')}`
+                : "Despesas e Recebimentos"}
               right={(props) => (
                 <Button
                   {...props}
@@ -947,6 +997,40 @@ const RelatorioScreen: React.FC = () => {
                 </View>
               ) : (
                 <ScrollView style={styles.detalhesScrollView}>
+                  {grupoSelecionadoDetalhes && (
+                    <View style={styles.resumoContainer}>
+                      <Text variant="titleMedium" style={styles.resumoTitle}>Resumo do Grupo</Text>
+                      <View style={styles.resumoItem}>
+                        <Text variant="bodyMedium">Total Pago:</Text>
+                        <Text variant="bodyLarge" style={styles.resumoValorPositivo}>
+                          {formatCurrency(grupoSelecionadoDetalhes.totalPagou)}
+                        </Text>
+                      </View>
+                      <View style={styles.resumoItem}>
+                        <Text variant="bodyMedium">Total Devido:</Text>
+                        <Text variant="bodyLarge" style={styles.resumoValorNegativo}>
+                          {formatCurrency(grupoSelecionadoDetalhes.totalDeve)}
+                        </Text>
+                      </View>
+                      <Divider style={styles.divider} />
+                      <View style={styles.resumoItem}>
+                        <Text variant="titleMedium">Saldo:</Text>
+                        <Text
+                          variant="titleLarge"
+                          style={[
+                            styles.resumoSaldo,
+                            grupoSelecionadoDetalhes.saldo > 0
+                              ? styles.positivo
+                              : grupoSelecionadoDetalhes.saldo < 0
+                              ? styles.negativo
+                              : null,
+                          ]}
+                        >
+                          {formatCurrency(grupoSelecionadoDetalhes.saldo)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
                   {participanteSelecionado && (
                     <View style={styles.resumoContainer}>
                       <Text variant="titleMedium" style={styles.resumoTitle}>Resumo</Text>
@@ -990,60 +1074,121 @@ const RelatorioScreen: React.FC = () => {
                     <Text style={styles.emptyText}>Nenhuma despesa encontrada</Text>
                   ) : (
                     despesasDetalhes.map((despesa) => {
-                      const participantePagou = despesa.pagador?.id === participanteSelecionado?.participanteId;
-                      const participacao = despesa.participacoes?.find(
-                        (p: any) => p.participante_id === participanteSelecionado?.participanteId
-                      );
+                      if (grupoSelecionadoDetalhes) {
+                        // Para grupos, mostrar se algum participante do grupo pagou ou deve
+                        const participantesIdsGrupo = new Set(grupoSelecionadoDetalhes.participantes.map(p => p.participanteId));
+                        const algumParticipantePagou = despesa.pagador?.id && participantesIdsGrupo.has(despesa.pagador.id);
+                        const participacoesDoGrupo = despesa.participacoes?.filter(
+                          (p: any) => participantesIdsGrupo.has(p.participante_id)
+                        ) || [];
+                        const totalGrupoDeve = participacoesDoGrupo.reduce((sum, p: any) => sum + (p.valorDevePagar || 0), 0);
 
-                      return (
-                        <View key={despesa.id} style={styles.despesaItem}>
-                          <View style={styles.despesaHeader}>
-                            <Text variant="titleSmall" style={styles.despesaDescricao}>
-                              {despesa.descricao}
+                        return (
+                          <View key={despesa.id} style={styles.despesaItem}>
+                            <View style={styles.despesaHeader}>
+                              <Text variant="titleSmall" style={styles.despesaDescricao}>
+                                {despesa.descricao}
+                              </Text>
+                              <Text variant="bodySmall" style={styles.despesaData}>
+                                {formatDate(despesa.data)}
+                              </Text>
+                            </View>
+                            <Text variant="bodySmall" style={styles.despesaTotal}>
+                              Valor Total: {formatCurrency(despesa.valorTotal)}
                             </Text>
-                            <Text variant="bodySmall" style={styles.despesaData}>
-                              {formatDate(despesa.data)}
-                            </Text>
+
+                            {algumParticipantePagou && (
+                              <View style={styles.transacaoItem}>
+                                <View style={styles.transacaoIconContainer}>
+                                  <Text style={styles.transacaoIcon}>💵</Text>
+                                </View>
+                                <View style={styles.transacaoInfo}>
+                                  <Text variant="bodyMedium" style={styles.transacaoLabel}>
+                                    {despesa.pagador?.nome} (do grupo) pagou esta despesa
+                                  </Text>
+                                  <Text variant="bodyLarge" style={styles.transacaoValorPositivo}>
+                                    + {formatCurrency(despesa.valorTotal)}
+                                  </Text>
+                                </View>
+                              </View>
+                            )}
+
+                            {participacoesDoGrupo.length > 0 && (
+                              <View style={styles.transacaoItem}>
+                                <View style={styles.transacaoIconContainer}>
+                                  <Text style={styles.transacaoIcon}>📋</Text>
+                                </View>
+                                <View style={styles.transacaoInfo}>
+                                  <Text variant="bodyMedium" style={styles.transacaoLabel}>
+                                    Grupo deve pagar ({participacoesDoGrupo.length} {participacoesDoGrupo.length === 1 ? 'participante' : 'participantes'})
+                                  </Text>
+                                  <Text variant="bodyLarge" style={styles.transacaoValorNegativo}>
+                                    - {formatCurrency(totalGrupoDeve)}
+                                  </Text>
+                                </View>
+                              </View>
+                            )}
+
+                            <Divider style={styles.dividerItem} />
                           </View>
-                          <Text variant="bodySmall" style={styles.despesaTotal}>
-                            Valor Total: {formatCurrency(despesa.valorTotal)}
-                          </Text>
+                        );
+                      } else {
+                        // Para participante individual
+                        const participantePagou = despesa.pagador?.id === participanteSelecionado?.participanteId;
+                        const participacao = despesa.participacoes?.find(
+                          (p: any) => p.participante_id === participanteSelecionado?.participanteId
+                        );
 
-                          {participantePagou && (
-                            <View style={styles.transacaoItem}>
-                              <View style={styles.transacaoIconContainer}>
-                                <Text style={styles.transacaoIcon}>💵</Text>
-                              </View>
-                              <View style={styles.transacaoInfo}>
-                                <Text variant="bodyMedium" style={styles.transacaoLabel}>
-                                  Pagou esta despesa
-                                </Text>
-                                <Text variant="bodyLarge" style={styles.transacaoValorPositivo}>
-                                  + {formatCurrency(despesa.valorTotal)}
-                                </Text>
-                              </View>
+                        return (
+                          <View key={despesa.id} style={styles.despesaItem}>
+                            <View style={styles.despesaHeader}>
+                              <Text variant="titleSmall" style={styles.despesaDescricao}>
+                                {despesa.descricao}
+                              </Text>
+                              <Text variant="bodySmall" style={styles.despesaData}>
+                                {formatDate(despesa.data)}
+                              </Text>
                             </View>
-                          )}
+                            <Text variant="bodySmall" style={styles.despesaTotal}>
+                              Valor Total: {formatCurrency(despesa.valorTotal)}
+                            </Text>
 
-                          {participacao && (
-                            <View style={styles.transacaoItem}>
-                              <View style={styles.transacaoIconContainer}>
-                                <Text style={styles.transacaoIcon}>📋</Text>
+                            {participantePagou && (
+                              <View style={styles.transacaoItem}>
+                                <View style={styles.transacaoIconContainer}>
+                                  <Text style={styles.transacaoIcon}>💵</Text>
+                                </View>
+                                <View style={styles.transacaoInfo}>
+                                  <Text variant="bodyMedium" style={styles.transacaoLabel}>
+                                    Pagou esta despesa
+                                  </Text>
+                                  <Text variant="bodyLarge" style={styles.transacaoValorPositivo}>
+                                    + {formatCurrency(despesa.valorTotal)}
+                                  </Text>
+                                </View>
                               </View>
-                              <View style={styles.transacaoInfo}>
-                                <Text variant="bodyMedium" style={styles.transacaoLabel}>
-                                  Deve pagar (sua parte)
-                                </Text>
-                                <Text variant="bodyLarge" style={styles.transacaoValorNegativo}>
-                                  - {formatCurrency(participacao.valorDevePagar)}
-                                </Text>
-                              </View>
-                            </View>
-                          )}
+                            )}
 
-                          <Divider style={styles.dividerItem} />
-                        </View>
-                      );
+                            {participacao && (
+                              <View style={styles.transacaoItem}>
+                                <View style={styles.transacaoIconContainer}>
+                                  <Text style={styles.transacaoIcon}>📋</Text>
+                                </View>
+                                <View style={styles.transacaoInfo}>
+                                  <Text variant="bodyMedium" style={styles.transacaoLabel}>
+                                    Deve pagar (sua parte)
+                                  </Text>
+                                  <Text variant="bodyLarge" style={styles.transacaoValorNegativo}>
+                                    - {formatCurrency(participacao.valorDevePagar)}
+                                  </Text>
+                                </View>
+                              </View>
+                            )}
+
+                            <Divider style={styles.dividerItem} />
+                          </View>
+                        );
+                      }
                     })
                   )}
                 </ScrollView>

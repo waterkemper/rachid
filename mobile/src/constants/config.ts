@@ -5,7 +5,7 @@ import Constants from 'expo-constants';
 // Se estiver usando simulador iOS no mesmo Mac, pode usar localhost
 // Para Android ou dispositivo físico, use o IP da máquina
 export const API_URL = __DEV__ 
-  ? 'http://192.168.15.25:3001/api'  // Use seu IP aqui para dispositivo físico/emulador
+  ? 'http://192.168.15.25image.png:3001/api'  // Use seu IP aqui para dispositivo físico/emulador
   : (Constants.expoConfig?.extra?.apiUrl || 'https://api.seusite.com/api');
 
 export const STORAGE_KEYS = {

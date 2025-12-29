@@ -68,7 +68,7 @@
 - ✅ Visualizar participantes de um grupo
 
 ### Dados do Grupo
-- ✅ Nome
+- ✅ Nomex'x'z
 - ✅ Descrição (opcional)
 - ✅ Data do evento
 - ✅ Vinculação com usuário

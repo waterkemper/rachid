@@ -262,6 +262,15 @@ class GrupoService {
             participante_id: participanteId,
         });
         await this.participanteGrupoRepository.save(participanteGrupo);
+        // Sincronizar participações nas despesas para incluir o novo participante
+        // Esta função adiciona apenas participantes que faltam, então é segura chamar múltiplas vezes
+        try {
+            await DespesaService_1.DespesaService.sincronizarParticipacoesDespesas(grupoId);
+        }
+        catch (err) {
+            console.error('[GrupoService.adicionarParticipante] Erro ao sincronizar participações nas despesas:', err);
+            // Não falhar a adição do participante se a sincronização falhar
+        }
         return true;
     }
     static async removerParticipante(grupoId, participanteId, usuarioId) {
