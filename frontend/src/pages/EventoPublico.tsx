@@ -4,6 +4,8 @@ import { Helmet } from 'react-helmet-async';
 import { publicEventoApi, EventoPublico as EventoPublicoType } from '../services/api';
 import { SaldoParticipante, SugestaoPagamento, SaldoGrupo, Despesa, Grupo } from '../types';
 import { formatarSugestoesPagamento } from '../utils/whatsappFormatter';
+import { FaShareAlt, FaCopy } from 'react-icons/fa';
+import { FaWhatsapp } from 'react-icons/fa6';
 import './EventoPublico.css';
 
 const EventoPublico: React.FC = () => {
@@ -373,46 +375,53 @@ const EventoPublico: React.FC = () => {
           <>
             {/* 1. Tabela de Sugestões de Pagamento */}
             <div className="card" style={{ marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                   <h3 style={{ margin: 0 }}>Sugestões de Pagamento</h3>
-                  {sugestoes.length > 0 && (
-                    <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'rgba(226, 232, 240, 0.6)', fontStyle: 'italic' }}>
-                      🧩 Por grupo de pessoas - O Rachid reduz o número de transferências agrupando pagamentos entre famílias.
-                    </p>
-                  )}
+                  <span style={{
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: 'rgba(148, 163, 184, 0.9)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    marginTop: '4px'
+                  }}>
+                    🧩 Por grupo de pessoas
+                  </span>
                 </div>
                 {sugestoes.length > 0 && (
-                  <button
-                    onClick={handleCompartilharWhatsApp}
-                    style={{
-                      padding: '10px 20px',
-                      backgroundColor: '#25D366',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontWeight: '600',
-                      fontSize: '14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = '#20BA5A';
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = '#25D366';
-                      e.currentTarget.style.transform = 'translateY(0)';
-                    }}
-                  >
-                    <span>📤</span>
-                    Compartilhar
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleCompartilharWhatsApp}
+                      style={{ 
+                        padding: '8px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      <FaShareAlt />
+                      <FaWhatsapp />
+                      <span>Compartilhar resumo (WhatsApp)</span>
+                    </button>
+                    <span style={{ fontSize: '11px', color: 'rgba(226, 232, 240, 0.6)', whiteSpace: 'nowrap' }}>
+                      Qualquer pessoa pode visualizar sem criar conta
+                    </span>
+                  </div>
                 )}
               </div>
+              {sugestoes.length > 0 && (
+                <p style={{ 
+                  fontSize: '13px', 
+                  color: 'rgba(226, 232, 240, 0.7)', 
+                  margin: '0 0 15px 0',
+                  fontStyle: 'italic'
+                }}>
+                  O Rachid reduz o número de transferências agrupando pagamentos entre famílias.
+                </p>
+              )}
               {sugestoes.length === 0 ? (
                 <p style={{ textAlign: 'center', color: 'rgba(226, 232, 240, 0.6)', padding: '20px' }}>
                   Nenhuma sugestão encontrada
@@ -461,66 +470,34 @@ const EventoPublico: React.FC = () => {
                           {formatCurrency(sugestao.valor)}
                         </div>
                         {chavesPix.length > 0 && (
-                          <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <span>💳 PIX:</span>
-                            {chavesPix.length === 1 ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <span>{chavesPix[0]}</span>
-                                <button
-                                  onClick={() => handleCopiarPix(chavesPix[0])}
-                                  style={{
-                                    padding: '4px 8px',
-                                    backgroundColor: 'rgba(99, 102, 241, 0.2)',
-                                    border: '1px solid rgba(99, 102, 241, 0.3)',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    color: 'rgba(255, 255, 255, 0.9)',
-                                    fontSize: '12px',
-                                    transition: 'all 0.2s',
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.3)';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.2)';
-                                  }}
-                                  title="Copiar PIX"
-                                >
-                                  📋
-                                </button>
-                              </div>
-                            ) : (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                                {chavesPix.map((pix, pixIndex) => (
-                                  <div key={pixIndex} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <span>{pix}</span>
-                                    <button
-                                      onClick={() => handleCopiarPix(pix)}
-                                      style={{
-                                        padding: '4px 8px',
-                                        backgroundColor: 'rgba(99, 102, 241, 0.2)',
-                                        border: '1px solid rgba(99, 102, 241, 0.3)',
-                                        borderRadius: '4px',
-                                        cursor: 'pointer',
-                                        color: 'rgba(255, 255, 255, 0.9)',
-                                        fontSize: '12px',
-                                        transition: 'all 0.2s',
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.3)';
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.2)';
-                                      }}
-                                      title="Copiar PIX"
-                                    >
-                                      📋
-                                    </button>
-                                    {pixIndex < chavesPix.length - 1 && <span> ou </span>}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                          <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginTop: '4px' }}>
+                            <span>💳 PIX: </span>
+                            <span>
+                              {chavesPix.map((pix, pixIndex) => (
+                                <span key={pixIndex} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginRight: '8px' }}>
+                                  {pix}
+                                  <button
+                                    className="btn btn-secondary btn-small"
+                                    style={{ 
+                                      padding: '4px 8px', 
+                                      fontSize: '12px', 
+                                      minWidth: 'auto',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      lineHeight: '1'
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCopiarPix(pix);
+                                    }}
+                                    title="Copiar PIX"
+                                  >
+                                    <FaCopy />
+                                  </button>
+                                  {pixIndex < chavesPix.length - 1 && ' ou '}
+                                </span>
+                              ))}
+                            </span>
                           </div>
                         )}
                       </div>
@@ -547,26 +524,14 @@ const EventoPublico: React.FC = () => {
                       return (
                         <div key={grupoId}>
                           <div
-                            onClick={() => handleOpenDetalhesGrupo({ grupoId, grupoNome, totalPagou, totalDeve, saldo })}
                             style={{
                               padding: '16px',
                               backgroundColor: 'rgba(99, 102, 241, 0.15)',
                               borderBottom: '2px solid rgba(99, 102, 241, 0.3)',
+                              borderLeft: saldo >= 0 ? '4px solid rgba(34, 197, 94, 0.6)' : '4px solid rgba(239, 68, 68, 0.4)',
                               marginTop: index > 0 ? '16px' : '0',
                               marginBottom: '12px',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.25)';
-                              e.currentTarget.style.transform = 'translateY(-2px)';
-                              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.15)';
-                              e.currentTarget.style.transform = 'translateY(0)';
-                              e.currentTarget.style.boxShadow = 'none';
+                              borderRadius: '8px'
                             }}
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
@@ -578,6 +543,19 @@ const EventoPublico: React.FC = () => {
                                   {grupoCompleto?.participantes.map(p => p.participanteNome).join(', ')}
                                 </div>
                               </div>
+                              {grupoCompleto && (
+                                <button
+                                  className="btn btn-secondary"
+                                  onClick={() => handleOpenDetalhesGrupo({ grupoId, grupoNome, totalPagou, totalDeve, saldo })}
+                                  style={{
+                                    padding: '8px 16px',
+                                    fontSize: '14px',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  Ver Despesas
+                                </button>
+                              )}
                             </div>
                             <div style={{ 
                               display: 'grid', 
@@ -690,21 +668,36 @@ const EventoPublico: React.FC = () => {
                             style={{
                               padding: '16px',
                               borderBottom: '1px solid rgba(148, 163, 184, 0.2)',
-                              paddingLeft: gruposOrdenados.length > 0 ? '32px' : '16px',
+                              borderLeft: saldo.saldo >= 0 ? '4px solid rgba(34, 197, 94, 0.6)' : '4px solid rgba(239, 68, 68, 0.4)',
                               cursor: 'pointer',
-                              transition: 'all 0.2s',
+                              transition: 'background-color 0.2s',
+                              paddingLeft: gruposOrdenados.length > 0 ? '32px' : '16px'
                             }}
                             onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)';
-                              e.currentTarget.style.transform = 'translateX(4px)';
+                              e.currentTarget.style.backgroundColor = 'rgba(148, 163, 184, 0.1)';
                             }}
                             onMouseLeave={(e) => {
                               e.currentTarget.style.backgroundColor = 'transparent';
-                              e.currentTarget.style.transform = 'translateX(0)';
                             }}
                           >
-                            <div style={{ fontWeight: '600', fontSize: '16px', color: 'rgba(255, 255, 255, 0.92)', marginBottom: '8px' }}>
-                              {saldo.participanteNome}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                              <div style={{ fontWeight: '600', fontSize: '16px', color: 'rgba(255, 255, 255, 0.92)' }}>
+                                {saldo.participanteNome}
+                              </div>
+                              <button
+                                className="btn btn-secondary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenDetalhes(saldo);
+                                }}
+                                style={{
+                                  padding: '8px 16px',
+                                  fontSize: '14px',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                Ver Despesas
+                              </button>
                             </div>
                             <div
                               style={{
@@ -719,7 +712,7 @@ const EventoPublico: React.FC = () => {
                             <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '4px' }}>
                               Pagou: <span style={{ color: 'rgba(34, 197, 94, 0.9)' }}>{formatCurrency(saldo.totalPagou)}</span> | Deve: <span style={{ color: 'rgba(239, 68, 68, 0.9)' }}>{formatCurrency(saldo.totalDeve)}</span>
                             </div>
-                            <div style={{ fontSize: '12px', color: 'rgba(226, 232, 240, 0.5)', fontStyle: 'italic', marginTop: '4px' }}>
+                            <div style={{ fontSize: '12px', color: 'rgba(226, 232, 240, 0.5)', fontStyle: 'italic' }}>
                               Clique para ver detalhes
                             </div>
                           </div>
@@ -754,9 +747,13 @@ const EventoPublico: React.FC = () => {
                     </div>
                     {despesa.participacoes && despesa.participacoes.length > 0 && (
                       <>
-                        <div className="evento-publico-despesa-detalhe">
-                          <span className="evento-publico-despesa-label">Dividido entre:</span>
-                          <span>{despesa.participacoes.map(p => p.participante?.nome || 'Desconhecido').join(', ')}</span>
+                        <div className="evento-publico-despesa-detalhe" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                          <span className="evento-publico-despesa-label">
+                            Dividido entre ({despesa.participacoes.length} {despesa.participacoes.length === 1 ? 'pessoa' : 'pessoas'}):
+                          </span>
+                          <span style={{ marginTop: '4px', flexWrap: 'wrap', flexShrink: 1 }}>
+                            {despesa.participacoes.map(p => p.participante?.nome || 'Desconhecido').join(', ')}
+                          </span>
                         </div>
                         <div className="evento-publico-despesa-detalhe">
                           <span className="evento-publico-despesa-label">Valor por pessoa:</span>
