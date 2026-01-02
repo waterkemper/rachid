@@ -28,6 +28,9 @@ const AdicionarParticipantesEvento: React.FC = () => {
   const [novoParticipanteDdi, setNovoParticipanteDdi] = useState('+55');
   const [novoParticipanteDdd, setNovoParticipanteDdd] = useState('');
   const [novoParticipanteTelefone, setNovoParticipanteTelefone] = useState('');
+  const [modalIncluirDespesasVisible, setModalIncluirDespesasVisible] = useState(false);
+  const [participantePendente, setParticipantePendente] = useState<{ id: number; obj?: Participante } | null>(null);
+  const [despesasComPagador, setDespesasComPagador] = useState(0);
   const [novoTipoPix, setNovoTipoPix] = useState<'email' | 'telefone' | 'outro'>('outro');
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(true);
@@ -84,11 +87,50 @@ const AdicionarParticipantesEvento: React.FC = () => {
     if (!eventoId) return;
 
     try {
-      // Verificar se jÃ¡ estÃ¡ no evento
+      // Verificar se já está no evento
       if (participantesNoEvento.some(p => p.id === participanteId)) {
-        return; // JÃ¡ estÃ¡ adicionado
+        return; // Já está adicionado
       }
 
+      // Verificar se há despesas no evento
+      try {
+        const despesas = await despesaApi.getAll(Number(eventoId));
+        
+        if (despesas.length > 0) {
+          // Verificar se há despesas com pagador definido
+          const despesasComPagadorDefinido = despesas.filter(d => 
+            d.pagador || d.participante_pagador_id
+          );
+          
+          if (despesasComPagadorDefinido.length > 0) {
+            // Há despesas com pagador definido - perguntar ao usuário
+            setDespesasComPagador(despesasComPagadorDefinido.length);
+            setParticipantePendente({ id: participanteId, obj: participanteObj });
+            setModalIncluirDespesasVisible(true);
+            return; // Aguardar resposta do usuário
+          }
+        }
+        
+        // Não há despesas ou não há despesas com pagador - adicionar automaticamente
+        await adicionarParticipanteEIncluirEmDespesas(participanteId, participanteObj, true);
+      } catch (err) {
+        console.error('Erro ao verificar despesas:', err);
+        // Em caso de erro, adicionar normalmente sem incluir em despesas
+        await adicionarParticipanteEIncluirEmDespesas(participanteId, participanteObj, false);
+      }
+    } catch (error) {
+      console.error('Erro ao adicionar participante:', error);
+    }
+  };
+
+  const adicionarParticipanteEIncluirEmDespesas = async (
+    participanteId: number, 
+    participanteObj: Participante | undefined,
+    incluirEmDespesas: boolean
+  ) => {
+    if (!eventoId) return;
+
+    try {
       await grupoApi.adicionarParticipante(Number(eventoId), participanteId);
       const participante = participanteObj || participantesDisponiveis.find(p => p.id === participanteId);
       if (participante) {
@@ -96,31 +138,49 @@ const AdicionarParticipantesEvento: React.FC = () => {
           prev.some((p) => p.id === participanteId) ? prev : [...prev, participante]
         );
       } else {
-        // fallback: se nÃ£o achou no state, recarrega o evento para sincronizar
+        // fallback: se não achou no state, recarrega o evento para sincronizar
         await loadData();
       }
 
-      // Adicionar participante a todas as despesas existentes do evento
-      try {
-        const despesas = await despesaApi.getAll(Number(eventoId));
-        for (const despesa of despesas) {
-          // Verificar se o participante já está na despesa
-          const jaTemParticipacao = despesa.participacoes?.some(p => p.participante_id === participanteId);
-          if (!jaTemParticipacao) {
-            try {
-              await participacaoApi.toggle(despesa.id, participanteId);
-            } catch (err) {
-              console.error(`Erro ao adicionar participante à despesa ${despesa.id}:`, err);
+      // Adicionar participante a todas as despesas existentes do evento (se solicitado)
+      if (incluirEmDespesas) {
+        try {
+          const despesas = await despesaApi.getAll(Number(eventoId));
+          for (const despesa of despesas) {
+            // Verificar se o participante já está na despesa
+            const jaTemParticipacao = despesa.participacoes?.some(p => p.participante_id === participanteId);
+            if (!jaTemParticipacao) {
+              try {
+                await participacaoApi.toggle(despesa.id, participanteId);
+              } catch (err) {
+                console.error(`Erro ao adicionar participante à despesa ${despesa.id}:`, err);
+              }
             }
           }
+        } catch (err) {
+          console.error('Erro ao adicionar participante às despesas:', err);
+          // Não bloquear o fluxo se houver erro ao adicionar às despesas
         }
-      } catch (err) {
-        console.error('Erro ao adicionar participante às despesas:', err);
-        // Não bloquear o fluxo se houver erro ao adicionar às despesas
+      } else {
+        // Garantir que NÃO adiciona às despesas quando incluirEmDespesas é false
+        console.log(`Participante ${participanteId} adicionado ao evento, mas NÃO incluído nas despesas (incluirEmDespesas = false)`);
       }
     } catch (error) {
       console.error('Erro ao adicionar participante:', error);
     }
+  };
+
+  const handleConfirmarIncluirDespesas = async (incluir: boolean) => {
+    if (!participantePendente) return;
+    
+    setModalIncluirDespesasVisible(false);
+    await adicionarParticipanteEIncluirEmDespesas(
+      participantePendente.id, 
+      participantePendente.obj,
+      incluir
+    );
+    setParticipantePendente(null);
+    setDespesasComPagador(0);
   };
 
   const removerParticipanteDoEvento = async (participanteId: number) => {
@@ -954,6 +1014,41 @@ const AdicionarParticipantesEvento: React.FC = () => {
           </button>
           <button type="button" className="btn btn-primary btn-with-icon" onClick={salvarFamilia}>
             <FaUsers /> <span>Salvar sub grupo</span>
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={modalIncluirDespesasVisible}
+        onClose={() => {
+          setModalIncluirDespesasVisible(false);
+          setParticipantePendente(null);
+          setDespesasComPagador(0);
+        }}
+        title="Incluir participante nas despesas?"
+      >
+        <div style={{ marginBottom: '20px' }}>
+          <p style={{ color: 'rgba(226, 232, 240, 0.9)', marginBottom: '12px' }}>
+            Este evento possui <strong>{despesasComPagador}</strong> despesa{despesasComPagador !== 1 ? 's' : ''} com pagador já definido.
+          </p>
+          <p style={{ color: 'rgba(226, 232, 240, 0.8)' }}>
+            Deseja incluir o novo participante em todas as despesas existentes?
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+          <button 
+            type="button" 
+            className="btn btn-secondary" 
+            onClick={() => handleConfirmarIncluirDespesas(false)}
+          >
+            Não incluir
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-primary" 
+            onClick={() => handleConfirmarIncluirDespesas(true)}
+          >
+            Sim, incluir em todas
           </button>
         </div>
       </Modal>

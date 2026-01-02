@@ -4,7 +4,7 @@ import { Text, Card, TextInput, Button, Portal, Modal, ActivityIndicator, Chip, 
 import { RouteProp, useRoute, useNavigation, CommonActions, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { grupoApi, participanteApi, grupoParticipantesApi } from '../services/api';
+import { grupoApi, participanteApi, grupoParticipantesApi, despesaApi, participacaoApi } from '../services/api';
 import { Participante, Grupo, GrupoParticipantesEvento } from '../../shared/types';
 import * as Contacts from 'expo-contacts';
 
@@ -109,6 +109,58 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
         return;
       }
 
+      // Verificar se há despesas no evento
+      try {
+        const despesas = await despesaApi.getAll(eventoId);
+        
+        if (despesas.length > 0) {
+          // Verificar se há despesas com pagador definido
+          const despesasComPagadorDefinido = despesas.filter(d => 
+            d.pagador || d.participante_pagador_id
+          );
+          
+          if (despesasComPagadorDefinido.length > 0) {
+            // Há despesas com pagador definido - perguntar ao usuário
+            Alert.alert(
+              'Incluir participante nas despesas?',
+              `Este evento possui ${despesasComPagadorDefinido.length} despesa${despesasComPagadorDefinido.length !== 1 ? 's' : ''} com pagador já definido.\n\nDeseja incluir o novo participante em todas as despesas existentes?`,
+              [
+                {
+                  text: 'Não incluir',
+                  style: 'cancel',
+                  onPress: () => adicionarParticipanteEIncluirEmDespesas(participanteId, participanteObj, false)
+                },
+                {
+                  text: 'Sim, incluir em todas',
+                  onPress: () => adicionarParticipanteEIncluirEmDespesas(participanteId, participanteObj, true)
+                }
+              ]
+            );
+            return; // Aguardar resposta do usuário
+          }
+        }
+        
+        // Não há despesas ou não há despesas com pagador - adicionar automaticamente
+        await adicionarParticipanteEIncluirEmDespesas(participanteId, participanteObj, true);
+      } catch (err) {
+        console.error('Erro ao verificar despesas:', err);
+        // Em caso de erro, adicionar normalmente sem incluir em despesas
+        await adicionarParticipanteEIncluirEmDespesas(participanteId, participanteObj, false);
+      }
+    } catch (error) {
+      console.error('Erro ao adicionar participante:', error);
+      Alert.alert('Erro', 'Não foi possível adicionar o participante');
+    }
+  };
+
+  const adicionarParticipanteEIncluirEmDespesas = async (
+    participanteId: number, 
+    participanteObj: Participante | undefined,
+    incluirEmDespesas: boolean
+  ) => {
+    if (!eventoId) return;
+
+    try {
       await grupoApi.adicionarParticipante(eventoId, participanteId);
       const participante = participanteObj || participantesDisponiveis.find(p => p.id === participanteId);
       if (participante) {
@@ -117,6 +169,30 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
         );
       } else {
         await loadData();
+      }
+
+      // Adicionar participante a todas as despesas existentes do evento (se solicitado)
+      if (incluirEmDespesas) {
+        try {
+          const despesas = await despesaApi.getAll(eventoId);
+          for (const despesa of despesas) {
+            // Verificar se o participante já está na despesa
+            const jaTemParticipacao = despesa.participacoes?.some(p => p.participante_id === participanteId);
+            if (!jaTemParticipacao) {
+              try {
+                await participacaoApi.toggle(despesa.id, participanteId);
+              } catch (err) {
+                console.error(`Erro ao adicionar participante à despesa ${despesa.id}:`, err);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Erro ao adicionar participante às despesas:', err);
+          // Não bloquear o fluxo se houver erro ao adicionar às despesas
+        }
+      } else {
+        // Garantir que NÃO adiciona às despesas quando incluirEmDespesas é false
+        console.log(`Participante ${participanteId} adicionado ao evento, mas NÃO incluído nas despesas (incluirEmDespesas = false)`);
       }
     } catch (error) {
       console.error('Erro ao adicionar participante:', error);

@@ -585,7 +585,44 @@ const DespesasScreen: React.FC = () => {
                   {participantesDoEvento.map((participante) => (
                     <Menu.Item
                       key={participante.id}
-                      onPress={() => {
+                      onPress={async () => {
+                        // Se estiver editando uma despesa, verificar se o pagador está nas participações
+                        if (editingDespesa && participante.id > 0) {
+                          const pagadorEstaNasParticipacoes = participantesSelecionados.includes(participante.id);
+                          
+                          if (!pagadorEstaNasParticipacoes) {
+                            // Pagador não está nas participações - avisar e incluir automaticamente
+                            Alert.alert(
+                              'Incluir participante na despesa?',
+                              `${participante.nome} não está incluído nesta despesa.\n\nDeseja incluí-lo automaticamente?`,
+                              [
+                                {
+                                  text: 'Cancelar',
+                                  style: 'cancel',
+                                  onPress: () => {
+                                    setMenuPagadorVisible(false);
+                                  }
+                                },
+                                {
+                                  text: 'Sim, incluir',
+                                  onPress: () => {
+                                    // Incluir o pagador nas participações automaticamente
+                                    setParticipantesSelecionados(prev => {
+                                      if (!prev.includes(participante.id)) {
+                                        return [...prev, participante.id];
+                                      }
+                                      return prev;
+                                    });
+                                    setFormData({ ...formData, participante_pagador_id: participante.id });
+                                    setMenuPagadorVisible(false);
+                                  }
+                                }
+                              ]
+                            );
+                            return;
+                          }
+                        }
+                        
                         setFormData({ ...formData, participante_pagador_id: participante.id });
                         setMenuPagadorVisible(false);
                       }}

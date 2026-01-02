@@ -130,7 +130,7 @@ const Despesas: React.FC = () => {
         setParticipanteSubgrupoMap(new Map());
       }
       
-      if (evento.participantes) {
+      if (evento.participantes && evento.participantes.length > 0) {
         const participantesIds = evento.participantes.map(p => p.participante_id);
         let participantesFiltrados = participantes.filter(p => participantesIds.includes(p.id));
         
@@ -149,11 +149,21 @@ const Despesas: React.FC = () => {
           const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
           setParticipantesDoEvento(pagadorAtual ? [pagadorAtual] : []);
         } else {
+          // Mesmo sem participantes no evento, permitir que o usuário veja o campo
+          // O backend vai validar se pode criar/editar
           setParticipantesDoEvento([]);
         }
       }
     } catch (err) {
-      setParticipantesDoEvento([]);
+      console.error('Erro ao carregar participantes do evento:', err);
+      // Em caso de erro, ainda permitir que o campo seja exibido (pode ser problema de permissão temporário)
+      // Se houver um pagador atual, incluir ele
+      if (incluirPagadorAtual) {
+        const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
+        setParticipantesDoEvento(pagadorAtual ? [pagadorAtual] : []);
+      } else {
+        setParticipantesDoEvento([]);
+      }
       setParticipanteSubgrupoMap(new Map());
     }
   };
@@ -593,18 +603,46 @@ const Despesas: React.FC = () => {
             <label>Quem Pagou *</label>
             <select
               value={formData.participante_pagador_id || ''}
-              onChange={(e) => {
+              onChange={async (e) => {
                 const value = e.target.value === '' ? 0 : Number(e.target.value);
+                
+                // Se estiver editando uma despesa, verificar se o pagador está nas participações
+                if (editingDespesa && value > 0) {
+                  const pagadorEstaNasParticipacoes = participantesSelecionados.includes(value);
+                  
+                  if (!pagadorEstaNasParticipacoes) {
+                    // Pagador não está nas participações - avisar e incluir automaticamente
+                    const nomePagador = participantesDoEvento.find(p => p.id === value)?.nome || 'o participante';
+                    const confirmar = window.confirm(
+                      `${nomePagador} não está incluído nesta despesa.\n\nDeseja incluí-lo automaticamente?`
+                    );
+                    
+                    if (confirmar) {
+                      // Incluir o pagador nas participações automaticamente
+                      setParticipantesSelecionados(prev => {
+                        if (!prev.includes(value)) {
+                          return [...prev, value];
+                        }
+                        return prev;
+                      });
+                      setFormData({ ...formData, participante_pagador_id: value });
+                    }
+                    // Se o usuário cancelar, não fazer nada - o formData não será atualizado
+                    // e o select voltará ao valor anterior automaticamente (controlado pelo React)
+                    return;
+                  }
+                }
+                
                 setFormData({ ...formData, participante_pagador_id: value });
               }}
               required
-              disabled={!formData.grupo_id || participantesDoEvento.length === 0}
+              disabled={!formData.grupo_id}
             >
               <option value="">
                 {!formData.grupo_id 
                   ? 'Selecione um evento primeiro' 
                   : participantesDoEvento.length === 0 
-                    ? 'Nenhum participante no evento' 
+                    ? 'Carregando participantes...' 
                     : 'Selecione quem pagou'}
               </option>
               {participantesDoEvento.map((participante) => (
@@ -613,6 +651,11 @@ const Despesas: React.FC = () => {
                 </option>
               ))}
             </select>
+            {formData.grupo_id && participantesDoEvento.length === 0 && (
+              <p style={{ fontSize: '12px', color: 'rgba(226, 232, 240, 0.6)', marginTop: '4px', marginBottom: 0 }}>
+                Nenhum participante encontrado no evento. Verifique se o evento tem participantes cadastrados.
+              </p>
+            )}
           </div>
           <div className="form-group">
             <label>Data *</label>
@@ -651,12 +694,13 @@ const Despesas: React.FC = () => {
                       : 'Marcar todos'}
                   </button>
                 )}
-                {formData.grupo_id && participantesDoEvento.length > 0 && (
+                {formData.grupo_id && (
                   <button
                     type="button"
                     className="btn btn-secondary"
                     style={{ padding: '4px 8px', fontSize: '12px' }}
                     onClick={() => setParticipantesExpandido(!participantesExpandido)}
+                    disabled={participantesDoEvento.length === 0}
                   >
                     {participantesExpandido ? 'Ocultar' : 'Mostrar'}
                   </button>
@@ -672,8 +716,9 @@ const Despesas: React.FC = () => {
                 ({participantesSelecionados.length} selecionado{participantesSelecionados.length !== 1 ? 's' : ''})
               </div>
             )}
-            {participantesExpandido && participantesDoEvento.length > 0 && (
-              <div style={{
+            {participantesExpandido && (
+              participantesDoEvento.length > 0 ? (
+                <div style={{
                 maxHeight: '200px',
                 overflowY: 'auto',
                 border: '1px solid rgba(148, 163, 184, 0.20)',
@@ -727,6 +772,11 @@ const Despesas: React.FC = () => {
                   );
                 })}
               </div>
+              ) : (
+                <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.6)', padding: '10px' }}>
+                  Nenhum participante encontrado no evento
+                </div>
+              )
             )}
             {!formData.grupo_id && (
               <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.6)' }}>
