@@ -355,10 +355,10 @@ class DespesaService {
         if (!grupo || !grupo.participantes || grupo.participantes.length === 0) {
             return; // Não há participantes para sincronizar
         }
-        // Buscar todas as despesas do grupo
+        // Buscar todas as despesas do grupo (incluindo relação com pagador para verificar)
         const despesas = await this.despesaRepository.find({
             where: { grupo_id: grupoId },
-            relations: ['participacoes'],
+            relations: ['participacoes', 'pagador'],
         });
         if (despesas.length === 0) {
             return; // Não há despesas para sincronizar
@@ -368,7 +368,13 @@ class DespesaService {
             .filter(pg => pg.participante_id)
             .map(pg => pg.participante_id);
         // Para cada despesa, garantir que todos os participantes tenham participação
+        // MAS apenas se a despesa NÃO tiver pagador definido (despesas com pagador já estão "fechadas")
         for (const despesa of despesas) {
+            // Se a despesa tem pagador definido, não adicionar participantes automaticamente
+            // O usuário deve escolher explicitamente se quer incluir o novo participante
+            if (despesa.pagador || despesa.participante_pagador_id) {
+                continue; // Pular despesas com pagador definido
+            }
             // Obter IDs de participantes que já têm participação nesta despesa
             const participantesComParticipacao = new Set((despesa.participacoes || []).map(p => p.participante_id));
             // Identificar participantes que precisam ser adicionados
