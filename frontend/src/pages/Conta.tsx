@@ -1,22 +1,338 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { isPro } from '../utils/plan';
+import { authApi } from '../services/api';
 
 const Conta: React.FC = () => {
-  const { usuario } = useAuth();
+  const { usuario, login } = useAuth();
   const usuarioPro = isPro(usuario);
+
+  const [nome, setNome] = useState('');
+  const [email, setEmail] = useState('');
+  const [ddd, setDdd] = useState('');
+  const [telefone, setTelefone] = useState('');
+  const [chavePix, setChavePix] = useState('');
+  const [tipoPix, setTipoPix] = useState<'email' | 'telefone' | 'outro'>('outro');
+  const [editando, setEditando] = useState(false);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState('');
+  const [sucesso, setSucesso] = useState('');
+
+  // Função para determinar o tipo de PIX
+  const determinarTipoPix = (chavePix: string, email: string) => {
+    if (!chavePix) return 'outro';
+    if (chavePix === email && email) return 'email';
+    const telefoneLimpo = chavePix.replace(/\D/g, '');
+    if (telefoneLimpo.length >= 10) return 'telefone';
+    return 'outro';
+  };
+
+  // Carregar dados do usuário quando a página carregar
+  useEffect(() => {
+    if (usuario) {
+      setNome(usuario.nome || '');
+      setEmail(usuario.email || '');
+      setDdd(usuario.ddd || '');
+      setTelefone(usuario.telefone || '');
+      setChavePix(usuario.chavePix || '');
+      // Determinar tipo de PIX baseado nos dados existentes
+      setTipoPix(determinarTipoPix(usuario.chavePix || '', usuario.email || ''));
+    }
+  }, [usuario]);
+
+  // Função para atualizar PIX baseado no tipo selecionado
+  const handleTipoPixChange = (tipo: 'email' | 'telefone' | 'outro') => {
+    setTipoPix(tipo);
+    
+    if (tipo === 'email' && email) {
+      setChavePix(email);
+    } else if (tipo === 'telefone') {
+      const telefoneCompleto = ddd && telefone ? `+55${ddd}${telefone}` : '';
+      const telefoneLimpo = telefoneCompleto.replace(/\D/g, '');
+      if (telefoneLimpo.length >= 10) {
+        setChavePix(telefoneCompleto);
+      } else {
+        setChavePix('');
+      }
+    } else if (tipo === 'outro') {
+      setChavePix('');
+    }
+  };
+
+  // Função para atualizar telefone e PIX quando campos de telefone mudarem
+  const handleTelefoneChange = (valor: string) => {
+    setTelefone(valor.replace(/\D/g, '').slice(0, 9));
+    
+    // Se o tipo PIX for telefone, atualizar automaticamente
+    if (tipoPix === 'telefone') {
+      const telefoneCompleto = ddd && valor.replace(/\D/g, '').slice(0, 9) ? `+55${ddd}${valor.replace(/\D/g, '').slice(0, 9)}` : '';
+      const telefoneLimpo = telefoneCompleto.replace(/\D/g, '');
+      if (telefoneLimpo.length >= 10) {
+        setChavePix(telefoneCompleto);
+      } else {
+        setChavePix('');
+      }
+    }
+  };
+
+  const handleDddChange = (valor: string) => {
+    setDdd(valor.replace(/\D/g, '').slice(0, 2));
+    
+    // Se o tipo PIX for telefone, atualizar automaticamente
+    if (tipoPix === 'telefone') {
+      const dddValor = valor.replace(/\D/g, '').slice(0, 2);
+      const telefoneCompleto = dddValor && telefone ? `+55${dddValor}${telefone}` : '';
+      const telefoneLimpo = telefoneCompleto.replace(/\D/g, '');
+      if (telefoneLimpo.length >= 10) {
+        setChavePix(telefoneCompleto);
+      } else {
+        setChavePix('');
+      }
+    }
+  };
+
+  // Função para atualizar email e PIX quando email mudar
+  const handleEmailChange = (valor: string) => {
+    setEmail(valor);
+    // Se o tipo PIX for email, atualizar automaticamente
+    if (tipoPix === 'email') {
+      setChavePix(valor);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErro('');
+    setSucesso('');
+    setCarregando(true);
+
+    try {
+      const usuarioAtualizado = await authApi.updateUser({
+        nome: nome.trim(),
+        email: email.trim(),
+        ddd: ddd.trim() || undefined,
+        telefone: telefone.trim() || undefined,
+        chavePix: chavePix.trim() || undefined,
+      });
+
+      // Atualizar o contexto com o usuário atualizado
+      login(usuarioAtualizado);
+      
+      setEditando(false);
+      setSucesso('Dados atualizados com sucesso!');
+      
+      // Limpar mensagem de sucesso após 3 segundos
+      setTimeout(() => setSucesso(''), 3000);
+    } catch (error: any) {
+      setErro(error.response?.data?.error || 'Erro ao atualizar dados');
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  const handleCancelar = () => {
+    // Restaurar valores originais
+    if (usuario) {
+      setNome(usuario.nome || '');
+      setEmail(usuario.email || '');
+      setDdd(usuario.ddd || '');
+      setTelefone(usuario.telefone || '');
+      setChavePix(usuario.chavePix || '');
+      setTipoPix(determinarTipoPix(usuario.chavePix || '', usuario.email || ''));
+    }
+    setEditando(false);
+    setErro('');
+    setSucesso('');
+  };
 
   return (
     <div>
       <h2>Conta</h2>
 
       <div className="card" style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <h3 style={{ margin: 0 }}>Dados Pessoais</h3>
+          {!editando && (
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => setEditando(true)}
+              style={{ fontSize: '14px', padding: '8px 16px' }}
+            >
+              Editar
+            </button>
+          )}
+        </div>
+
+        {editando ? (
+          <form onSubmit={handleSubmit}>
+            {erro && (
+              <div className="alert" style={{ backgroundColor: '#fee', color: '#c33', marginBottom: '15px' }}>
+                {erro}
+              </div>
+            )}
+            {sucesso && (
+              <div className="alert" style={{ backgroundColor: '#efe', color: '#3c3', marginBottom: '15px' }}>
+                {sucesso}
+              </div>
+            )}
+
+            <div className="form-group">
+              <label>Nome *</label>
+              <input
+                type="text"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="Seu nome completo"
+                required
+                disabled={carregando}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Email *</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => handleEmailChange(e.target.value)}
+                placeholder="seu@email.com"
+                required
+                disabled={carregando}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: '10px' }}>
+              <div className="form-group">
+                <label>DDD</label>
+                <input
+                  type="text"
+                  value={ddd}
+                  onChange={(e) => handleDddChange(e.target.value)}
+                  placeholder="11"
+                  maxLength={2}
+                  inputMode="numeric"
+                  disabled={carregando}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Telefone</label>
+                <input
+                  type="text"
+                  value={telefone}
+                  onChange={(e) => handleTelefoneChange(e.target.value)}
+                  placeholder="987654321"
+                  maxLength={9}
+                  inputMode="numeric"
+                  disabled={carregando}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Chave PIX</label>
+              <input
+                type="text"
+                value={chavePix}
+                onChange={(e) => {
+                  setChavePix(e.target.value);
+                  // Se o usuário editar manualmente, mudar para 'outro'
+                  if (tipoPix !== 'outro') {
+                    const novoTipo = determinarTipoPix(e.target.value, email);
+                    if (novoTipo !== tipoPix) {
+                      setTipoPix('outro');
+                    }
+                  }
+                }}
+                placeholder="CPF, e-mail, telefone ou chave aleatória"
+                disabled={carregando}
+              />
+            </div>
+            <div className="form-group">
+              <label style={{ marginBottom: '10px', display: 'block' }}>Tipo de Chave PIX:</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="tipoPix"
+                    value="email"
+                    checked={tipoPix === 'email'}
+                    onChange={() => handleTipoPixChange('email')}
+                    disabled={carregando}
+                  />
+                  <span>Usar Email como PIX</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="tipoPix"
+                    value="telefone"
+                    checked={tipoPix === 'telefone'}
+                    onChange={() => handleTipoPixChange('telefone')}
+                    disabled={carregando}
+                  />
+                  <span>Usar Telefone como PIX</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="tipoPix"
+                    value="outro"
+                    checked={tipoPix === 'outro'}
+                    onChange={() => handleTipoPixChange('outro')}
+                    disabled={carregando}
+                  />
+                  <span>Outro (CPF, chave aleatória, etc.)</span>
+                </label>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+              <button 
+                type="submit" 
+                className="btn btn-primary"
+                disabled={carregando}
+              >
+                {carregando ? 'Salvando...' : 'Salvar'}
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-secondary"
+                onClick={handleCancelar}
+                disabled={carregando}
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div>
+            <p style={{ margin: '5px 0', color: 'rgba(226, 232, 240, 0.92)' }}>
+              <strong style={{ color: 'rgba(255, 255, 255, 0.96)' }}>Nome:</strong> {usuario?.nome || '-'}
+            </p>
+            <p style={{ margin: '5px 0', color: 'rgba(226, 232, 240, 0.92)' }}>
+              <strong style={{ color: 'rgba(255, 255, 255, 0.96)' }}>Email:</strong> {usuario?.email || '-'}
+            </p>
+            {(usuario?.ddd || usuario?.telefone) && (
+              <p style={{ margin: '5px 0', color: 'rgba(226, 232, 240, 0.92)' }}>
+                <strong style={{ color: 'rgba(255, 255, 255, 0.96)' }}>Telefone:</strong> {usuario?.ddd ? `(${usuario.ddd}) ` : ''}{usuario?.telefone || ''}
+              </p>
+            )}
+            {usuario?.chavePix && (
+              <p style={{ margin: '5px 0', color: 'rgba(226, 232, 240, 0.92)' }}>
+                <strong style={{ color: 'rgba(255, 255, 255, 0.96)' }}>Chave PIX:</strong> {usuario.chavePix}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="card" style={{ marginBottom: '20px' }}>
         <h3 style={{ marginBottom: '10px' }}>Seu plano</h3>
-        <p style={{ margin: 0, color: '#444' }}>
-          Plano atual: <strong>{usuarioPro ? 'Pro' : 'Grátis'}</strong>
+        <p style={{ margin: 0, color: 'rgba(226, 232, 240, 0.92)' }}>
+          Plano atual: <strong style={{ color: 'rgba(255, 255, 255, 0.96)' }}>{usuarioPro ? 'Pro' : 'Grátis'}</strong>
         </p>
         {usuario?.planoValidoAte && (
-          <p style={{ marginTop: '8px', color: '#666', fontSize: '14px' }}>
+          <p style={{ marginTop: '8px', color: 'rgba(226, 232, 240, 0.75)', fontSize: '14px' }}>
             Válido até: {new Date(usuario.planoValidoAte).toLocaleDateString('pt-BR')}
           </p>
         )}
@@ -24,11 +340,11 @@ const Conta: React.FC = () => {
 
       <div className="card" style={{ marginBottom: '20px' }}>
         <h3 style={{ marginBottom: '10px' }}>Plano Pro</h3>
-        <p style={{ marginTop: 0, color: '#666' }}>
+        <p style={{ marginTop: 0, color: 'rgba(226, 232, 240, 0.85)' }}>
           Para quem divide contas toda semana: grupos ilimitados, histórico, relatórios e exportação.
         </p>
 
-        <ul style={{ marginTop: 0, paddingLeft: '18px', color: '#444' }}>
+        <ul style={{ marginTop: 0, paddingLeft: '18px', color: 'rgba(226, 232, 240, 0.92)' }}>
           <li>Grupos reutilizáveis ilimitados</li>
           <li>Relatórios por pessoa e por grupo</li>
           <li>Exportar PDF/CSV do resultado</li>
@@ -36,20 +352,20 @@ const Conta: React.FC = () => {
         </ul>
 
         <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-          <div style={{ border: '1px solid #eee', borderRadius: '10px', padding: '12px' }}>
-            <div style={{ fontWeight: 700 }}>Mensal</div>
-            <div style={{ fontSize: '22px', fontWeight: 800 }}>R$ 12,90</div>
-            <div style={{ color: '#666' }}>/mês</div>
+          <div style={{ border: '1px solid rgba(148, 163, 184, 0.20)', borderRadius: '10px', padding: '12px' }}>
+            <div style={{ fontWeight: 700, color: 'rgba(255, 255, 255, 0.94)' }}>Mensal</div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>R$ 12,90</div>
+            <div style={{ color: 'rgba(226, 232, 240, 0.75)' }}>/mês</div>
           </div>
-          <div style={{ border: '2px solid #111', borderRadius: '10px', padding: '12px' }}>
-            <div style={{ fontWeight: 700 }}>Anual</div>
-            <div style={{ fontSize: '22px', fontWeight: 800 }}>R$ 99,90</div>
-            <div style={{ color: '#666' }}>/ano (melhor custo-benefício)</div>
+          <div style={{ border: '2px solid rgba(99, 102, 241, 0.50)', borderRadius: '10px', padding: '12px' }}>
+            <div style={{ fontWeight: 700, color: 'rgba(255, 255, 255, 0.94)' }}>Anual</div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>R$ 99,90</div>
+            <div style={{ color: 'rgba(226, 232, 240, 0.75)' }}>/ano (melhor custo-benefício)</div>
           </div>
-          <div style={{ border: '1px solid #eee', borderRadius: '10px', padding: '12px' }}>
-            <div style={{ fontWeight: 700 }}>Vitalício</div>
-            <div style={{ fontSize: '22px', fontWeight: 800 }}>R$ 199,90</div>
-            <div style={{ color: '#666' }}>pagamento único</div>
+          <div style={{ border: '1px solid rgba(148, 163, 184, 0.20)', borderRadius: '10px', padding: '12px' }}>
+            <div style={{ fontWeight: 700, color: 'rgba(255, 255, 255, 0.94)' }}>Vitalício</div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>R$ 199,90</div>
+            <div style={{ color: 'rgba(226, 232, 240, 0.75)' }}>pagamento único</div>
           </div>
         </div>
 

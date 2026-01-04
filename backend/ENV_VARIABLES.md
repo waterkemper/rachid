@@ -35,6 +35,10 @@ FRONTEND_URL=https://orachid.com.br
 SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 SENDGRID_FROM_EMAIL=noreply@orachid.com.br
 SENDGRID_FROM_NAME=Rachid
+
+# pg-boss (Fila de Emails)
+# Não precisa de variáveis adicionais - usa as mesmas do banco de dados
+# IMPORTANTE: Execute 'npm run setup-pgboss' uma vez após o primeiro deploy
 ```
 
 ## Como Configurar no Railway

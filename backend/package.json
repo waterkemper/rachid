@@ -8,7 +8,8 @@
     "build": "npx tsc",
     "postbuild": "node scripts/copy-templates.js",
     "start": "node dist/server.js",
-    "migrate": "tsx src/scripts/migrate-data.ts"
+    "migrate": "tsx src/scripts/migrate-data.ts",
+    "setup-pgboss": "tsx src/scripts/setup-pgboss-schema.ts"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +24,7 @@
     "google-auth-library": "^10.5.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.3",
+    "pg-boss": "^10.4.0",
     "reflect-metadata": "^0.1.13",
     "typeorm": "^0.3.17",
     "typescript": "^5.3.3"

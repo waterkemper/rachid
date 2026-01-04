@@ -57,12 +57,44 @@ O Railway fará deploy automático quando você:
 - Fizer push no GitHub (se conectado)
 - Ou clicar em **Deploy** manualmente
 
+### 5. Configurar Schema do pg-boss (Fila de Emails)
+
+Após o primeiro deploy, você precisa executar o script de setup do pg-boss **uma vez**:
+
+**Opção A - Via Railway CLI (Recomendado):**
+```bash
+# Instalar Railway CLI (se ainda não tiver)
+npm install -g @railway/cli
+
+# Fazer login
+railway login
+
+# Conectar ao projeto
+cd backend
+railway link
+
+# Executar script de setup
+railway run npm run setup-pgboss
+```
+
+**Opção B - Via Console do Railway:**
+1. Acesse seu projeto no Railway
+2. Vá em **Deployments** → Selecione o último deploy
+3. Clique em **View Logs** ou **Shell**
+4. Execute: `npm run setup-pgboss`
+
+**Importante:**
+- Execute apenas **uma vez** após o primeiro deploy
+- Não precisa executar novamente (o schema persiste no banco)
+- Veja `RAILWAY_PGBOSS_SETUP.md` para mais detalhes
+
 ## 📝 Checklist
 
 - [ ] Variáveis de ambiente configuradas no Railway
 - [ ] Domínio `api.orachid.com.br` adicionado no Railway
 - [ ] DNS configurado no provedor de domínio
 - [ ] Deploy realizado com sucesso
+- [ ] **Schema do pg-boss criado** (executar `npm run setup-pgboss`)
 - [ ] Testar API: `https://api.orachid.com.br/api/health`
 
 ## 🧪 Testar

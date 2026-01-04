@@ -1,0 +1,20 @@
+<h2 style="color: #333333; margin-top: 0;">Despesa Atualizada</h2>
+
+<p>Olá <strong>{{nomeDestinatario}}</strong>,</p>
+
+<p>A despesa do evento <strong>{{eventoNome}}</strong> foi atualizada.</p>
+
+<div style="background-color: #f8f9fa; padding: 20px; border-radius: 6px; margin: 20px 0;">
+  <h3 style="color: #667eea; margin-top: 0;">Detalhes Atualizados</h3>
+  <p style="margin: 8px 0;"><strong>Descrição:</strong> {{despesaDescricao}}</p>
+  <p style="margin: 8px 0;"><strong>Valor Total:</strong> {{despesaValorTotal}}</p>
+  <p style="margin: 8px 0;"><strong>Data:</strong> {{despesaData}}</p>
+  
+  {{mudancasLista}}
+</div>
+
+{{linkEvento}}
+
+<p class="text-muted">
+  Você recebeu este e-mail porque está participando do evento <strong>{{eventoNome}}</strong>.
+</p>

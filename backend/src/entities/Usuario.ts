@@ -4,6 +4,7 @@ import { Grupo } from './Grupo';
 import { Despesa } from './Despesa';
 
 export type PlanoUsuario = 'FREE' | 'PRO';
+export type RoleUsuario = 'USER' | 'ADMIN';
 
 @Entity('usuarios')
 export class Usuario {
@@ -31,11 +32,17 @@ export class Usuario {
   @Column('varchar', { nullable: true })
   telefone?: string;
 
+  @Column('varchar', { nullable: true, name: 'chavepix' })
+  chavePix?: string;
+
   @Column('varchar', { default: 'FREE' })
   plano!: PlanoUsuario;
 
   @Column({ type: 'timestamp', nullable: true })
   planoValidoAte?: Date;
+
+  @Column('varchar', { default: 'USER' })
+  role!: RoleUsuario;
 
   @CreateDateColumn()
   criadoEm!: Date;

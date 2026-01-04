@@ -1,0 +1,18 @@
+<h2 style="color: #333333; margin-top: 0;">Você foi adicionado a uma despesa</h2>
+
+<p>Olá <strong>{{nomeDestinatario}}</strong>,</p>
+
+<p>Você foi adicionado a uma despesa do evento <strong>{{eventoNome}}</strong>.</p>
+
+<div style="background-color: #f8f9fa; padding: 20px; border-radius: 6px; margin: 20px 0;">
+  <h3 style="color: #667eea; margin-top: 0;">Detalhes da Despesa</h3>
+  <p style="margin: 8px 0;"><strong>Descrição:</strong> {{despesaDescricao}}</p>
+  <p style="margin: 8px 0;"><strong>Valor Total:</strong> {{despesaValorTotal}}</p>
+  <p style="margin: 8px 0;"><strong>Seu Valor a Pagar:</strong> <strong style="color: #667eea;">{{valorDevePagar}}</strong></p>
+</div>
+
+{{linkEvento}}
+
+<p class="text-muted">
+  Você recebeu este e-mail porque foi adicionado a esta despesa no evento <strong>{{eventoNome}}</strong>.
+</p>

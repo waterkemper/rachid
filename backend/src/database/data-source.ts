@@ -13,6 +13,7 @@ import { GrupoMaiorGrupo } from '../entities/GrupoMaiorGrupo';
 import { GrupoMaiorParticipante } from '../entities/GrupoMaiorParticipante';
 import { PasswordResetToken } from '../entities/PasswordResetToken';
 import { DespesaHistorico } from '../entities/DespesaHistorico';
+import { EventoAcesso } from '../entities/EventoAcesso';
 
 // Suporta DATABASE_URL (formato URI) ou variáveis individuais
 function getDataSourceConfig() {
@@ -41,6 +42,7 @@ function getDataSourceConfig() {
         GrupoMaiorParticipante,
         PasswordResetToken,
         DespesaHistorico,
+        EventoAcesso,
       ],
       migrations: [],
       subscribers: [],
@@ -73,6 +75,7 @@ function getDataSourceConfig() {
       GrupoMaiorParticipante,
       PasswordResetToken,
       DespesaHistorico,
+      EventoAcesso,
     ],
     migrations: [],
     subscribers: [],

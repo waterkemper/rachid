@@ -142,4 +142,131 @@ export class EmailTemplateService {
       linkSuporte: data.linkSuporte || 'mailto:suporte@orachid.com.br',
     });
   }
+
+  /**
+   * Renderiza template de nova despesa
+   */
+  static renderNovaDespesa(data: {
+    nomeDestinatario: string;
+    eventoNome: string;
+    despesaDescricao: string;
+    despesaValorTotal: string;
+    valorPorPessoa: string;
+    pagadorNome: string;
+    despesaData: string;
+    linkEvento?: string;
+  }): string {
+    const linkEventoHtml = data.linkEvento
+      ? `<p><a href="${data.linkEvento}" class="button">Ver Evento</a></p>`
+      : '';
+
+    return this.render('nova-despesa.html', {
+      titulo: 'Nova Despesa - Rachid',
+      nomeDestinatario: data.nomeDestinatario,
+      eventoNome: data.eventoNome,
+      despesaDescricao: data.despesaDescricao,
+      despesaValorTotal: data.despesaValorTotal,
+      valorPorPessoa: data.valorPorPessoa,
+      pagadorNome: data.pagadorNome,
+      despesaData: data.despesaData,
+      linkEvento: linkEventoHtml,
+    });
+  }
+
+  /**
+   * Renderiza template de despesa editada
+   */
+  static renderDespesaEditada(data: {
+    nomeDestinatario: string;
+    eventoNome: string;
+    despesaDescricao: string;
+    despesaValorTotal: string;
+    despesaData: string;
+    mudancas: string[];
+    linkEvento?: string;
+  }): string {
+    const linkEventoHtml = data.linkEvento
+      ? `<p><a href="${data.linkEvento}" class="button">Ver Evento</a></p>`
+      : '';
+
+    const mudancasListaHtml = data.mudancas && data.mudancas.length > 0
+      ? `<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #dee2e6;">
+          <p style="margin: 8px 0; font-weight: 600; color: #495057;">Mudanças realizadas:</p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            ${data.mudancas.map(m => `<li style="margin: 4px 0;">${m}</li>`).join('')}
+          </ul>
+        </div>`
+      : '';
+
+    return this.render('despesa-editada.html', {
+      titulo: 'Despesa Atualizada - Rachid',
+      nomeDestinatario: data.nomeDestinatario,
+      eventoNome: data.eventoNome,
+      despesaDescricao: data.despesaDescricao,
+      despesaValorTotal: data.despesaValorTotal,
+      despesaData: data.despesaData,
+      mudancasLista: mudancasListaHtml,
+      linkEvento: linkEventoHtml,
+    });
+  }
+
+  /**
+   * Renderiza template de inclusão em evento
+   */
+  static renderInclusaoEvento(data: {
+    nomeDestinatario: string;
+    eventoNome: string;
+    eventoDescricao?: string;
+    eventoData?: string;
+    adicionadoPor: string;
+    linkEvento?: string;
+  }): string {
+    const linkEventoHtml = data.linkEvento
+      ? `<p><a href="${data.linkEvento}" class="button">Ver Evento</a></p>`
+      : '';
+
+    const eventoDescricaoHtml = data.eventoDescricao
+      ? `<p style="margin: 8px 0;"><strong>Descrição:</strong> ${data.eventoDescricao}</p>`
+      : '';
+
+    const eventoDataHtml = data.eventoData
+      ? `<p style="margin: 8px 0;"><strong>Data:</strong> ${data.eventoData}</p>`
+      : '';
+
+    return this.render('inclusao-evento.html', {
+      titulo: 'Você foi adicionado a um evento - Rachid',
+      nomeDestinatario: data.nomeDestinatario,
+      eventoNome: data.eventoNome,
+      eventoDescricao: eventoDescricaoHtml,
+      eventoData: eventoDataHtml,
+      adicionadoPor: data.adicionadoPor,
+      linkEvento: linkEventoHtml,
+    });
+  }
+
+  /**
+   * Renderiza template de participante adicionado a despesa
+   */
+  static renderParticipanteAdicionadoDespesa(data: {
+    nomeDestinatario: string;
+    eventoNome: string;
+    despesaDescricao: string;
+    despesaValorTotal: string;
+    valorDevePagar: string;
+    linkEvento?: string;
+  }): string {
+    const linkEventoHtml = data.linkEvento
+      ? `<p><a href="${data.linkEvento}" class="button">Ver Evento</a></p>`
+      : '';
+
+    return this.render('participante-adicionado-despesa.html', {
+      titulo: 'Você foi adicionado a uma despesa - Rachid',
+      nomeDestinatario: data.nomeDestinatario,
+      eventoNome: data.eventoNome,
+      despesaDescricao: data.despesaDescricao,
+      despesaValorTotal: data.despesaValorTotal,
+      valorDevePagar: data.valorDevePagar,
+      linkEvento: linkEventoHtml,
+    });
+  }
 }

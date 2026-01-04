@@ -83,6 +83,17 @@ export const authApi = {
   resetarSenha: async (token: string, senha: string): Promise<void> => {
     await api.post('/auth/resetar-senha', { token, senha });
   },
+
+  updateUser: async (data: {
+    nome?: string;
+    email?: string;
+    ddd?: string;
+    telefone?: string;
+    chavePix?: string;
+  }): Promise<Usuario> => {
+    const response = await api.put('/auth/me', data);
+    return response.data.usuario;
+  },
 };
 
 export const participanteApi = {
@@ -455,6 +466,77 @@ export const grupoMaiorApi = {
 export const analyticsApi = {
   track: async (event: string, props?: Record<string, any>): Promise<void> => {
     await api.post('/analytics/event', { event, props });
+  },
+};
+
+export interface EstatisticasUsuarios {
+  total: number;
+  novosUltimos7Dias: number;
+  novosUltimos30Dias: number;
+  ativosUltimos30Dias: number;
+}
+
+export interface EstatisticasEventos {
+  total: number;
+  criadosUltimos7Dias: number;
+  criadosUltimos30Dias: number;
+  comAcessoPublico: number;
+}
+
+export interface EstatisticasDespesas {
+  total: number;
+  valorTotal: number;
+  mediaPorEvento: number;
+  criadasUltimos7Dias: number;
+  criadasUltimos30Dias: number;
+}
+
+export interface EstatisticasAcessos {
+  total: number;
+  ultimos7Dias: number;
+  ultimos30Dias: number;
+  porEvento: Array<{
+    eventoId: number;
+    eventoNome: string;
+    acessos: number;
+  }>;
+}
+
+export interface EstatisticasGerais {
+  usuarios: EstatisticasUsuarios;
+  eventos: EstatisticasEventos;
+  despesas: EstatisticasDespesas;
+  acessos: EstatisticasAcessos;
+}
+
+export const adminApi = {
+  getEstatisticasGerais: async (): Promise<EstatisticasGerais> => {
+    const response = await api.get('/admin/estatisticas');
+    return response.data;
+  },
+  getEstatisticasUsuarios: async (): Promise<EstatisticasUsuarios> => {
+    const response = await api.get('/admin/estatisticas/usuarios');
+    return response.data;
+  },
+  getEstatisticasEventos: async (): Promise<EstatisticasEventos> => {
+    const response = await api.get('/admin/estatisticas/eventos');
+    return response.data;
+  },
+  getEstatisticasDespesas: async (): Promise<EstatisticasDespesas> => {
+    const response = await api.get('/admin/estatisticas/despesas');
+    return response.data;
+  },
+  getEstatisticasAcessos: async (): Promise<EstatisticasAcessos> => {
+    const response = await api.get('/admin/estatisticas/acessos');
+    return response.data;
+  },
+  getAllUsuarios: async (): Promise<Usuario[]> => {
+    const response = await api.get('/admin/usuarios');
+    return response.data;
+  },
+  getAllEventos: async (): Promise<Grupo[]> => {
+    const response = await api.get('/admin/eventos');
+    return response.data;
   },
 };
 

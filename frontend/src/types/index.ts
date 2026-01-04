@@ -94,9 +94,12 @@ export interface Usuario {
   nome: string;
   ddd?: string;
   telefone?: string;
+  chavePix?: string;
   criadoEm: string;
   plano?: 'FREE' | 'PRO';
   planoValidoAte?: string | null;
+  role?: 'USER' | 'ADMIN';
+  auth_provider?: string;
 }
 
 export interface EventTemplate {

@@ -1,10 +1,15 @@
 import { AppDataSource } from '../database/data-source';
 import { ParticipacaoDespesa } from '../entities/ParticipacaoDespesa';
 import { Despesa } from '../entities/Despesa';
+import { Participante } from '../entities/Participante';
+import { Grupo } from '../entities/Grupo';
+import { EmailQueueService } from './EmailQueueService';
 
 export class ParticipacaoService {
   private static participacaoRepository = AppDataSource.getRepository(ParticipacaoDespesa);
   private static despesaRepository = AppDataSource.getRepository(Despesa);
+  private static participanteRepository = AppDataSource.getRepository(Participante);
+  private static grupoRepository = AppDataSource.getRepository(Grupo);
 
   static async toggleParticipacao(despesaId: number, participanteId: number, usuarioId: number): Promise<ParticipacaoDespesa | null> {
     const despesa = await this.despesaRepository.findOne({
@@ -36,7 +41,77 @@ export class ParticipacaoService {
       });
       const participacaoSalva = await this.participacaoRepository.save(novaParticipacao);
       await this.recalcularValores(despesaId, usuarioId);
+      
+      // Notificar participante sobre adição à despesa (não bloquear se falhar)
+      try {
+        await this.notificarParticipanteAdicionadoDespesa(despesaId, participanteId, participacaoSalva.valorDevePagar);
+      } catch (err) {
+        console.error('[ParticipacaoService.toggleParticipacao] Erro ao adicionar notificação à fila:', err);
+        // Não falhar a adição se a notificação falhar
+      }
+      
       return participacaoSalva;
+    }
+  }
+
+  /**
+   * Notifica participante sobre adição a despesa existente
+   */
+  private static async notificarParticipanteAdicionadoDespesa(
+    despesaId: number,
+    participanteId: number,
+    valorDevePagar: number
+  ): Promise<void> {
+    // Buscar despesa com grupo
+    const despesa = await this.despesaRepository.findOne({
+      where: { id: despesaId },
+      relations: ['grupo'],
+    });
+
+    if (!despesa || !despesa.grupo) {
+      return;
+    }
+
+    // Buscar participante
+    const participante = await this.participanteRepository.findOne({
+      where: { id: participanteId },
+      relations: ['usuario'],
+    });
+
+    if (!participante) {
+      return;
+    }
+
+    // Obter email do participante
+    let email: string | null = null;
+    if (participante.email && participante.email.trim()) {
+      email = participante.email.trim();
+    } else if (participante.usuario && participante.usuario.email) {
+      email = participante.usuario.email.trim();
+    }
+
+    if (!email) {
+      return; // Não notificar se não tiver email
+    }
+
+    // Obter link
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const linkEvento = `${frontendUrl}/eventos/${despesa.grupo.id}`;
+
+    try {
+      await EmailQueueService.adicionarEmailParticipanteAdicionadoDespesa({
+        destinatario: email,
+        nomeDestinatario: participante.nome,
+        eventoNome: despesa.grupo.nome,
+        eventoId: despesa.grupo.id,
+        despesaDescricao: despesa.descricao,
+        despesaValorTotal: despesa.valorTotal,
+        valorDevePagar,
+        linkEvento,
+      });
+    } catch (err) {
+      console.error(`Erro ao adicionar notificação de participante adicionado a despesa para ${email}:`, err);
+      throw err;
     }
   }
 

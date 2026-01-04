@@ -251,5 +251,38 @@ export class AuthService {
 
     return true;
   }
+
+  /**
+   * Atualiza dados do usuário
+   */
+  static async updateUsuario(id: number, data: { nome?: string; email?: string; ddd?: string; telefone?: string; chavePix?: string }): Promise<Usuario | null> {
+    const usuario = await this.findById(id);
+    
+    if (!usuario) {
+      return null;
+    }
+
+    // Se o email foi alterado, verificar se não existe outro usuário com esse email
+    if (data.email && data.email !== usuario.email) {
+      const usuarioComEmail = await this.findByEmail(data.email);
+      if (usuarioComEmail && usuarioComEmail.id !== id) {
+        throw new Error('Email já está em uso');
+      }
+    }
+
+    // Atualizar apenas os campos fornecidos
+    const updateData: Partial<Usuario> = {};
+    if (data.nome !== undefined) updateData.nome = data.nome;
+    if (data.email !== undefined) updateData.email = data.email;
+    if (data.ddd !== undefined) updateData.ddd = data.ddd || null;
+    if (data.telefone !== undefined) updateData.telefone = data.telefone || null;
+    if (data.chavePix !== undefined) updateData.chavePix = data.chavePix || null;
+
+    await this.repository.update(id, updateData);
+
+    // Buscar usuário atualizado
+    const usuarioAtualizado = await this.findById(id);
+    return usuarioAtualizado;
+  }
 }
 

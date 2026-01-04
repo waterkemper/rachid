@@ -3,9 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate 
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import PaywallModal from './components/PaywallModal';
-import { isPro } from './utils/plan';
-import { track } from './services/analytics';
 import { FaBars, FaTimes } from 'react-icons/fa';
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -23,13 +20,13 @@ import Relatorio from './pages/Relatorio';
 import Conta from './pages/Conta';
 import Ajuda from './pages/Ajuda';
 import ConvidarAmigos from './pages/ConvidarAmigos';
+import AdminDashboard from './pages/AdminDashboard';
 
 function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { usuario, logout } = useAuth();
+  const { usuario, logout, isAdmin } = useAuth();
   const [logoSrc, setLogoSrc] = React.useState<string | undefined>(undefined);
-  const [isPaywallOpen, setIsPaywallOpen] = React.useState(false);
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -103,67 +100,39 @@ function Navbar() {
                 Criar evento
               </Link>
             </li>
-            <li>
-              <a
-                href="/relatorio"
-                className={isActive('/relatorio') ? 'active' : ''}
-                onClick={(e) => {
-                  setIsMenuOpen(false);
-                  if (!isPro(usuario)) {
-                    e.preventDefault();
-                    track('paywall_view', { feature: 'relatorios', source: 'navbar_relatorios' });
-                    setIsPaywallOpen(true);
-                    return;
-                  }
-                  navigate('/relatorio');
-                }}
-                style={{ cursor: 'pointer' }}
-              >
-                Relatórios {isPro(usuario) ? '' : '(Pro)'}
-              </a>
-            </li>
-            <li>
-              <Link 
-                to="/conta" 
-                className={isActive('/conta') ? 'active' : ''}
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Conta
-              </Link>
-            </li>
-            <li>
-              <Link 
-                to="/ajuda" 
-                className={isActive('/ajuda') ? 'active' : ''}
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Ajuda
-              </Link>
-            </li>
+            {isAdmin() && (
+              <li>
+                <Link 
+                  to="/admin" 
+                  className={isActive('/admin') ? 'active' : ''}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Admin
+                </Link>
+              </li>
+            )}
           </ul>
           <div className="navbar-user">
-            <span className="user-name">{usuario?.nome}</span>
-            <button onClick={handleLogout} className="btn btn-secondary" style={{ marginLeft: '10px' }}>
+            <Link 
+              to="/conta" 
+              className={`navbar-user-link ${isActive('/conta') ? 'active' : ''}`}
+              onClick={() => setIsMenuOpen(false)}
+            >
+              <span className="user-name">{usuario?.nome}</span>
+            </Link>
+            <Link 
+              to="/ajuda" 
+              className={`navbar-user-link ${isActive('/ajuda') ? 'active' : ''}`}
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Ajuda
+            </Link>
+            <button onClick={handleLogout} className="btn btn-secondary">
               Sair
             </button>
           </div>
         </div>
       </div>
-
-      <PaywallModal
-        isOpen={isPaywallOpen}
-        onClose={() => setIsPaywallOpen(false)}
-        title="Relatórios no Pro"
-        bullets={[
-          'Relatórios por pessoa e por grupo',
-          'Exportar PDF/CSV do resultado',
-          'Grupos reutilizáveis ilimitados',
-        ]}
-        onCta={() => {
-          track('paywall_click_cta', { feature: 'relatorios', source: 'navbar' });
-          window.location.href = '/conta';
-        }}
-      />
     </nav>
   );
 }
@@ -273,6 +242,14 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <ConvidarAmigos />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminDashboard />
             </ProtectedRoute>
           }
         />

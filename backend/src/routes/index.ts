@@ -9,8 +9,10 @@ import { GrupoMaiorController } from '../controllers/GrupoMaiorController';
 import { AuthController } from '../controllers/AuthController';
 import { PublicEventoController } from '../controllers/PublicEventoController';
 import { TemplateController } from '../controllers/TemplateController';
+import { AdminController } from '../controllers/AdminController';
 import { authMiddleware } from '../middleware/auth';
 import { requireGroupMember } from '../middleware/requireGroupMember';
+import { requireAdmin } from '../middleware/requireAdmin';
 import { AnalyticsController } from '../controllers/AnalyticsController';
 
 const router = Router();
@@ -37,6 +39,7 @@ router.get('/templates/:id', TemplateController.getById);
 
 // Rotas protegidas (requerem autenticação)
 router.get('/auth/me', authMiddleware, AuthController.me);
+router.put('/auth/me', authMiddleware, AuthController.updateUser);
 router.post('/analytics/event', authMiddleware, AnalyticsController.track);
 
 router.get('/participantes', authMiddleware, ParticipanteController.getAll);
@@ -92,6 +95,15 @@ router.get('/grupos-maiores/:id/participantes', authMiddleware, GrupoMaiorContro
 
 // Rota pública para reivindicar participação (requer autenticação após cadastro)
 router.post('/public/eventos/:token/reivindicar', authMiddleware, PublicEventoController.reivindicarParticipacao);
+
+// Rotas administrativas (requerem autenticação e role ADMIN)
+router.get('/admin/estatisticas', authMiddleware, requireAdmin, AdminController.getEstatisticasGerais);
+router.get('/admin/estatisticas/usuarios', authMiddleware, requireAdmin, AdminController.getEstatisticasUsuarios);
+router.get('/admin/estatisticas/eventos', authMiddleware, requireAdmin, AdminController.getEstatisticasEventos);
+router.get('/admin/estatisticas/despesas', authMiddleware, requireAdmin, AdminController.getEstatisticasDespesas);
+router.get('/admin/estatisticas/acessos', authMiddleware, requireAdmin, AdminController.getEstatisticasAcessos);
+router.get('/admin/usuarios', authMiddleware, requireAdmin, AdminController.getAllUsuarios);
+router.get('/admin/eventos', authMiddleware, requireAdmin, AdminController.getAllEventos);
 
 export default router;
 

@@ -374,22 +374,45 @@ table tr:hover {
 .navbar-user {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.navbar-user-link {
+  color: rgba(226, 232, 240, 0.86);
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 999px;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+  border: 1px solid transparent;
+  font-size: 14px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+.navbar-user-link:hover,
+.navbar-user-link.active {
+  background-color: rgba(255, 255, 255, 0.10);
+  border-color: rgba(148, 163, 184, 0.18);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .user-name {
   color: rgba(226, 232, 240, 0.9);
   font-weight: 500;
-  max-width: 220px;
+  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
 }
 
 .navbar-user .btn {
   border-radius: 999px;
   padding: 8px 12px;
+  margin-left: 0;
 }
 
 .navbar-user .btn.btn-secondary {
@@ -455,7 +478,17 @@ table tr:hover {
     align-items: stretch;
     gap: 12px;
     padding-top: 12px;
+    padding-left: 0;
+    margin-left: 0;
     border-top: 1px solid rgba(148, 163, 184, 0.14);
+    border-left: none;
+  }
+
+  .navbar-user-link {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 16px;
+    border-radius: 8px;
   }
 
   .user-name {

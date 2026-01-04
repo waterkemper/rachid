@@ -6,6 +6,7 @@ import { ParticipanteGrupo } from '../entities/ParticipanteGrupo';
 import { ParticipacaoDespesa } from '../entities/ParticipacaoDespesa';
 import { SaldoParticipante, SugestaoPagamento, SaldoGrupo, CalculadoraService } from './CalculadoraService';
 import { GrupoParticipantesEvento } from '../entities/GrupoParticipantesEvento';
+import { EventoAcesso } from '../entities/EventoAcesso';
 
 export interface EventoPublico {
   id: number;
@@ -25,6 +26,21 @@ export class PublicEventoService {
   private static despesaRepository = AppDataSource.getRepository(Despesa);
   private static participanteRepository = AppDataSource.getRepository(Participante);
   private static participanteGrupoRepository = AppDataSource.getRepository(ParticipanteGrupo);
+  private static eventoAcessoRepository = AppDataSource.getRepository(EventoAcesso);
+
+  static async rastrearAcesso(eventoId: number, ipAddress?: string, userAgent?: string): Promise<void> {
+    try {
+      const acesso = this.eventoAcessoRepository.create({
+        evento_id: eventoId,
+        ipAddress: ipAddress || null,
+        userAgent: userAgent || null,
+      });
+      await this.eventoAcessoRepository.save(acesso);
+    } catch (error) {
+      // Não queremos que erros no rastreamento quebrem o fluxo principal
+      console.error('Erro ao rastrear acesso ao evento:', error);
+    }
+  }
 
   static async findByToken(token: string): Promise<EventoPublico | null> {
     const grupo = await this.grupoRepository.findOne({

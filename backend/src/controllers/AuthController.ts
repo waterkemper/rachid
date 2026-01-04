@@ -176,5 +176,42 @@ export class AuthController {
       res.status(statusCode).json({ error: errorMessage });
     }
   }
+
+  static async updateUser(req: Request, res: Response) {
+    try {
+      const usuarioId = (req as any).usuarioId;
+      
+      if (!usuarioId) {
+        return res.status(401).json({ error: 'Não autenticado' });
+      }
+
+      const { nome, email, ddd, telefone, chavePix } = req.body;
+
+      // Validar que pelo menos um campo foi fornecido
+      if (!nome && !email && ddd === undefined && telefone === undefined && chavePix === undefined) {
+        return res.status(400).json({ error: 'Pelo menos um campo deve ser fornecido para atualização' });
+      }
+
+      // Validar formato do email se fornecido
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ error: 'Email inválido' });
+      }
+
+      const usuarioAtualizado = await AuthService.updateUsuario(usuarioId, { nome, email, ddd, telefone, chavePix });
+
+      if (!usuarioAtualizado) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+
+      const { senha: _, ...usuarioSemSenha } = usuarioAtualizado;
+      res.json({ usuario: usuarioSemSenha });
+    } catch (error: any) {
+      console.error('Erro ao atualizar usuário:', error);
+      if (error.message === 'Email já está em uso') {
+        return res.status(400).json({ error: error.message });
+      }
+      res.status(500).json({ error: 'Erro ao atualizar usuário' });
+    }
+  }
 }
 

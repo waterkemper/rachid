@@ -5,6 +5,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { AppDataSource } from './database/data-source';
 import routes from './routes';
+import { EmailQueueService } from './services/EmailQueueService';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -73,8 +74,18 @@ app.listen(PORT, () => {
   
   // Tentar conectar ao banco de dados
   AppDataSource.initialize()
-    .then(() => {
+    .then(async () => {
       console.log('✅ Database connected successfully');
+      
+      // Inicializar EmailQueueService após conectar ao banco
+      try {
+        await EmailQueueService.initialize();
+        await EmailQueueService.iniciarWorker();
+        console.log('✅ Email queue service initialized');
+      } catch (error: any) {
+        console.error('❌ Error initializing email queue service:', error);
+        console.error('Email notifications will not work, but server will continue running');
+      }
     })
     .catch((error) => {
       console.error('❌ Error connecting to database:', error);

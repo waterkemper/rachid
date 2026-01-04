@@ -17,7 +17,6 @@ const Despesas: React.FC = () => {
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [participantesDoEvento, setParticipantesDoEvento] = useState<Participante[]>([]);
   const [participanteSubgrupoMap, setParticipanteSubgrupoMap] = useState<Map<number, string>>(new Map());
-  const [carregandoParticipantes, setCarregandoParticipantes] = useState(false);
   // Inicializar filtroGrupo com o valor da URL se existir
   const eventoIdFromUrl = searchParams.get('evento');
   const [filtroGrupo, setFiltroGrupo] = useState<number | ''>(eventoIdFromUrl ? Number(eventoIdFromUrl) : '');
@@ -112,7 +111,6 @@ const Despesas: React.FC = () => {
   usePageFocus(loadDespesas, [filtroGrupo]);
 
   const loadParticipantesDoEvento = async (eventoId: number, incluirPagadorAtual?: number) => {
-    setCarregandoParticipantes(true);
     try {
       const evento = await grupoApi.getById(eventoId);
       
@@ -129,88 +127,44 @@ const Despesas: React.FC = () => {
         });
         setParticipanteSubgrupoMap(map);
       } catch (err) {
-        console.error('Erro ao carregar subgrupos:', err);
         setParticipanteSubgrupoMap(new Map());
       }
       
-      // Usar os participantes que vêm diretamente do evento (já incluem todos os participantes do evento)
-      // Isso funciona tanto para criador quanto para não-criador
       if (evento.participantes && evento.participantes.length > 0) {
-        // Extrair os objetos Participante dos ParticipanteGrupo
-        const participantesDoEvento = evento.participantes
-          .map(pg => pg.participante)
-          .filter(p => p !== null && p !== undefined) as Participante[];
+        const participantesIds = evento.participantes.map(p => p.participante_id);
+        let participantesFiltrados = participantes.filter(p => participantesIds.includes(p.id));
         
         // Se estiver editando e o pagador atual não estiver na lista, incluir ele também
-        if (incluirPagadorAtual && !participantesDoEvento.some(p => p.id === incluirPagadorAtual)) {
-          // Tentar buscar o pagador na lista de participantes do usuário ou do evento
-          let pagadorAtual: Participante | undefined;
-          
-          // Primeiro tentar na lista de participantes do usuário
-          if (participantes.length > 0) {
-            pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
-          }
-          
-          // Se não encontrou, tentar buscar na API
-          if (!pagadorAtual) {
-            try {
-              pagadorAtual = await participanteApi.getById(incluirPagadorAtual);
-            } catch (err) {
-              console.error('Erro ao buscar pagador:', err);
-            }
-          }
-          
+        if (incluirPagadorAtual && !participantesIds.includes(incluirPagadorAtual)) {
+          const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
           if (pagadorAtual) {
-            participantesDoEvento.push(pagadorAtual);
+            participantesFiltrados = [...participantesFiltrados, pagadorAtual];
           }
         }
         
-        setParticipantesDoEvento(participantesDoEvento);
-        
-        // Atualizar a lista global de participantes com os participantes do evento
-        // (para evitar problemas futuros)
-        setParticipantes(prev => {
-          const idsExistentes = new Set(prev.map(p => p.id));
-          const novosParticipantes = participantesDoEvento.filter(p => !idsExistentes.has(p.id));
-          return [...prev, ...novosParticipantes];
-        });
+        setParticipantesDoEvento(participantesFiltrados);
       } else {
         // Se não houver participantes no evento mas houver um pagador atual, incluir ele
         if (incluirPagadorAtual) {
-          let pagadorAtual: Participante | undefined;
-          
-          // Tentar buscar o pagador
-          if (participantes.length > 0) {
-            pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
-          }
-          
-          if (!pagadorAtual) {
-            try {
-              pagadorAtual = await participanteApi.getById(incluirPagadorAtual);
-            } catch (err) {
-              console.error('Erro ao buscar pagador:', err);
-            }
-          }
-          
+          const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
           setParticipantesDoEvento(pagadorAtual ? [pagadorAtual] : []);
         } else {
+          // Mesmo sem participantes no evento, permitir que o usuário veja o campo
+          // O backend vai validar se pode criar/editar
           setParticipantesDoEvento([]);
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Erro ao carregar participantes do evento:', err);
-      console.error('Detalhes do erro:', {
-        message: err?.message,
-        response: err?.response?.data,
-        status: err?.response?.status,
-        eventoId
-      });
-      
-      // Em caso de erro, limpar o estado
-      setParticipantesDoEvento([]);
+      // Em caso de erro, ainda permitir que o campo seja exibido (pode ser problema de permissão temporário)
+      // Se houver um pagador atual, incluir ele
+      if (incluirPagadorAtual) {
+        const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
+        setParticipantesDoEvento(pagadorAtual ? [pagadorAtual] : []);
+      } else {
+        setParticipantesDoEvento([]);
+      }
       setParticipanteSubgrupoMap(new Map());
-    } finally {
-      setCarregandoParticipantes(false);
     }
   };
 
@@ -224,15 +178,12 @@ const Despesas: React.FC = () => {
         participante_pagador_id: despesa.participante_pagador_id || 0,
         data: despesa.data.split('T')[0],
       });
-      
-      // Carregar participantes já selecionados da despesa
-      const participantesIds = despesa.participacoes?.map(p => p.participante_id) || [];
-      setParticipantesSelecionados(participantesIds);
-      
       // Carregar participantes do evento da despesa sendo editada
       // Incluir o pagador atual caso ele não esteja mais no evento
       await loadParticipantesDoEvento(despesa.grupo_id, despesa.participante_pagador_id);
-      
+      // Carregar participantes já selecionados da despesa
+      const participantesIds = despesa.participacoes?.map(p => p.participante_id) || [];
+      setParticipantesSelecionados(participantesIds);
       setParticipantesExpandido(true); // Expandir ao editar
     } else {
       setEditingDespesa(null);
@@ -690,11 +641,9 @@ const Despesas: React.FC = () => {
               <option value="">
                 {!formData.grupo_id 
                   ? 'Selecione um evento primeiro' 
-                  : carregandoParticipantes
+                  : participantesDoEvento.length === 0 
                     ? 'Carregando participantes...' 
-                    : participantesDoEvento.length === 0
-                      ? 'Nenhum participante no evento'
-                      : 'Selecione quem pagou'}
+                    : 'Selecione quem pagou'}
               </option>
               {participantesDoEvento.map((participante) => (
                 <option key={participante.id} value={participante.id}>
