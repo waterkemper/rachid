@@ -16,6 +16,7 @@ const GrupoMaiorGrupo_1 = require("../entities/GrupoMaiorGrupo");
 const GrupoMaiorParticipante_1 = require("../entities/GrupoMaiorParticipante");
 const PasswordResetToken_1 = require("../entities/PasswordResetToken");
 const DespesaHistorico_1 = require("../entities/DespesaHistorico");
+const EventoAcesso_1 = require("../entities/EventoAcesso");
 // Suporta DATABASE_URL (formato URI) ou variáveis individuais
 function getDataSourceConfig() {
     // Se DATABASE_URL estiver definida, usa ela
@@ -42,6 +43,7 @@ function getDataSourceConfig() {
                 GrupoMaiorParticipante_1.GrupoMaiorParticipante,
                 PasswordResetToken_1.PasswordResetToken,
                 DespesaHistorico_1.DespesaHistorico,
+                EventoAcesso_1.EventoAcesso,
             ],
             migrations: [],
             subscribers: [],
@@ -72,6 +74,7 @@ function getDataSourceConfig() {
             GrupoMaiorParticipante_1.GrupoMaiorParticipante,
             PasswordResetToken_1.PasswordResetToken,
             DespesaHistorico_1.DespesaHistorico,
+            EventoAcesso_1.EventoAcesso,
         ],
         migrations: [],
         subscribers: [],

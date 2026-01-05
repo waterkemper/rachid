@@ -9,6 +9,8 @@ const Grupo_1 = require("../entities/Grupo");
 const ParticipanteGrupo_1 = require("../entities/ParticipanteGrupo");
 const Usuario_1 = require("../entities/Usuario");
 const DespesaHistoricoService_1 = require("./DespesaHistoricoService");
+const Participante_1 = require("../entities/Participante");
+const EmailQueueService_1 = require("./EmailQueueService");
 class DespesaService {
     static async findAll(usuarioId, grupoId) {
         // Buscar despesas onde o usuário é dono OU é membro do grupo
@@ -97,6 +99,27 @@ class DespesaService {
         // Verificar se é membro do grupo
         return await this.isUserGroupMember(usuarioId, despesa.grupo_id);
     }
+    /**
+     * Obtém o email de um participante (prioriza participante.email, depois usuario.email)
+     */
+    static async obterEmailParticipante(participanteId) {
+        const participante = await this.participanteRepository.findOne({
+            where: { id: participanteId },
+            relations: ['usuario'],
+        });
+        if (!participante) {
+            return null;
+        }
+        // Prioridade 1: Email do participante
+        if (participante.email && participante.email.trim()) {
+            return participante.email.trim();
+        }
+        // Prioridade 2: Email do usuário relacionado
+        if (participante.usuario && participante.usuario.email) {
+            return participante.usuario.email.trim();
+        }
+        return null;
+    }
     static async create(data) {
         const despesa = this.despesaRepository.create({
             grupo_id: data.grupo_id,
@@ -157,7 +180,85 @@ class DespesaService {
         if (!despesaCompleta) {
             throw new Error('Erro ao criar despesa');
         }
+        // Notificar participantes sobre nova despesa (não bloquear se falhar)
+        try {
+            await this.notificarNovaDespesa(despesaCompleta, data.grupo_id);
+        }
+        catch (err) {
+            console.error('[DespesaService.create] Erro ao adicionar notificações à fila:', err);
+            // Não falhar a criação da despesa se a notificação falhar
+        }
         return despesaCompleta;
+    }
+    /**
+     * Notifica participantes sobre nova despesa
+     */
+    static async notificarNovaDespesa(despesa, grupoId) {
+        // Buscar grupo e participantes
+        const grupo = await this.grupoRepository.findOne({
+            where: { id: grupoId },
+            select: ['id', 'nome'],
+        });
+        if (!grupo) {
+            return;
+        }
+        // Buscar participantes que devem pagar (participações)
+        const participacoes = await this.participacaoRepository.find({
+            where: { despesa_id: despesa.id },
+            relations: ['participante'],
+        });
+        if (!participacoes || participacoes.length === 0) {
+            return;
+        }
+        // Buscar pagador
+        const pagador = despesa.pagador;
+        const pagadorNome = pagador?.nome || 'Desconhecido';
+        // Calcular valor por pessoa
+        const valorPorPessoa = despesa.valorTotal / participacoes.length;
+        // Obter link de compartilhamento
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const linkEvento = `${frontendUrl}/eventos/${grupoId}`;
+        // Formatar data
+        const formatDate = (date) => {
+            const d = typeof date === 'string' ? new Date(date) : date;
+            return new Intl.DateTimeFormat('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+            }).format(d);
+        };
+        // Adicionar jobs na fila para cada participante (exceto o pagador, se aplicável)
+        for (const participacao of participacoes) {
+            const participante = participacao.participante;
+            if (!participante)
+                continue;
+            // Pular o pagador (ele já sabe que pagou)
+            if (pagador && participante.id === pagador.id) {
+                continue;
+            }
+            const email = await this.obterEmailParticipante(participante.id);
+            if (!email) {
+                continue; // Pular se não tiver email
+            }
+            try {
+                await EmailQueueService_1.EmailQueueService.adicionarEmailNovaDespesa({
+                    destinatario: email,
+                    nomeDestinatario: participante.nome,
+                    eventoNome: grupo.nome,
+                    eventoId: grupo.id,
+                    despesaDescricao: despesa.descricao,
+                    despesaValorTotal: despesa.valorTotal,
+                    despesaData: formatDate(despesa.data),
+                    valorPorPessoa,
+                    pagadorNome,
+                    linkEvento,
+                });
+            }
+            catch (err) {
+                console.error(`Erro ao adicionar notificação para ${email}:`, err);
+                // Continuar com outros participantes
+            }
+        }
     }
     static async update(id, usuarioId, data) {
         // Verificar permissão primeiro
@@ -312,7 +413,98 @@ class DespesaService {
             .leftJoinAndSelect('participacoes.participante', 'participante')
             .where('despesa.id = :id', { id })
             .getOne();
+        if (!despesaAtualizada) {
+            return null;
+        }
+        // Notificar participantes sobre despesa editada (não bloquear se falhar)
+        try {
+            await this.notificarDespesaEditada(despesaAtualizada, historicoAlteracoes);
+        }
+        catch (err) {
+            console.error('[DespesaService.update] Erro ao adicionar notificações à fila:', err);
+            // Não falhar a atualização da despesa se a notificação falhar
+        }
         return despesaAtualizada;
+    }
+    /**
+     * Notifica participantes sobre despesa editada
+     */
+    static async notificarDespesaEditada(despesa, mudancas) {
+        if (!mudancas || mudancas.length === 0) {
+            return; // Não notificar se não houver mudanças
+        }
+        // Buscar grupo
+        const grupo = await this.grupoRepository.findOne({
+            where: { id: despesa.grupo_id },
+            select: ['id', 'nome'],
+        });
+        if (!grupo) {
+            return;
+        }
+        // Buscar participantes envolvidos na despesa
+        const participacoes = await this.participacaoRepository.find({
+            where: { despesa_id: despesa.id },
+            relations: ['participante'],
+        });
+        if (!participacoes || participacoes.length === 0) {
+            return;
+        }
+        // Formatar lista de mudanças
+        const mudancasFormatadas = mudancas.map(m => {
+            if (m.campo_alterado === 'descricao') {
+                return `Descrição alterada de "${m.valor_anterior}" para "${m.valor_novo}"`;
+            }
+            else if (m.campo_alterado === 'valorTotal') {
+                const formatCurrency = (v) => {
+                    const num = parseFloat(v);
+                    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+                };
+                return `Valor total alterado de ${formatCurrency(m.valor_anterior || '0')} para ${formatCurrency(m.valor_novo || '0')}`;
+            }
+            else if (m.campo_alterado === 'participante_pagador_id') {
+                return `Quem pagou foi alterado`;
+            }
+            return `${m.campo_alterado} foi alterado`;
+        });
+        // Obter link
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const linkEvento = `${frontendUrl}/eventos/${grupo.id}`;
+        // Formatar data
+        const formatDate = (date) => {
+            const d = typeof date === 'string' ? new Date(date) : date;
+            return new Intl.DateTimeFormat('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+            }).format(d);
+        };
+        // Adicionar jobs na fila para cada participante
+        for (const participacao of participacoes) {
+            const participante = participacao.participante;
+            if (!participante)
+                continue;
+            const email = await this.obterEmailParticipante(participante.id);
+            if (!email) {
+                continue; // Pular se não tiver email
+            }
+            try {
+                await EmailQueueService_1.EmailQueueService.adicionarEmailDespesaEditada({
+                    destinatario: email,
+                    nomeDestinatario: participante.nome,
+                    eventoNome: grupo.nome,
+                    eventoId: grupo.id,
+                    despesaDescricao: despesa.descricao,
+                    despesaValorTotal: despesa.valorTotal,
+                    despesaData: formatDate(despesa.data),
+                    mudancas: mudancasFormatadas,
+                    linkEvento,
+                });
+            }
+            catch (err) {
+                console.error(`Erro ao adicionar notificação para ${email}:`, err);
+                // Continuar com outros participantes
+            }
+        }
     }
     /**
      * Registra histórico de alterações em uma despesa
@@ -403,3 +595,4 @@ DespesaService.participacaoRepository = data_source_1.AppDataSource.getRepositor
 DespesaService.grupoRepository = data_source_1.AppDataSource.getRepository(Grupo_1.Grupo);
 DespesaService.participanteGrupoRepository = data_source_1.AppDataSource.getRepository(ParticipanteGrupo_1.ParticipanteGrupo);
 DespesaService.usuarioRepository = data_source_1.AppDataSource.getRepository(Usuario_1.Usuario);
+DespesaService.participanteRepository = data_source_1.AppDataSource.getRepository(Participante_1.Participante);

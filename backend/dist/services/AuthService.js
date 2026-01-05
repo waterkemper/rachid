@@ -202,6 +202,38 @@ class AuthService {
         });
         return true;
     }
+    /**
+     * Atualiza dados do usuário
+     */
+    static async updateUsuario(id, data) {
+        const usuario = await this.findById(id);
+        if (!usuario) {
+            return null;
+        }
+        // Se o email foi alterado, verificar se não existe outro usuário com esse email
+        if (data.email && data.email !== usuario.email) {
+            const usuarioComEmail = await this.findByEmail(data.email);
+            if (usuarioComEmail && usuarioComEmail.id !== id) {
+                throw new Error('Email já está em uso');
+            }
+        }
+        // Atualizar apenas os campos fornecidos
+        const updateData = {};
+        if (data.nome !== undefined)
+            updateData.nome = data.nome;
+        if (data.email !== undefined)
+            updateData.email = data.email;
+        if (data.ddd !== undefined)
+            updateData.ddd = data.ddd || undefined;
+        if (data.telefone !== undefined)
+            updateData.telefone = data.telefone || undefined;
+        if (data.chavePix !== undefined)
+            updateData.chavePix = data.chavePix || undefined;
+        await this.repository.update(id, updateData);
+        // Buscar usuário atualizado
+        const usuarioAtualizado = await this.findById(id);
+        return usuarioAtualizado;
+    }
 }
 exports.AuthService = AuthService;
 AuthService.repository = data_source_1.AppDataSource.getRepository(Usuario_1.Usuario);

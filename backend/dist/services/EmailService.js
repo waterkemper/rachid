@@ -149,6 +149,115 @@ class EmailService {
         });
         await this.sendEmail(email, 'Senha Alterada - Rachid', html);
     }
+    /**
+     * Envia email de nova despesa (chamado pelo worker)
+     */
+    static async enviarEmailNovaDespesa(data) {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const linkEvento = data.linkEvento || `${frontendUrl}/eventos/${data.eventoId}`;
+        const formatCurrency = (value) => {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+            }).format(value);
+        };
+        const formatDate = (dateString) => {
+            const date = new Date(dateString);
+            return new Intl.DateTimeFormat('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+            }).format(date);
+        };
+        const html = EmailTemplateService_1.EmailTemplateService.renderNovaDespesa({
+            nomeDestinatario: data.nomeDestinatario,
+            eventoNome: data.eventoNome,
+            despesaDescricao: data.despesaDescricao,
+            despesaValorTotal: formatCurrency(data.despesaValorTotal),
+            valorPorPessoa: formatCurrency(data.valorPorPessoa),
+            pagadorNome: data.pagadorNome,
+            despesaData: formatDate(data.despesaData),
+            linkEvento,
+        });
+        await this.sendEmail(data.destinatario, `Nova Despesa: ${data.despesaDescricao} - ${data.eventoNome}`, html);
+    }
+    /**
+     * Envia email de despesa editada (chamado pelo worker)
+     */
+    static async enviarEmailDespesaEditada(data) {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const linkEvento = data.linkEvento || `${frontendUrl}/eventos/${data.eventoId}`;
+        const formatCurrency = (value) => {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+            }).format(value);
+        };
+        const formatDate = (dateString) => {
+            const date = new Date(dateString);
+            return new Intl.DateTimeFormat('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+            }).format(date);
+        };
+        const html = EmailTemplateService_1.EmailTemplateService.renderDespesaEditada({
+            nomeDestinatario: data.nomeDestinatario,
+            eventoNome: data.eventoNome,
+            despesaDescricao: data.despesaDescricao,
+            despesaValorTotal: formatCurrency(data.despesaValorTotal),
+            despesaData: formatDate(data.despesaData),
+            mudancas: data.mudancas,
+            linkEvento,
+        });
+        await this.sendEmail(data.destinatario, `Despesa Atualizada: ${data.despesaDescricao} - ${data.eventoNome}`, html);
+    }
+    /**
+     * Envia email de inclusão em evento (chamado pelo worker)
+     */
+    static async enviarEmailInclusaoEvento(data) {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const linkEvento = data.linkEvento || `${frontendUrl}/eventos/${data.eventoId}`;
+        const formatDate = (dateString) => {
+            const date = new Date(dateString);
+            return new Intl.DateTimeFormat('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+            }).format(date);
+        };
+        const html = EmailTemplateService_1.EmailTemplateService.renderInclusaoEvento({
+            nomeDestinatario: data.nomeDestinatario,
+            eventoNome: data.eventoNome,
+            eventoDescricao: data.eventoDescricao,
+            eventoData: data.eventoData ? formatDate(data.eventoData) : undefined,
+            adicionadoPor: data.adicionadoPor,
+            linkEvento,
+        });
+        await this.sendEmail(data.destinatario, `Você foi adicionado ao evento: ${data.eventoNome}`, html);
+    }
+    /**
+     * Envia email de participante adicionado a despesa (chamado pelo worker)
+     */
+    static async enviarEmailParticipanteAdicionadoDespesa(data) {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const linkEvento = data.linkEvento || `${frontendUrl}/eventos/${data.eventoId}`;
+        const formatCurrency = (value) => {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+            }).format(value);
+        };
+        const html = EmailTemplateService_1.EmailTemplateService.renderParticipanteAdicionadoDespesa({
+            nomeDestinatario: data.nomeDestinatario,
+            eventoNome: data.eventoNome,
+            despesaDescricao: data.despesaDescricao,
+            despesaValorTotal: formatCurrency(data.despesaValorTotal),
+            valorDevePagar: formatCurrency(data.valorDevePagar),
+            linkEvento,
+        });
+        await this.sendEmail(data.destinatario, `Você foi adicionado a uma despesa: ${data.despesaDescricao}`, html);
+    }
 }
 exports.EmailService = EmailService;
 EmailService.initialized = false;

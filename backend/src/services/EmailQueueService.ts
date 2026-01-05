@@ -140,7 +140,7 @@ export class EmailQueueService {
     }
 
     // Worker para nova-despesa
-    await this.boss.work('nova-despesa', async (job) => {
+    await this.boss.work('nova-despesa', async (job: any) => {
       const data = job.data as NovaDespesaJobData;
       try {
         await EmailService.enviarEmailNovaDespesa(data);
@@ -152,7 +152,7 @@ export class EmailQueueService {
     });
 
     // Worker para despesa-editada
-    await this.boss.work('despesa-editada', async (job) => {
+    await this.boss.work('despesa-editada', async (job: any) => {
       const data = job.data as DespesaEditadaJobData;
       try {
         await EmailService.enviarEmailDespesaEditada(data);
@@ -164,7 +164,7 @@ export class EmailQueueService {
     });
 
     // Worker para inclusao-evento
-    await this.boss.work('inclusao-evento', async (job) => {
+    await this.boss.work('inclusao-evento', async (job: any) => {
       const data = job.data as InclusaoEventoJobData;
       try {
         await EmailService.enviarEmailInclusaoEvento(data);
@@ -176,7 +176,7 @@ export class EmailQueueService {
     });
 
     // Worker para participante-adicionado-despesa
-    await this.boss.work('participante-adicionado-despesa', async (job) => {
+    await this.boss.work('participante-adicionado-despesa', async (job: any) => {
       const data = job.data as ParticipanteAdicionadoDespesaJobData;
       try {
         await EmailService.enviarEmailParticipanteAdicionadoDespesa(data);

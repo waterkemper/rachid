@@ -50,6 +50,10 @@ __decorate([
     __metadata("design:type", String)
 ], Usuario.prototype, "telefone", void 0);
 __decorate([
+    (0, typeorm_1.Column)('varchar', { nullable: true, name: 'chavepix' }),
+    __metadata("design:type", String)
+], Usuario.prototype, "chavePix", void 0);
+__decorate([
     (0, typeorm_1.Column)('varchar', { default: 'FREE' }),
     __metadata("design:type", String)
 ], Usuario.prototype, "plano", void 0);
@@ -57,6 +61,10 @@ __decorate([
     (0, typeorm_1.Column)({ type: 'timestamp', nullable: true }),
     __metadata("design:type", Date)
 ], Usuario.prototype, "planoValidoAte", void 0);
+__decorate([
+    (0, typeorm_1.Column)('varchar', { default: 'USER' }),
+    __metadata("design:type", String)
+], Usuario.prototype, "role", void 0);
 __decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)

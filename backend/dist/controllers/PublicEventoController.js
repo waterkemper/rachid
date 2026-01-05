@@ -13,6 +13,10 @@ class PublicEventoController {
             if (!evento) {
                 return res.status(404).json({ error: 'Evento não encontrado' });
             }
+            // Rastrear acesso
+            const ipAddress = req.ip || req.socket.remoteAddress || undefined;
+            const userAgent = req.get('user-agent') || undefined;
+            await PublicEventoService_1.PublicEventoService.rastrearAcesso(evento.id, ipAddress, userAgent);
             res.json(evento);
         }
         catch (error) {
@@ -30,6 +34,10 @@ class PublicEventoController {
             if (!evento) {
                 return res.status(404).json({ error: 'Evento não encontrado' });
             }
+            // Rastrear acesso
+            const ipAddress = req.ip || req.socket.remoteAddress || undefined;
+            const userAgent = req.get('user-agent') || undefined;
+            await PublicEventoService_1.PublicEventoService.rastrearAcesso(evento.id, ipAddress, userAgent);
             const saldos = await PublicEventoService_1.PublicEventoService.calcularSaldosPublicos(evento.id);
             res.json(saldos);
         }
@@ -48,6 +56,10 @@ class PublicEventoController {
             if (!evento) {
                 return res.status(404).json({ error: 'Evento não encontrado' });
             }
+            // Rastrear acesso
+            const ipAddress = req.ip || req.socket.remoteAddress || undefined;
+            const userAgent = req.get('user-agent') || undefined;
+            await PublicEventoService_1.PublicEventoService.rastrearAcesso(evento.id, ipAddress, userAgent);
             // Verificar se há grupos e usar sugestões entre grupos se necessário
             const saldosGrupos = await PublicEventoService_1.PublicEventoService.calcularSaldosPorGrupoPublicos(evento.id);
             const temGrupos = saldosGrupos.some(g => g.grupoId > 0);
@@ -71,6 +83,10 @@ class PublicEventoController {
             if (!evento) {
                 return res.status(404).json({ error: 'Evento não encontrado' });
             }
+            // Rastrear acesso
+            const ipAddress = req.ip || req.socket.remoteAddress || undefined;
+            const userAgent = req.get('user-agent') || undefined;
+            await PublicEventoService_1.PublicEventoService.rastrearAcesso(evento.id, ipAddress, userAgent);
             const saldosGrupos = await PublicEventoService_1.PublicEventoService.calcularSaldosPorGrupoPublicos(evento.id);
             res.json(saldosGrupos);
         }
@@ -89,6 +105,10 @@ class PublicEventoController {
             if (!evento) {
                 return res.status(404).json({ error: 'Evento não encontrado' });
             }
+            // Rastrear acesso
+            const ipAddress = req.ip || req.socket.remoteAddress || undefined;
+            const userAgent = req.get('user-agent') || undefined;
+            await PublicEventoService_1.PublicEventoService.rastrearAcesso(evento.id, ipAddress, userAgent);
             const despesas = await PublicEventoService_1.PublicEventoService.buscarDespesasPublicas(evento.id);
             res.json(despesas);
         }

@@ -9,7 +9,22 @@ const ParticipanteGrupo_1 = require("../entities/ParticipanteGrupo");
 const ParticipacaoDespesa_1 = require("../entities/ParticipacaoDespesa");
 const CalculadoraService_1 = require("./CalculadoraService");
 const GrupoParticipantesEvento_1 = require("../entities/GrupoParticipantesEvento");
+const EventoAcesso_1 = require("../entities/EventoAcesso");
 class PublicEventoService {
+    static async rastrearAcesso(eventoId, ipAddress, userAgent) {
+        try {
+            const acesso = this.eventoAcessoRepository.create({
+                evento: { id: eventoId },
+                ipAddress: ipAddress || undefined,
+                userAgent: userAgent || undefined,
+            });
+            await this.eventoAcessoRepository.save(acesso);
+        }
+        catch (error) {
+            // Não queremos que erros no rastreamento quebrem o fluxo principal
+            console.error('Erro ao rastrear acesso ao evento:', error);
+        }
+    }
     static async findByToken(token) {
         const grupo = await this.grupoRepository.findOne({
             where: { shareToken: token },
@@ -305,3 +320,4 @@ PublicEventoService.grupoRepository = data_source_1.AppDataSource.getRepository(
 PublicEventoService.despesaRepository = data_source_1.AppDataSource.getRepository(Despesa_1.Despesa);
 PublicEventoService.participanteRepository = data_source_1.AppDataSource.getRepository(Participante_1.Participante);
 PublicEventoService.participanteGrupoRepository = data_source_1.AppDataSource.getRepository(ParticipanteGrupo_1.ParticipanteGrupo);
+PublicEventoService.eventoAcessoRepository = data_source_1.AppDataSource.getRepository(EventoAcesso_1.EventoAcesso);

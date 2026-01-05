@@ -11,8 +11,10 @@ const GrupoMaiorController_1 = require("../controllers/GrupoMaiorController");
 const AuthController_1 = require("../controllers/AuthController");
 const PublicEventoController_1 = require("../controllers/PublicEventoController");
 const TemplateController_1 = require("../controllers/TemplateController");
+const AdminController_1 = require("../controllers/AdminController");
 const auth_1 = require("../middleware/auth");
 const requireGroupMember_1 = require("../middleware/requireGroupMember");
+const requireAdmin_1 = require("../middleware/requireAdmin");
 const AnalyticsController_1 = require("../controllers/AnalyticsController");
 const router = (0, express_1.Router)();
 // Rotas públicas (sem autenticação)
@@ -34,6 +36,7 @@ router.get('/templates', TemplateController_1.TemplateController.getAll);
 router.get('/templates/:id', TemplateController_1.TemplateController.getById);
 // Rotas protegidas (requerem autenticação)
 router.get('/auth/me', auth_1.authMiddleware, AuthController_1.AuthController.me);
+router.put('/auth/me', auth_1.authMiddleware, AuthController_1.AuthController.updateUser);
 router.post('/analytics/event', auth_1.authMiddleware, AnalyticsController_1.AnalyticsController.track);
 router.get('/participantes', auth_1.authMiddleware, ParticipanteController_1.ParticipanteController.getAll);
 router.get('/participantes/:id', auth_1.authMiddleware, ParticipanteController_1.ParticipanteController.getById);
@@ -81,4 +84,12 @@ router.delete('/grupos-maiores/:id/participantes/:participanteId', auth_1.authMi
 router.get('/grupos-maiores/:id/participantes', auth_1.authMiddleware, GrupoMaiorController_1.GrupoMaiorController.obterTodosParticipantes);
 // Rota pública para reivindicar participação (requer autenticação após cadastro)
 router.post('/public/eventos/:token/reivindicar', auth_1.authMiddleware, PublicEventoController_1.PublicEventoController.reivindicarParticipacao);
+// Rotas administrativas (requerem autenticação e role ADMIN)
+router.get('/admin/estatisticas', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminController_1.AdminController.getEstatisticasGerais);
+router.get('/admin/estatisticas/usuarios', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminController_1.AdminController.getEstatisticasUsuarios);
+router.get('/admin/estatisticas/eventos', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminController_1.AdminController.getEstatisticasEventos);
+router.get('/admin/estatisticas/despesas', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminController_1.AdminController.getEstatisticasDespesas);
+router.get('/admin/estatisticas/acessos', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminController_1.AdminController.getEstatisticasAcessos);
+router.get('/admin/usuarios', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminController_1.AdminController.getAllUsuarios);
+router.get('/admin/eventos', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminController_1.AdminController.getAllEventos);
 exports.default = router;

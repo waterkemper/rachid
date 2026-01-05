@@ -10,6 +10,7 @@ const cors_1 = __importDefault(require("cors"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const data_source_1 = require("./database/data-source");
 const routes_1 = __importDefault(require("./routes"));
+const EmailQueueService_1 = require("./services/EmailQueueService");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3001;
 app.use((0, cors_1.default)({
@@ -70,8 +71,18 @@ app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     // Tentar conectar ao banco de dados
     data_source_1.AppDataSource.initialize()
-        .then(() => {
+        .then(async () => {
         console.log('✅ Database connected successfully');
+        // Inicializar EmailQueueService após conectar ao banco
+        try {
+            await EmailQueueService_1.EmailQueueService.initialize();
+            await EmailQueueService_1.EmailQueueService.iniciarWorker();
+            console.log('✅ Email queue service initialized');
+        }
+        catch (error) {
+            console.error('❌ Error initializing email queue service:', error);
+            console.error('Email notifications will not work, but server will continue running');
+        }
     })
         .catch((error) => {
         console.error('❌ Error connecting to database:', error);

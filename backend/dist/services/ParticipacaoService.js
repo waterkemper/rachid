@@ -4,6 +4,9 @@ exports.ParticipacaoService = void 0;
 const data_source_1 = require("../database/data-source");
 const ParticipacaoDespesa_1 = require("../entities/ParticipacaoDespesa");
 const Despesa_1 = require("../entities/Despesa");
+const Participante_1 = require("../entities/Participante");
+const Grupo_1 = require("../entities/Grupo");
+const EmailQueueService_1 = require("./EmailQueueService");
 class ParticipacaoService {
     static async toggleParticipacao(despesaId, participanteId, usuarioId) {
         const despesa = await this.despesaRepository.findOne({
@@ -33,7 +36,66 @@ class ParticipacaoService {
             });
             const participacaoSalva = await this.participacaoRepository.save(novaParticipacao);
             await this.recalcularValores(despesaId, usuarioId);
+            // Notificar participante sobre adição à despesa (não bloquear se falhar)
+            try {
+                await this.notificarParticipanteAdicionadoDespesa(despesaId, participanteId, participacaoSalva.valorDevePagar);
+            }
+            catch (err) {
+                console.error('[ParticipacaoService.toggleParticipacao] Erro ao adicionar notificação à fila:', err);
+                // Não falhar a adição se a notificação falhar
+            }
             return participacaoSalva;
+        }
+    }
+    /**
+     * Notifica participante sobre adição a despesa existente
+     */
+    static async notificarParticipanteAdicionadoDespesa(despesaId, participanteId, valorDevePagar) {
+        // Buscar despesa com grupo
+        const despesa = await this.despesaRepository.findOne({
+            where: { id: despesaId },
+            relations: ['grupo'],
+        });
+        if (!despesa || !despesa.grupo) {
+            return;
+        }
+        // Buscar participante
+        const participante = await this.participanteRepository.findOne({
+            where: { id: participanteId },
+            relations: ['usuario'],
+        });
+        if (!participante) {
+            return;
+        }
+        // Obter email do participante
+        let email = null;
+        if (participante.email && participante.email.trim()) {
+            email = participante.email.trim();
+        }
+        else if (participante.usuario && participante.usuario.email) {
+            email = participante.usuario.email.trim();
+        }
+        if (!email) {
+            return; // Não notificar se não tiver email
+        }
+        // Obter link
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const linkEvento = `${frontendUrl}/eventos/${despesa.grupo.id}`;
+        try {
+            await EmailQueueService_1.EmailQueueService.adicionarEmailParticipanteAdicionadoDespesa({
+                destinatario: email,
+                nomeDestinatario: participante.nome,
+                eventoNome: despesa.grupo.nome,
+                eventoId: despesa.grupo.id,
+                despesaDescricao: despesa.descricao,
+                despesaValorTotal: despesa.valorTotal,
+                valorDevePagar,
+                linkEvento,
+            });
+        }
+        catch (err) {
+            console.error(`Erro ao adicionar notificação de participante adicionado a despesa para ${email}:`, err);
+            throw err;
         }
     }
     static async recalcularValores(despesaId, usuarioId) {
@@ -81,3 +143,5 @@ class ParticipacaoService {
 exports.ParticipacaoService = ParticipacaoService;
 ParticipacaoService.participacaoRepository = data_source_1.AppDataSource.getRepository(ParticipacaoDespesa_1.ParticipacaoDespesa);
 ParticipacaoService.despesaRepository = data_source_1.AppDataSource.getRepository(Despesa_1.Despesa);
+ParticipacaoService.participanteRepository = data_source_1.AppDataSource.getRepository(Participante_1.Participante);
+ParticipacaoService.grupoRepository = data_source_1.AppDataSource.getRepository(Grupo_1.Grupo);

@@ -499,6 +499,10 @@ export class DespesaService {
       .where('despesa.id = :id', { id })
       .getOne();
     
+    if (!despesaAtualizada) {
+      return null;
+    }
+
     // Notificar participantes sobre despesa editada (não bloquear se falhar)
     try {
       await this.notificarDespesaEditada(despesaAtualizada, historicoAlteracoes);

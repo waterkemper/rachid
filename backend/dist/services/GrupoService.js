@@ -14,6 +14,7 @@ const ParticipacaoService_1 = require("./ParticipacaoService");
 const Usuario_1 = require("../entities/Usuario");
 const Participante_1 = require("../entities/Participante");
 const typeorm_1 = require("typeorm");
+const EmailQueueService_1 = require("./EmailQueueService");
 class GrupoService {
     /**
      * Verifica se um usuário tem acesso a um grupo (é dono OU é participante via email)
@@ -271,7 +272,83 @@ class GrupoService {
             console.error('[GrupoService.adicionarParticipante] Erro ao sincronizar participações nas despesas:', err);
             // Não falhar a adição do participante se a sincronização falhar
         }
+        // Notificar participante sobre inclusão no evento (não bloquear se falhar)
+        try {
+            await this.notificarInclusaoEvento(grupoId, participanteId, usuarioId);
+        }
+        catch (err) {
+            console.error('[GrupoService.adicionarParticipante] Erro ao adicionar notificação à fila:', err);
+            // Não falhar a adição do participante se a notificação falhar
+        }
         return true;
+    }
+    /**
+     * Notifica participante sobre inclusão em evento
+     */
+    static async notificarInclusaoEvento(grupoId, participanteId, usuarioIdQueAdicionou) {
+        // Buscar grupo
+        const grupo = await this.grupoRepository.findOne({
+            where: { id: grupoId },
+            select: ['id', 'nome', 'descricao', 'data'],
+        });
+        if (!grupo) {
+            return;
+        }
+        // Buscar participante
+        const participante = await this.participanteRepository.findOne({
+            where: { id: participanteId },
+            relations: ['usuario'],
+        });
+        if (!participante) {
+            return;
+        }
+        // Obter email do participante
+        let email = null;
+        if (participante.email && participante.email.trim()) {
+            email = participante.email.trim();
+        }
+        else if (participante.usuario && participante.usuario.email) {
+            email = participante.usuario.email.trim();
+        }
+        if (!email) {
+            return; // Não notificar se não tiver email
+        }
+        // Buscar quem adicionou
+        const usuarioQueAdicionou = await this.usuarioRepository.findOne({
+            where: { id: usuarioIdQueAdicionou },
+            select: ['nome'],
+        });
+        const adicionadoPor = usuarioQueAdicionou?.nome || 'Alguém';
+        // Obter link de compartilhamento
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const linkEvento = `${frontendUrl}/eventos/${grupoId}`;
+        // Formatar data do evento
+        const formatDate = (date) => {
+            if (!date)
+                return undefined;
+            const d = typeof date === 'string' ? new Date(date) : date;
+            return new Intl.DateTimeFormat('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+            }).format(d);
+        };
+        try {
+            await EmailQueueService_1.EmailQueueService.adicionarEmailInclusaoEvento({
+                destinatario: email,
+                nomeDestinatario: participante.nome,
+                eventoNome: grupo.nome,
+                eventoId: grupo.id,
+                eventoDescricao: grupo.descricao || undefined,
+                eventoData: formatDate(grupo.data),
+                adicionadoPor,
+                linkEvento,
+            });
+        }
+        catch (err) {
+            console.error(`Erro ao adicionar notificação de inclusão em evento para ${email}:`, err);
+            throw err;
+        }
     }
     static async removerParticipante(grupoId, participanteId, usuarioId) {
         // Verificar se o grupo pertence ao usuário

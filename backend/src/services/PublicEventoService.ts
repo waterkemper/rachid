@@ -31,9 +31,9 @@ export class PublicEventoService {
   static async rastrearAcesso(eventoId: number, ipAddress?: string, userAgent?: string): Promise<void> {
     try {
       const acesso = this.eventoAcessoRepository.create({
-        evento_id: eventoId,
-        ipAddress: ipAddress || null,
-        userAgent: userAgent || null,
+        evento: { id: eventoId } as Grupo,
+        ipAddress: ipAddress || undefined,
+        userAgent: userAgent || undefined,
       });
       await this.eventoAcessoRepository.save(acesso);
     } catch (error) {
