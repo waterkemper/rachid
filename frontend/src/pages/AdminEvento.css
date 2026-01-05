@@ -1,0 +1,207 @@
+.admin-evento {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.admin-evento-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.admin-evento-header h1 {
+  margin: 0;
+  color: #1a1a1a;
+  flex: 1;
+  font-weight: 700;
+}
+
+.admin-evento-info {
+  margin-bottom: 2rem;
+}
+
+.admin-evento-card {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  border: 1px solid #e0e0e0;
+}
+
+.admin-evento-card h3 {
+  margin: 0 0 1rem 0;
+  color: #1a1a1a;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.admin-evento-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-evento-details > div {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #e0e0e0;
+  color: #2a2a2a;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.admin-evento-details > div:last-child {
+  border-bottom: none;
+}
+
+.admin-evento-details strong {
+  color: #1a1a1a;
+  margin-right: 0.5rem;
+  font-weight: 600;
+  min-width: 140px;
+  display: inline-block;
+}
+
+.admin-evento-section {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  border: 1px solid #e0e0e0;
+  margin-bottom: 2rem;
+}
+
+.admin-evento-section h2 {
+  margin: 0 0 1.5rem 0;
+  color: #1a1a1a;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.admin-evento-saldos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.admin-evento-saldo-card {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 1.5rem;
+  border: 2px solid #d0d0d0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.admin-evento-saldo-card h3 {
+  margin: 0 0 1rem 0;
+  color: #1a1a1a;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.admin-evento-saldo-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.admin-evento-saldo-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: #444;
+}
+
+.admin-evento-saldo-details strong {
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.admin-evento-participantes {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #dee2e6;
+}
+
+.admin-evento-participantes strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.admin-evento-participantes ul {
+  margin: 0;
+  padding-left: 1.5rem;
+  list-style: disc;
+}
+
+.admin-evento-participantes li {
+  color: #2a2a2a;
+  margin-bottom: 0.25rem;
+  font-weight: 500;
+}
+
+.admin-evento-saldos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.admin-evento-saldo-item {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 1.5rem;
+  border: 2px solid #d0d0d0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-evento-saldo-nome {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.admin-evento-saldo-item .admin-evento-saldo-value {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.admin-evento-saldo-item .admin-evento-saldo-details {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.9rem;
+  color: #444;
+}
+
+.admin-evento-saldo-item .admin-evento-saldo-details strong {
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.admin-evento-sugestoes {
+  margin-top: 1rem;
+}
+
+@media (max-width: 768px) {
+  .admin-evento {
+    padding: 1rem;
+  }
+
+  .admin-evento-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-evento-saldos-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

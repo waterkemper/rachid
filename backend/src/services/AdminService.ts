@@ -212,5 +212,44 @@ export class AdminService {
     });
     return eventos;
   }
+
+  static async getEventoDetalhes(eventoId: number) {
+    const grupo = await this.grupoRepository.findOne({
+      where: { id: eventoId },
+      relations: ['usuario', 'participantes', 'participantes.participante'],
+    });
+
+    if (!grupo) {
+      return null;
+    }
+
+    // Buscar despesas para calcular total
+    const despesas = await this.despesaRepository.find({
+      where: { grupo_id: eventoId },
+    });
+
+    const totalDespesas = despesas.reduce((sum, despesa) => sum + Number(despesa.valorTotal), 0);
+
+    return {
+      id: grupo.id,
+      nome: grupo.nome,
+      descricao: grupo.descricao || undefined,
+      data: grupo.data,
+      criadoEm: grupo.criadoEm,
+      shareToken: grupo.shareToken || undefined,
+      usuario: {
+        id: grupo.usuario.id,
+        nome: grupo.usuario.nome,
+        email: grupo.usuario.email,
+      },
+      participantes: (grupo.participantes || []).map((pg) => ({
+        id: pg.participante.id,
+        nome: pg.participante.nome,
+        email: pg.participante.email || undefined,
+        chavePix: pg.participante.chavePix || undefined,
+      })),
+      totalDespesas,
+    };
+  }
 }
 

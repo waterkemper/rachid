@@ -246,6 +246,11 @@
   border-bottom: none;
 }
 
+.admin-table-row-clickable:hover {
+  background: #f0f0f0;
+  cursor: pointer;
+}
+
 @media (max-width: 768px) {
   .admin-dashboard {
     padding: 1rem;

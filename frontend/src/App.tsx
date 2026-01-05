@@ -21,6 +21,7 @@ import Conta from './pages/Conta';
 import Ajuda from './pages/Ajuda';
 import ConvidarAmigos from './pages/ConvidarAmigos';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminEvento from './pages/AdminEvento';
 
 function Navbar() {
   const location = useLocation();
@@ -250,6 +251,14 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/evento/:id"
+          element={
+            <ProtectedRoute>
+              <AdminEvento />
             </ProtectedRoute>
           }
         />

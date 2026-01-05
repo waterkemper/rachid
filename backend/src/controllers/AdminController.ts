@@ -71,5 +71,94 @@ export class AdminController {
       res.status(500).json({ error: 'Erro ao listar eventos' });
     }
   }
+
+  static async getEventoDetalhes(req: Request, res: Response) {
+    try {
+      const eventoId = parseInt(req.params.id);
+      if (isNaN(eventoId)) {
+        return res.status(400).json({ error: 'ID do evento inválido' });
+      }
+
+      const detalhes = await AdminService.getEventoDetalhes(eventoId);
+      if (!detalhes) {
+        return res.status(404).json({ error: 'Evento não encontrado' });
+      }
+
+      res.json(detalhes);
+    } catch (error) {
+      console.error('Erro ao buscar detalhes do evento:', error);
+      res.status(500).json({ error: 'Erro ao buscar detalhes do evento' });
+    }
+  }
+
+  static async getEventoSaldos(req: Request, res: Response) {
+    try {
+      const eventoId = parseInt(req.params.id);
+      if (isNaN(eventoId)) {
+        return res.status(400).json({ error: 'ID do evento inválido' });
+      }
+
+      const { PublicEventoService } = await import('../services/PublicEventoService');
+      const saldos = await PublicEventoService.calcularSaldosPublicos(eventoId);
+      res.json(saldos);
+    } catch (error) {
+      console.error('Erro ao calcular saldos do evento:', error);
+      res.status(500).json({ error: 'Erro ao calcular saldos do evento' });
+    }
+  }
+
+  static async getEventoSaldosPorGrupo(req: Request, res: Response) {
+    try {
+      const eventoId = parseInt(req.params.id);
+      if (isNaN(eventoId)) {
+        return res.status(400).json({ error: 'ID do evento inválido' });
+      }
+
+      const { PublicEventoService } = await import('../services/PublicEventoService');
+      const saldos = await PublicEventoService.calcularSaldosPorGrupoPublicos(eventoId);
+      res.json(saldos);
+    } catch (error) {
+      console.error('Erro ao calcular saldos por grupo do evento:', error);
+      res.status(500).json({ error: 'Erro ao calcular saldos por grupo do evento' });
+    }
+  }
+
+  static async getEventoSugestoes(req: Request, res: Response) {
+    try {
+      const eventoId = parseInt(req.params.id);
+      if (isNaN(eventoId)) {
+        return res.status(400).json({ error: 'ID do evento inválido' });
+      }
+
+      const { PublicEventoService } = await import('../services/PublicEventoService');
+      const saldosGrupos = await PublicEventoService.calcularSaldosPorGrupoPublicos(eventoId);
+      const temGrupos = saldosGrupos.some(g => g.grupoId > 0);
+      
+      const sugestoes = temGrupos
+        ? await PublicEventoService.calcularSugestoesPagamentoGruposPublicas(eventoId)
+        : await PublicEventoService.calcularSugestoesPagamentoPublicas(eventoId);
+      
+      res.json(sugestoes);
+    } catch (error) {
+      console.error('Erro ao calcular sugestões do evento:', error);
+      res.status(500).json({ error: 'Erro ao calcular sugestões do evento' });
+    }
+  }
+
+  static async getEventoDespesas(req: Request, res: Response) {
+    try {
+      const eventoId = parseInt(req.params.id);
+      if (isNaN(eventoId)) {
+        return res.status(400).json({ error: 'ID do evento inválido' });
+      }
+
+      const { PublicEventoService } = await import('../services/PublicEventoService');
+      const despesas = await PublicEventoService.buscarDespesasPublicas(eventoId);
+      res.json(despesas);
+    } catch (error) {
+      console.error('Erro ao buscar despesas do evento:', error);
+      res.status(500).json({ error: 'Erro ao buscar despesas do evento' });
+    }
+  }
 }
 

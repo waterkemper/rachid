@@ -538,6 +538,26 @@ export const adminApi = {
     const response = await api.get('/admin/eventos');
     return response.data;
   },
+  getEventoDetalhes: async (eventoId: number): Promise<any> => {
+    const response = await api.get(`/admin/eventos/${eventoId}`);
+    return response.data;
+  },
+  getEventoSaldos: async (eventoId: number): Promise<SaldoParticipante[]> => {
+    const response = await api.get(`/admin/eventos/${eventoId}/saldos`);
+    return response.data;
+  },
+  getEventoSaldosPorGrupo: async (eventoId: number): Promise<SaldoGrupo[]> => {
+    const response = await api.get(`/admin/eventos/${eventoId}/saldos-por-grupo`);
+    return response.data;
+  },
+  getEventoSugestoes: async (eventoId: number): Promise<SugestaoPagamento[]> => {
+    const response = await api.get(`/admin/eventos/${eventoId}/sugestoes`);
+    return response.data;
+  },
+  getEventoDespesas: async (eventoId: number): Promise<Despesa[]> => {
+    const response = await api.get(`/admin/eventos/${eventoId}/despesas`);
+    return response.data;
+  },
 };
 
 export interface EventoPublico {

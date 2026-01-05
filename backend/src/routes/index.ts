@@ -104,6 +104,11 @@ router.get('/admin/estatisticas/despesas', authMiddleware, requireAdmin, AdminCo
 router.get('/admin/estatisticas/acessos', authMiddleware, requireAdmin, AdminController.getEstatisticasAcessos);
 router.get('/admin/usuarios', authMiddleware, requireAdmin, AdminController.getAllUsuarios);
 router.get('/admin/eventos', authMiddleware, requireAdmin, AdminController.getAllEventos);
+router.get('/admin/eventos/:id', authMiddleware, requireAdmin, AdminController.getEventoDetalhes);
+router.get('/admin/eventos/:id/saldos', authMiddleware, requireAdmin, AdminController.getEventoSaldos);
+router.get('/admin/eventos/:id/saldos-por-grupo', authMiddleware, requireAdmin, AdminController.getEventoSaldosPorGrupo);
+router.get('/admin/eventos/:id/sugestoes', authMiddleware, requireAdmin, AdminController.getEventoSugestoes);
+router.get('/admin/eventos/:id/despesas', authMiddleware, requireAdmin, AdminController.getEventoDespesas);
 
 export default router;
 

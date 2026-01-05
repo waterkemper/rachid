@@ -310,7 +310,12 @@ const AdminDashboard: React.FC = () => {
               </thead>
               <tbody>
                 {eventos.map((evento) => (
-                  <tr key={evento.id}>
+                  <tr 
+                    key={evento.id}
+                    className="admin-table-row-clickable"
+                    onClick={() => navigate(`/admin/evento/${evento.id}`)}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <td>{evento.id}</td>
                     <td>{evento.nome}</td>
                     <td>{evento.descricao || '-'}</td>
