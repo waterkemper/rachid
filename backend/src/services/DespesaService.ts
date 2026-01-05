@@ -505,7 +505,10 @@ export class DespesaService {
 
     // Notificar participantes sobre despesa editada (não bloquear se falhar)
     try {
-      await this.notificarDespesaEditada(despesaAtualizada, historicoAlteracoes);
+      if (historicoAlteracoes.length > 0) {
+        console.log(`[DespesaService.update] Notificando ${historicoAlteracoes.length} mudança(s) na despesa ${id}`);
+        await this.notificarDespesaEditada(despesaAtualizada, historicoAlteracoes);
+      }
     } catch (err) {
       console.error('[DespesaService.update] Erro ao adicionar notificações à fila:', err);
       // Não falhar a atualização da despesa se a notificação falhar
@@ -576,12 +579,16 @@ export class DespesaService {
     };
 
     // Adicionar jobs na fila para cada participante
+    let notificacoesEnviadas = 0;
+    let notificacoesFalhadas = 0;
+    
     for (const participacao of participacoes) {
       const participante = participacao.participante;
       if (!participante) continue;
 
       const email = await this.obterEmailParticipante(participante.id);
       if (!email) {
+        console.log(`[DespesaService.notificarDespesaEditada] Participante ${participante.nome} (ID: ${participante.id}) não tem email cadastrado`);
         continue; // Pular se não tiver email
       }
 
@@ -597,11 +604,16 @@ export class DespesaService {
           mudancas: mudancasFormatadas,
           linkEvento,
         });
+        notificacoesEnviadas++;
+        console.log(`[DespesaService.notificarDespesaEditada] ✅ Notificação adicionada à fila para ${participante.nome} (${email})`);
       } catch (err) {
-        console.error(`Erro ao adicionar notificação para ${email}:`, err);
+        notificacoesFalhadas++;
+        console.error(`[DespesaService.notificarDespesaEditada] ❌ Erro ao adicionar notificação para ${participante.nome} (${email}):`, err);
         // Continuar com outros participantes
       }
     }
+    
+    console.log(`[DespesaService.notificarDespesaEditada] Resumo: ${notificacoesEnviadas} enviadas, ${notificacoesFalhadas} falhadas`);
   }
 
   /**
