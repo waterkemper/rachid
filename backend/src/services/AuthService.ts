@@ -274,9 +274,9 @@ export class AuthService {
     const updateData: Partial<Usuario> = {};
     if (data.nome !== undefined) updateData.nome = data.nome;
     if (data.email !== undefined) updateData.email = data.email;
-    if (data.ddd !== undefined) updateData.ddd = data.ddd || undefined;
-    if (data.telefone !== undefined) updateData.telefone = data.telefone || undefined;
-    if (data.chavePix !== undefined) updateData.chavePix = data.chavePix || undefined;
+    if (data.ddd !== undefined) updateData.ddd = data.ddd;
+    if (data.telefone !== undefined) updateData.telefone = data.telefone;
+    if (data.chavePix !== undefined) updateData.chavePix = data.chavePix;
 
     await this.repository.update(id, updateData);
 
