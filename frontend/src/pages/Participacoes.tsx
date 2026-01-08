@@ -1153,11 +1153,28 @@ const Participacoes: React.FC = () => {
                   <div style={{ 
                     textAlign: 'center', 
                     padding: '16px',
-                    color: 'rgba(226, 232, 240, 0.6)',
-                    fontSize: '13px',
-                    fontStyle: 'italic'
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '12px'
                   }}>
-                    +{despesas.length - 8} despesas ocultas. Clique em "Mostrar detalhamento completo" para ver todas.
+                    <div style={{
+                      color: 'rgba(226, 232, 240, 0.6)',
+                      fontSize: '13px',
+                      fontStyle: 'italic'
+                    }}>
+                      +{despesas.length - 8} despesas ocultas
+                    </div>
+                    <button
+                      className="btn btn-secondary btn-small"
+                      onClick={() => setDetalhamentoExpanded(!detalhamentoExpanded)}
+                      style={{
+                        padding: '6px 16px',
+                        fontSize: '13px'
+                      }}
+                    >
+                      Mostrar detalhamento completo
+                    </button>
                   </div>
                 )}
               </div>
