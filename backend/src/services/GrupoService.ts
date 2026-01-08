@@ -54,8 +54,9 @@ export class GrupoService {
       relations: ['participante'],
     });
 
+    const emailUsuarioNormalizado = usuario.email.trim().toLowerCase();
     return participantesGrupo.some(
-      (pg) => pg.participante?.email?.toLowerCase() === usuario.email.toLowerCase()
+      (pg) => pg.participante?.email?.trim().toLowerCase() === emailUsuarioNormalizado
     );
   }
 
@@ -79,10 +80,13 @@ export class GrupoService {
 
       if (usuario?.email) {
         // Buscar participantes com o mesmo email (case-insensitive)
-        // Usar ILIKE para compatibilidade com Supabase
+        // Normalizar email: remover espaços e converter para lowercase
+        const emailNormalizado = usuario.email.trim().toLowerCase();
         const participantesComEmail = await this.participanteRepository
           .createQueryBuilder('participante')
-          .where('LOWER(participante.email) = LOWER(:email)', { email: usuario.email })
+          .where('participante.email IS NOT NULL')
+          .andWhere('participante.email != :empty', { empty: '' })
+          .andWhere('LOWER(TRIM(participante.email)) = :email', { email: emailNormalizado })
           .select(['participante.id'])
           .getMany();
 

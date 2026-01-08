@@ -66,8 +66,9 @@ export class ParticipanteService {
         relations: ['participante'],
       });
 
+      const emailUsuarioNormalizado = usuario.email.trim().toLowerCase();
       const isMember = participantesGrupo.some(
-        (pg2) => pg2.participante?.email?.toLowerCase() === usuario.email.toLowerCase()
+        (pg2) => pg2.participante?.email?.trim().toLowerCase() === emailUsuarioNormalizado
       );
 
       if (isMember) {

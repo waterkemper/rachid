@@ -13,10 +13,10 @@ export class EventoAcesso {
   @Column('integer')
   evento_id!: number;
 
-  @Column('varchar', { nullable: true })
+  @Column('varchar', { name: 'ip_address', nullable: true })
   ipAddress?: string;
 
-  @Column('text', { nullable: true })
+  @Column('text', { name: 'user_agent', nullable: true })
   userAgent?: string;
 
   @CreateDateColumn({ name: 'acessado_em' })

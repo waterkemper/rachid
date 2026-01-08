@@ -21,8 +21,10 @@ export class EmailService {
     if (apiKey) {
       sgMail.setApiKey(apiKey);
       this.isConfigured = true;
+      console.log('✅ SendGrid configurado - emails serão enviados');
     } else {
       console.warn('⚠️  SENDGRID_API_KEY não configurado. E-mails serão apenas logados no console.');
+      console.warn('⚠️  Configure SENDGRID_API_KEY no Railway para enviar emails de verdade');
       this.isConfigured = false;
     }
 

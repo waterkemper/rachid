@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { grupoApi, participanteApi, grupoParticipantesApi, despesaApi, participacaoApi } from '../services/api';
 import { Participante, Grupo, GrupoParticipantesEvento } from '../types';
 import Modal from '../components/Modal';
+import ParticipanteFormModal from '../components/ParticipanteFormModal';
 import { FaPlus, FaTrash, FaEdit, FaUserPlus, FaUsers, FaArrowLeft, FaArrowRight, FaSearch, FaChartBar, FaMoneyBillWave } from 'react-icons/fa';
 import './AdicionarParticipantesEvento.css';
 
@@ -22,19 +23,16 @@ const AdicionarParticipantesEvento: React.FC = () => {
   const [familiaEditando, setFamiliaEditando] = useState<GrupoParticipantesEvento | null>(null);
   const [familiaNome, setFamiliaNome] = useState('');
   const [familiaSelecionados, setFamiliaSelecionados] = useState<number[]>([]);
-  const [novoParticipanteNome, setNovoParticipanteNome] = useState('');
-  const [novoParticipanteEmail, setNovoParticipanteEmail] = useState('');
-  const [novoParticipantePix, setNovoParticipantePix] = useState('');
-  const [novoParticipanteDdi, setNovoParticipanteDdi] = useState('+55');
-  const [novoParticipanteDdd, setNovoParticipanteDdd] = useState('');
-  const [novoParticipanteTelefone, setNovoParticipanteTelefone] = useState('');
   const [modalIncluirDespesasVisible, setModalIncluirDespesasVisible] = useState(false);
   const [participantePendente, setParticipantePendente] = useState<{ id: number; obj?: Participante } | null>(null);
   const [despesasComPagador, setDespesasComPagador] = useState(0);
-  const [novoTipoPix, setNovoTipoPix] = useState<'email' | 'telefone' | 'outro'>('outro');
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(true);
-  const [mensagemSucesso, setMensagemSucesso] = useState('');
+  const [criandoParticipante, setCriandoParticipante] = useState(false);
+  const [adicionandoParticipantes, setAdicionandoParticipantes] = useState<Set<number>>(new Set());
+  const [editandoParticipante, setEditandoParticipante] = useState<Participante | null>(null);
+  const [erroModalParticipante, setErroModalParticipante] = useState('');
+  const [sucessoModalParticipante, setSucessoModalParticipante] = useState('');
 
   useEffect(() => {
     if (eventoId) {
@@ -60,11 +58,41 @@ const AdicionarParticipantesEvento: React.FC = () => {
       setGrupos(gruposData);
       setFamiliasEvento(familiasData || []);
 
-      // Carregar participantes jÃ¡ no evento
+      // Carregar participantes já no evento
       if (eventoData.participantes) {
-        const participantesIds = eventoData.participantes.map(p => p.participante_id);
-        const participantes = participantesData.filter(p => participantesIds.includes(p.id));
-        setParticipantesNoEvento(participantes);
+        const participantesNoEventoList: Participante[] = [];
+        
+        // Primeiro, usar os participantes que vêm na relação (incluindo de outros usuários)
+        for (const pg of eventoData.participantes) {
+          if (pg.participante) {
+            // Participante já vem populado na relação
+            participantesNoEventoList.push(pg.participante);
+          } else if (pg.participante_id) {
+            // Se não vier populado, tentar buscar do participantesData primeiro
+            const participante = participantesData.find(p => p.id === pg.participante_id);
+            if (participante) {
+              participantesNoEventoList.push(participante);
+            } else {
+              // Se não estiver em participantesData, buscar individualmente
+              try {
+                const participanteCompleto = await participanteApi.getById(pg.participante_id);
+                if (participanteCompleto) {
+                  participantesNoEventoList.push(participanteCompleto);
+                }
+              } catch (error) {
+                // Ignorar erro se não conseguir buscar o participante
+                console.warn(`Não foi possível buscar participante ${pg.participante_id}:`, error);
+              }
+            }
+          }
+        }
+        
+        // Remover duplicatas baseado no ID
+        const participantesUnicos = Array.from(
+          new Map(participantesNoEventoList.map(p => [p.id, p])).values()
+        );
+        
+        setParticipantesNoEvento(participantesUnicos);
       }
     } catch (error) {
       setErro('Erro ao carregar dados');
@@ -86,11 +114,18 @@ const AdicionarParticipantesEvento: React.FC = () => {
   const adicionarParticipanteAoEvento = async (participanteId: number, participanteObj?: Participante) => {
     if (!eventoId) return;
 
+    // Verificar se já está sendo adicionado
+    if (adicionandoParticipantes.has(participanteId)) {
+      return; // Já está sendo processado
+    }
+
+    // Verificar se já está no evento
+    if (participantesNoEvento.some(p => p.id === participanteId)) {
+      return; // Já está adicionado
+    }
+
     try {
-      // Verificar se já está no evento
-      if (participantesNoEvento.some(p => p.id === participanteId)) {
-        return; // Já está adicionado
-      }
+      setAdicionandoParticipantes(prev => new Set(prev).add(participanteId));
 
       // Verificar se há despesas no evento
       try {
@@ -107,6 +142,11 @@ const AdicionarParticipantesEvento: React.FC = () => {
             setDespesasComPagador(despesasComPagadorDefinido.length);
             setParticipantePendente({ id: participanteId, obj: participanteObj });
             setModalIncluirDespesasVisible(true);
+            setAdicionandoParticipantes(prev => {
+              const novo = new Set(prev);
+              novo.delete(participanteId);
+              return novo;
+            });
             return; // Aguardar resposta do usuário
           }
         }
@@ -120,6 +160,12 @@ const AdicionarParticipantesEvento: React.FC = () => {
       }
     } catch (error) {
       console.error('Erro ao adicionar participante:', error);
+    } finally {
+      setAdicionandoParticipantes(prev => {
+        const novo = new Set(prev);
+        novo.delete(participanteId);
+        return novo;
+      });
     }
   };
 
@@ -173,14 +219,25 @@ const AdicionarParticipantesEvento: React.FC = () => {
   const handleConfirmarIncluirDespesas = async (incluir: boolean) => {
     if (!participantePendente) return;
     
+    const participanteId = participantePendente.id;
     setModalIncluirDespesasVisible(false);
-    await adicionarParticipanteEIncluirEmDespesas(
-      participantePendente.id, 
-      participantePendente.obj,
-      incluir
-    );
-    setParticipantePendente(null);
-    setDespesasComPagador(0);
+    
+    try {
+      setAdicionandoParticipantes(prev => new Set(prev).add(participanteId));
+      await adicionarParticipanteEIncluirEmDespesas(
+        participanteId, 
+        participantePendente.obj,
+        incluir
+      );
+    } finally {
+      setAdicionandoParticipantes(prev => {
+        const novo = new Set(prev);
+        novo.delete(participanteId);
+        return novo;
+      });
+      setParticipantePendente(null);
+      setDespesasComPagador(0);
+    }
   };
 
   const removerParticipanteDoEvento = async (participanteId: number) => {
@@ -293,111 +350,74 @@ const AdicionarParticipantesEvento: React.FC = () => {
     }
   };
 
-  // Função para determinar o tipo de PIX
-  const determinarTipoPix = (chavePix: string, email: string) => {
-    if (!chavePix) return 'outro';
-    if (chavePix === email && email) return 'email';
-    const telefoneLimpo = chavePix.replace(/\D/g, '');
-    if (telefoneLimpo.length >= 10) return 'telefone';
-    return 'outro';
+  const abrirModalParticipante = (participante?: Participante) => {
+    setEditandoParticipante(participante || null);
+    setErroModalParticipante('');
+    setSucessoModalParticipante('');
+    setIsModalNovoParticipanteOpen(true);
   };
 
-  // Função para atualizar PIX baseado no tipo selecionado
-  const handleNovoTipoPixChange = (tipo: 'email' | 'telefone' | 'outro') => {
-    setNovoTipoPix(tipo);
-    
-    if (tipo === 'email' && novoParticipanteEmail) {
-      setNovoParticipantePix(novoParticipanteEmail);
-    } else if (tipo === 'telefone') {
-      const telefoneCompleto = `${novoParticipanteDdi}${novoParticipanteDdd}${novoParticipanteTelefone}`;
-      const telefoneLimpo = telefoneCompleto.replace(/\D/g, '');
-      if (telefoneLimpo.length >= 10) {
-        setNovoParticipantePix(telefoneCompleto);
-      } else {
-        setNovoParticipantePix('');
-      }
-    }
+  const fecharModalParticipante = () => {
+    setIsModalNovoParticipanteOpen(false);
+    setEditandoParticipante(null);
+    setErroModalParticipante('');
+    setSucessoModalParticipante('');
   };
 
-  // Função para atualizar telefone e PIX quando campos de telefone mudarem
-  const handleNovoTelefoneChange = (campo: 'ddi' | 'ddd' | 'telefone', valor: string) => {
-    if (campo === 'ddi') {
-      setNovoParticipanteDdi(valor);
-    } else if (campo === 'ddd') {
-      setNovoParticipanteDdd(valor.replace(/\D/g, '').substring(0, 2));
-    } else if (campo === 'telefone') {
-      setNovoParticipanteTelefone(valor.replace(/\D/g, '').substring(0, 9));
-    }
-    
-    // Se o tipo PIX for telefone, atualizar automaticamente
-    if (novoTipoPix === 'telefone') {
-      const ddi = campo === 'ddi' ? valor : novoParticipanteDdi;
-      const ddd = campo === 'ddd' ? valor.replace(/\D/g, '').substring(0, 2) : novoParticipanteDdd;
-      const telefone = campo === 'telefone' ? valor.replace(/\D/g, '').substring(0, 9) : novoParticipanteTelefone;
-      const telefoneCompleto = `${ddi}${ddd}${telefone}`;
-      const telefoneLimpo = telefoneCompleto.replace(/\D/g, '');
-      if (telefoneLimpo.length >= 10) {
-        setNovoParticipantePix(telefoneCompleto);
-      } else {
-        setNovoParticipantePix('');
-      }
-    }
-  };
-
-  // Função para atualizar email e PIX quando email mudar
-  const handleNovoEmailChange = (email: string) => {
-    setNovoParticipanteEmail(email);
-    // Se o tipo PIX for email, atualizar automaticamente
-    if (novoTipoPix === 'email') {
-      setNovoParticipantePix(email);
-    }
-  };
-
-  const criarNovoParticipante = async () => {
-    if (!novoParticipanteNome.trim()) {
-      setErro('Nome é obrigatório');
-      return;
+  const salvarParticipante = async (data: { nome: string; email?: string; chavePix?: string; telefone?: string }) => {
+    if (criandoParticipante) {
+      return; // Evitar múltiplas requisições simultâneas
     }
 
     try {
-      setErro('');
-      setMensagemSucesso('');
+      setCriandoParticipante(true);
+      setErroModalParticipante('');
+      setSucessoModalParticipante('');
       
-      // Montar telefone completo para salvar
-      const telefoneCompleto = novoParticipanteDdd && novoParticipanteTelefone 
-        ? `${novoParticipanteDdi}${novoParticipanteDdd}${novoParticipanteTelefone}` 
-        : novoParticipanteTelefone || '';
+      if (editandoParticipante) {
+        // Editar participante existente
+        const participanteAtualizado = await participanteApi.update(editandoParticipante.id, data);
+        
+        // Atualizar na lista de participantes disponíveis
+        setParticipantesDisponiveis((prev) =>
+          prev.map((p) => p.id === participanteAtualizado.id ? participanteAtualizado : p)
+        );
+        
+        // Atualizar na lista de participantes no evento se estiver lá
+        setParticipantesNoEvento((prev) =>
+          prev.map((p) => p.id === participanteAtualizado.id ? participanteAtualizado : p)
+        );
+        
+        setSucessoModalParticipante('Participante atualizado');
+        // Fechar modal após um delay para mostrar mensagem de sucesso
+        setTimeout(() => {
+          fecharModalParticipante();
+        }, 1000);
+      } else {
+        // Criar novo participante
+        const participante = await participanteApi.create(data);
 
-      const participante = await participanteApi.create({
-        nome: novoParticipanteNome.trim(),
-        email: novoParticipanteEmail.trim() || undefined,
-        chavePix: novoParticipantePix.trim() || undefined,
-        telefone: telefoneCompleto || undefined,
-      });
+        setParticipantesDisponiveis((prev) =>
+          prev.some((p) => p.id === participante.id) ? prev : [...prev, participante]
+        );
+        await adicionarParticipanteAoEvento(participante.id, participante);
 
-      setParticipantesDisponiveis((prev) =>
-        prev.some((p) => p.id === participante.id) ? prev : [...prev, participante]
-      );
-      await adicionarParticipanteAoEvento(participante.id, participante);
-
-      // Limpar campos mas manter modal aberto
-      setNovoParticipanteNome('');
-      setNovoParticipanteEmail('');
-      setNovoParticipantePix('');
-      setNovoParticipanteDdi('+55');
-      setNovoParticipanteDdd('');
-      setNovoParticipanteTelefone('');
-      setNovoTipoPix('outro');
-      setMensagemSucesso('Participante adicionado');
-      setBusca(''); // Limpar busca também
+        // Limpar busca e mostrar mensagem de sucesso
+        setBusca('');
+        setSucessoModalParticipante('Participante adicionado');
+        
+        // Não fechar modal para permitir adicionar mais participantes rapidamente
+      }
       
       // Limpar mensagem após 3 segundos
       setTimeout(() => {
-        setMensagemSucesso('');
+        setSucessoModalParticipante('');
       }, 3000);
     } catch (error: any) {
-      setErro(error.response?.data?.error || 'Erro ao criar participante');
-      setMensagemSucesso('');
+      setErroModalParticipante(error.response?.data?.error || (editandoParticipante ? 'Erro ao atualizar participante' : 'Erro ao criar participante'));
+      setSucessoModalParticipante('');
+    } finally {
+      setCriandoParticipante(false);
     }
   };
 
@@ -566,9 +586,7 @@ const AdicionarParticipantesEvento: React.FC = () => {
                 onChange={(e) => setBusca(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && busca.trim() && participantesFiltrados.length === 0) {
-                    setNovoParticipanteNome(busca.trim());
-                    setIsModalNovoParticipanteOpen(true);
-                    setMensagemSucesso('');
+                    abrirModalParticipante();
                   }
                 }}
                 className="search-input"
@@ -578,26 +596,30 @@ const AdicionarParticipantesEvento: React.FC = () => {
 
           {participantesFiltrados.length > 0 && (
             <div className="participantes-lista">
-              {participantesFiltrados.map((participante) => (
-                <div key={participante.id} className="participante-item">
-                  <span>{participante.nome} {participante.email && `(${participante.email})`}</span>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-icon"
-                    onClick={() => adicionarParticipanteAoEvento(participante.id, participante)}
-                    title="Adicionar"
-                  >
-                    <FaPlus />
-                  </button>
-                </div>
-              ))}
+              {participantesFiltrados.map((participante) => {
+                const estaAdicionando = adicionandoParticipantes.has(participante.id);
+                return (
+                  <div key={participante.id} className="participante-item">
+                    <span>{participante.nome} {participante.email && `(${participante.email})`}</span>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-icon"
+                      onClick={() => adicionarParticipanteAoEvento(participante.id, participante)}
+                      title={estaAdicionando ? "Adicionando..." : "Adicionar"}
+                      disabled={estaAdicionando}
+                    >
+                      <FaPlus />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
 
           <button
             type="button"
             className="btn btn-secondary btn-with-icon"
-            onClick={() => setIsModalNovoParticipanteOpen(true)}
+            onClick={() => abrirModalParticipante()}
             style={{ marginTop: '10px' }}
           >
             <FaUserPlus /> <span>Adicionar pessoa</span>
@@ -638,14 +660,24 @@ const AdicionarParticipantesEvento: React.FC = () => {
               {participantesNoEvento.map((participante) => (
                 <div key={participante.id} className="participante-item">
                   <span>{participante.nome} {participante.email && `(${participante.email})`}</span>
-                  <button
-                    type="button"
-                    className="btn btn-danger btn-icon"
-                    onClick={() => removerParticipanteDoEvento(participante.id)}
-                    title="Remover"
-                  >
-                    <FaTrash />
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-icon"
+                      onClick={() => abrirModalParticipante(participante)}
+                      title="Editar"
+                    >
+                      <FaEdit />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-icon"
+                      onClick={() => removerParticipanteDoEvento(participante.id)}
+                      title="Remover"
+                    >
+                      <FaTrash />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -740,173 +772,16 @@ const AdicionarParticipantesEvento: React.FC = () => {
         </div>
       </div>
 
-      <Modal
+      <ParticipanteFormModal
         isOpen={isModalNovoParticipanteOpen}
-        onClose={() => {
-          setIsModalNovoParticipanteOpen(false);
-          setNovoParticipanteNome('');
-          setNovoParticipanteEmail('');
-          setNovoParticipantePix('');
-          setNovoParticipanteDdi('+55');
-          setNovoParticipanteDdd('');
-          setNovoParticipanteTelefone('');
-          setNovoTipoPix('outro');
-          setErro('');
-          setMensagemSucesso('');
-        }}
-        title="Novo Participante"
-      >
-        {mensagemSucesso && (
-          <div style={{ 
-            padding: '12px', 
-            marginBottom: '16px', 
-            backgroundColor: 'rgba(34, 197, 94, 0.1)', 
-            border: '1px solid rgba(34, 197, 94, 0.3)', 
-            borderRadius: '8px',
-            color: '#22c55e',
-            textAlign: 'center'
-          }}>
-            {mensagemSucesso}
-          </div>
-        )}
-        {erro && (
-          <div style={{ 
-            padding: '12px', 
-            marginBottom: '16px', 
-            backgroundColor: 'rgba(239, 68, 68, 0.1)', 
-            border: '1px solid rgba(239, 68, 68, 0.3)', 
-            borderRadius: '8px',
-            color: '#ef4444',
-            textAlign: 'center'
-          }}>
-            {erro}
-          </div>
-        )}
-        <div className="form-group">
-          <label>Nome *</label>
-          <input
-            type="text"
-            value={novoParticipanteNome}
-            onChange={(e) => setNovoParticipanteNome(e.target.value)}
-            placeholder="Nome do participante"
-            autoFocus
-          />
-        </div>
-        <div className="form-group">
-          <label>Email</label>
-          <input
-            type="email"
-            value={novoParticipanteEmail}
-            onChange={(e) => handleNovoEmailChange(e.target.value)}
-            placeholder="email@exemplo.com"
-          />
-        </div>
-        <div className="form-group">
-          <label>Telefone</label>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <input
-              type="text"
-              value={novoParticipanteDdi}
-              onChange={(e) => handleNovoTelefoneChange('ddi', e.target.value)}
-              placeholder="+55"
-              style={{ width: '80px' }}
-              maxLength={4}
-            />
-            <input
-              type="text"
-              value={novoParticipanteDdd}
-              onChange={(e) => handleNovoTelefoneChange('ddd', e.target.value)}
-              placeholder="DD"
-              style={{ width: '60px' }}
-              maxLength={2}
-            />
-            <input
-              type="text"
-              value={novoParticipanteTelefone}
-              onChange={(e) => handleNovoTelefoneChange('telefone', e.target.value)}
-              placeholder="00000-0000"
-              style={{ flex: 1 }}
-              maxLength={9}
-            />
-          </div>
-        </div>
-        <div className="form-group">
-          <label>PIX</label>
-          <input
-            type="text"
-            value={novoParticipantePix}
-            onChange={(e) => {
-              setNovoParticipantePix(e.target.value);
-              // Se o usuário editar manualmente, mudar para 'outro'
-              if (novoTipoPix !== 'outro') {
-                const novoTipo = determinarTipoPix(e.target.value, novoParticipanteEmail);
-                if (novoTipo !== novoTipoPix) {
-                  setNovoTipoPix('outro');
-                }
-              }
-            }}
-            placeholder="Chave PIX"
-          />
-        </div>
-        <div className="form-group">
-          <label style={{ marginBottom: '10px', display: 'block' }}>Tipo de Chave PIX:</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="novoTipoPix"
-                value="email"
-                checked={novoTipoPix === 'email'}
-                onChange={() => handleNovoTipoPixChange('email')}
-              />
-              <span>Usar Email como PIX</span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="novoTipoPix"
-                value="telefone"
-                checked={novoTipoPix === 'telefone'}
-                onChange={() => handleNovoTipoPixChange('telefone')}
-              />
-              <span>Usar Telefone como PIX</span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="novoTipoPix"
-                value="outro"
-                checked={novoTipoPix === 'outro'}
-                onChange={() => handleNovoTipoPixChange('outro')}
-              />
-              <span>Outro (CPF, chave aleatória, etc.)</span>
-            </label>
-          </div>
-        </div>
-        <div className="form-actions">
-          <button
-            type="button"
-            className="btn btn-secondary btn-with-icon"
-            onClick={() => {
-              setIsModalNovoParticipanteOpen(false);
-              setNovoParticipanteNome('');
-              setNovoParticipanteEmail('');
-              setNovoParticipantePix('');
-              setNovoParticipanteDdi('+55');
-              setNovoParticipanteDdd('');
-              setNovoParticipanteTelefone('');
-              setNovoTipoPix('outro');
-              setErro('');
-              setMensagemSucesso('');
-            }}
-          >
-            <FaArrowLeft /> <span>Cancelar</span>
-          </button>
-          <button type="button" className="btn btn-primary btn-with-icon" onClick={criarNovoParticipante}>
-            <FaUserPlus /> <span>Adicionar</span>
-          </button>
-        </div>
-      </Modal>
+        onClose={fecharModalParticipante}
+        participante={editandoParticipante}
+        onSave={salvarParticipante}
+        saving={criandoParticipante}
+        error={erroModalParticipante || undefined}
+        successMessage={sucessoModalParticipante || undefined}
+        showSuccessMessage={!!sucessoModalParticipante}
+      />
 
       <Modal
         isOpen={isModalFamiliaOpen}

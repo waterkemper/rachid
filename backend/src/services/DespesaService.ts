@@ -107,8 +107,9 @@ export class DespesaService {
       relations: ['participante'],
     });
 
+    const emailUsuarioNormalizado = usuario.email.trim().toLowerCase();
     return participantesGrupo.some(
-      (pg) => pg.participante?.email?.toLowerCase() === usuario.email.toLowerCase()
+      (pg) => pg.participante?.email?.trim().toLowerCase() === emailUsuarioNormalizado
     );
   }
 

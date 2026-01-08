@@ -79,12 +79,15 @@ app.listen(PORT, () => {
       
       // Inicializar EmailQueueService após conectar ao banco
       try {
+        console.log('🔄 Inicializando EmailQueueService...');
         await EmailQueueService.initialize();
+        console.log('🔄 Iniciando workers de email...');
         await EmailQueueService.iniciarWorker();
-        console.log('✅ Email queue service initialized');
+        console.log('✅ Email queue service initialized and workers started');
       } catch (error: any) {
         console.error('❌ Error initializing email queue service:', error);
         console.error('Email notifications will not work, but server will continue running');
+        console.error('Stack trace:', error.stack);
       }
     })
     .catch((error) => {

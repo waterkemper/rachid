@@ -123,6 +123,17 @@ export class EmailQueueService {
       console.log('✅ EmailQueueService inicializado com sucesso');
     } catch (error: any) {
       console.error('❌ Erro ao inicializar EmailQueueService:', error);
+      
+      // Verificar se é erro de schema não encontrado
+      if (error.message?.includes('schema') || 
+          error.message?.includes('pgboss') ||
+          error.message?.includes('relation') ||
+          error.code === '42P01') {
+        console.error('⚠️  Schema do pg-boss não encontrado!');
+        console.error('📋 Execute o script de setup: npm run setup-pgboss');
+        console.error('📋 Ou via Railway: railway run npm run setup-pgboss');
+      }
+      
       throw error;
     }
   }
@@ -152,8 +163,12 @@ export class EmailQueueService {
     });
 
     // Worker para despesa-editada
-    await this.boss.work('despesa-editada', async (job: any) => {
+    await this.boss.work('despesa-editada', {
+      teamSize: 1,
+      teamConcurrency: 1,
+    }, async (job: any) => {
       const data = job.data as DespesaEditadaJobData;
+      console.log(`[EmailQueueService] 🔄 Processando job de despesa editada (ID: ${job.id}) para: ${data.destinatario}`);
       try {
         await EmailService.enviarEmailDespesaEditada(data);
         console.log(`✅ Email de despesa editada enviado para: ${data.destinatario}`);
@@ -187,7 +202,21 @@ export class EmailQueueService {
       }
     });
 
-    console.log('✅ Workers de email iniciados');
+    console.log('✅ Workers de email iniciados e prontos para processar jobs');
+    console.log('📋 Workers registrados: nova-despesa, despesa-editada, inclusao-evento, participante-adicionado-despesa');
+    
+    // Verificar se há jobs pendentes na fila
+    try {
+      const queues = ['nova-despesa', 'despesa-editada', 'inclusao-evento', 'participante-adicionado-despesa'];
+      for (const queue of queues) {
+        const count = await this.boss.getQueueSize(queue);
+        if (count > 0) {
+          console.log(`📬 Fila "${queue}": ${count} job(s) pendente(s)`);
+        }
+      }
+    } catch (error: any) {
+      console.warn('⚠️  Não foi possível verificar tamanho das filas:', error.message);
+    }
   }
 
   /**

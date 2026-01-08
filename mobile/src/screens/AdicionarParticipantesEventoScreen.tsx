@@ -74,10 +74,41 @@ const AdicionarParticipantesEventoScreen: React.FC = () => {
       setGrupos(gruposData);
       setFamiliasEvento(familiasData || []);
 
+      // Carregar participantes já no evento
       if (eventoData.participantes) {
-        const participantesIds = eventoData.participantes.map(p => p.participante_id);
-        const participantes = participantesData.filter(p => participantesIds.includes(p.id));
-        setParticipantesNoEvento(participantes);
+        const participantesNoEventoList: Participante[] = [];
+        
+        // Primeiro, usar os participantes que vêm na relação (incluindo de outros usuários)
+        for (const pg of eventoData.participantes) {
+          if (pg.participante) {
+            // Participante já vem populado na relação
+            participantesNoEventoList.push(pg.participante);
+          } else if (pg.participante_id) {
+            // Se não vier populado, tentar buscar do participantesData primeiro
+            const participante = participantesData.find(p => p.id === pg.participante_id);
+            if (participante) {
+              participantesNoEventoList.push(participante);
+            } else {
+              // Se não estiver em participantesData, buscar individualmente
+              try {
+                const participanteCompleto = await participanteApi.getById(pg.participante_id);
+                if (participanteCompleto) {
+                  participantesNoEventoList.push(participanteCompleto);
+                }
+              } catch (error) {
+                // Ignorar erro se não conseguir buscar o participante
+                console.warn(`Não foi possível buscar participante ${pg.participante_id}:`, error);
+              }
+            }
+          }
+        }
+        
+        // Remover duplicatas baseado no ID
+        const participantesUnicos = Array.from(
+          new Map(participantesNoEventoList.map(p => [p.id, p])).values()
+        );
+        
+        setParticipantesNoEvento(participantesUnicos);
       }
 
       // Se houver grupoMaior pré-selecionado, adicionar participantes
