@@ -55,6 +55,18 @@ const Participacoes: React.FC = () => {
   };
 
   const formatDate = (dateString: string): string => {
+    // Se a data já está no formato YYYY-MM-DD (sem hora), usar diretamente sem conversão de timezone
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = dateString.split('-');
+      return `${day}/${month}/${year}`;
+    }
+    // Se a data tem hora (formato ISO), extrair apenas a parte da data
+    if (dateString.includes('T')) {
+      const datePart = dateString.split('T')[0];
+      const [year, month, day] = datePart.split('-');
+      return `${day}/${month}/${year}`;
+    }
+    // Fallback para outros formatos
     const date = new Date(dateString);
     return new Intl.DateTimeFormat('pt-BR', {
       day: '2-digit',
