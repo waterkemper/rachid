@@ -79,7 +79,7 @@ export async function requireGroupMember(req: AuthRequest, res: Response, next: 
 
     // Buscar participantes do grupo
     const participantesGrupo = await participanteGrupoRepository.find({
-      where: { grupo_id: grupoId },
+      where: { grupoId },
       relations: ['participante'],
     });
 

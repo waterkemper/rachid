@@ -39,6 +39,16 @@ SENDGRID_API_KEY=your-sendgrid-api-key
 SENDGRID_FROM_EMAIL=noreply@orachid.com.br
 SENDGRID_FROM_NAME=Rachid
 
+   # PayPal Configuration (Subscription Service)
+PAYPAL_CLIENT_ID=your-paypal-client-id
+PAYPAL_CLIENT_SECRET=your-paypal-client-secret
+PAYPAL_MODE=sandbox
+PAYPAL_WEBHOOK_ID=your-paypal-webhook-id
+PAYPAL_PLAN_ID_MONTHLY=your-monthly-plan-id
+PAYPAL_PLAN_ID_YEARLY=your-yearly-plan-id
+PAYPAL_LIFETIME_AMOUNT=499.00
+PAYPAL_PRODUCT_ID=your-product-id
+
 # Frontend Build Variables
 VITE_API_URL=https://api.orachid.com.br
 VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
@@ -118,6 +128,67 @@ VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
 #### SENDGRID_FROM_NAME
 - **Required**: No (default: "Rachid")
 - **Description**: Display name for email sender
+
+### PayPal Variables (Subscription System)
+
+#### PAYPAL_CLIENT_ID
+- **Required**: Yes (for subscription functionality)
+- **Description**: PayPal REST API Client ID
+- **How to get**:
+  1. Create PayPal Business account at [PayPal Developer](https://developer.paypal.com)
+  2. Create a new app in Dashboard
+  3. Copy Client ID from app credentials
+
+#### PAYPAL_CLIENT_SECRET
+- **Required**: Yes (for subscription functionality)
+- **Description**: PayPal REST API Client Secret
+- **How to get**: Same as PAYPAL_CLIENT_ID, copy Client Secret from app credentials
+- **Security**: Keep this secret! Never commit to version control.
+
+#### PAYPAL_MODE
+- **Required**: Yes
+- **Values**: `sandbox` or `live`
+- **Default**: `sandbox`
+- **Description**: PayPal environment mode
+- **Note**: Use `sandbox` for testing, `live` for production
+
+#### PAYPAL_WEBHOOK_ID
+- **Required**: Yes (for webhook verification)
+- **Description**: PayPal Webhook ID for subscription events
+- **How to get**:
+  1. Go to PayPal Developer Dashboard → My Apps & Credentials
+  2. Click on your app → Webhooks
+  3. Create webhook with URL: `https://api.orachid.com.br/api/subscriptions/webhook`
+  4. Select events: `BILLING.SUBSCRIPTION.*`, `PAYMENT.SALE.*`, `PAYMENT.CAPTURE.*`
+  5. Copy Webhook ID
+
+#### PAYPAL_PLAN_ID_MONTHLY
+- **Required**: Yes (for monthly subscriptions)
+- **Description**: PayPal Subscription Plan ID for monthly PRO plan
+- **How to get**:
+  1. Create subscription plan in PayPal Dashboard or via API
+  2. Copy Plan ID (starts with `P-`)
+- **Note**: Plan must be created before using monthly subscriptions
+
+#### PAYPAL_PLAN_ID_YEARLY
+- **Required**: Yes (for yearly subscriptions)
+- **Description**: PayPal Subscription Plan ID for yearly PRO plan
+- **How to get**: Same as PAYPAL_PLAN_ID_MONTHLY
+- **Note**: Plan must be created before using yearly subscriptions
+
+#### PAYPAL_LIFETIME_AMOUNT
+- **Required**: No (default: `499.00`)
+- **Description**: Price for lifetime subscription in BRL
+- **Format**: Decimal number as string (e.g., `499.00`)
+- **Note**: Used for one-time lifetime payments (not subscription plans)
+
+#### PAYPAL_PRODUCT_ID
+- **Required**: No (optional)
+- **Description**: PayPal Product ID for subscription plans
+- **How to get**:
+  1. Create product in PayPal Dashboard
+  2. Copy Product ID (starts with `PROD-`)
+- **Note**: Optional, only needed if creating plans via API
 
 ### Frontend Build Variables
 
@@ -215,6 +286,14 @@ Set environment variables as GitHub Secrets:
 - Check `SENDGRID_FROM_EMAIL` is verified in SendGrid
 - Check SendGrid API key has "Mail Send" permission
 
+### PayPal/Subscription errors
+
+- Verify `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` are correct
+- Check `PAYPAL_MODE` matches your environment (`sandbox` vs `live`)
+- Ensure `PAYPAL_PLAN_ID_MONTHLY` and `PAYPAL_PLAN_ID_YEARLY` are valid plan IDs
+- Verify `PAYPAL_WEBHOOK_ID` is correct and webhook URL is accessible
+- Check PayPal app has required permissions (Subscriptions, Payments)
+
 ### Frontend can't connect to API
 
 - Verify `VITE_API_URL` matches your API domain
@@ -238,6 +317,14 @@ FRONTEND_URL=http://localhost:5173
 VITE_API_URL=http://localhost:3001
 VITE_GOOGLE_CLIENT_ID=your-dev-google-client-id
 # SendGrid optional in dev (emails logged to console)
+# PayPal - use sandbox credentials for development
+PAYPAL_CLIENT_ID=your-sandbox-client-id
+PAYPAL_CLIENT_SECRET=your-sandbox-client-secret
+PAYPAL_MODE=sandbox
+PAYPAL_WEBHOOK_ID=your-sandbox-webhook-id
+PAYPAL_PLAN_ID_MONTHLY=your-sandbox-monthly-plan-id
+PAYPAL_PLAN_ID_YEARLY=your-sandbox-yearly-plan-id
+PAYPAL_LIFETIME_AMOUNT=499.00
 ```
 
 ### Production
@@ -251,6 +338,13 @@ FRONTEND_URL=https://orachid.com.br
 SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 SENDGRID_FROM_EMAIL=noreply@orachid.com.br
 SENDGRID_FROM_NAME=Rachid
+PAYPAL_CLIENT_ID=your-live-paypal-client-id
+PAYPAL_CLIENT_SECRET=your-live-paypal-client-secret
+PAYPAL_MODE=live
+PAYPAL_WEBHOOK_ID=your-live-paypal-webhook-id
+PAYPAL_PLAN_ID_MONTHLY=your-live-monthly-plan-id
+PAYPAL_PLAN_ID_YEARLY=your-live-yearly-plan-id
+PAYPAL_LIFETIME_AMOUNT=499.00
 VITE_API_URL=https://api.orachid.com.br
 VITE_GOOGLE_CLIENT_ID=your-production-google-client-id
 ```

@@ -28,6 +28,8 @@
 ### Perfil de Usuário
 - ✅ Visualizar informações do usuário
 - ✅ Gerenciar dados pessoais (nome, email, telefone)
+- ✅ Gerenciar preferências de email (opt-in/opt-out)
+- ✅ Visualizar histórico de opt-out de emails
 
 ---
 
@@ -68,10 +70,12 @@
 - ✅ Visualizar participantes de um grupo
 
 ### Dados do Grupo
-- ✅ Nomex'x'z
+- ✅ Nome
 - ✅ Descrição (opcional)
 - ✅ Data do evento
 - ✅ Vinculação com usuário
+- ✅ Status do evento (EM_ABERTO, CONCLUIDO, CANCELADO)
+- ✅ Link de compartilhamento público (shareToken)
 
 ---
 
@@ -112,6 +116,101 @@
 - ✅ Sugestões de pagamento entre participantes
 - ✅ Sugestões de pagamento entre grupos
 - ✅ Otimização de transferências (menor número de pagamentos)
+
+### Controle de Pagamentos
+- ✅ Marcar pagamento individual como realizado
+- ✅ Marcar pagamento entre grupos como realizado
+- ✅ Confirmar recebimento de pagamento (credor confirma)
+- ✅ Verificar se todos os pagamentos foram realizados
+- ✅ Status de pagamento por sugestão (pago, confirmado, pendente)
+- ✅ Matching baseado em IDs (não nomes) para evitar ambiguidade
+- ✅ Histórico completo de pagamentos realizados
+
+---
+
+## 💳 Sistema de Pagamentos
+
+### Controle de Pagamentos
+- ✅ Marcar pagamento individual como realizado
+- ✅ Marcar pagamento entre grupos (famílias, casais) como realizado
+- ✅ Confirmar recebimento de pagamento (qualquer participante do grupo credor pode confirmar)
+- ✅ Verificar se todos os pagamentos foram realizados
+- ✅ Status de pagamento por sugestão (pago, confirmado, pendente)
+- ✅ Matching baseado em IDs (não nomes) para evitar ambiguidade com nomes duplicados
+- ✅ Histórico completo de pagamentos realizados
+- ✅ Tipos de pagamento: INDIVIDUAL (entre participantes) e ENTRE_GRUPOS (entre famílias/casais)
+
+### Funcionalidades
+- ✅ Validação de IDs antes de marcar como pago (evita erros de matching)
+- ✅ Verificação automática de conclusão de evento quando todos os pagamentos são confirmados
+- ✅ Ações desabilitadas para eventos CONCLUIDOS ou CANCELADOS
+- ✅ Interface para visualizar status de pagamentos e ações disponíveis
+
+---
+
+## 📧 Sistema de Emails
+
+### Tipos de Emails
+- ✅ Boas-vindas (novo usuário)
+- ✅ Boas-vindas Google (login via Google)
+- ✅ Recuperação de senha
+- ✅ Senha alterada
+- ✅ Nova despesa
+- ✅ Despesa editada
+- ✅ Inclusão em evento
+- ✅ Participante adicionado a despesa
+- ✅ Mudança de saldo
+- ✅ Evento finalizado
+- ✅ Reativação sem evento (usuário cadastrado mas não criou evento)
+- ✅ Reativação sem participantes (evento criado mas sem participantes)
+- ✅ Reativação sem despesas (evento com participantes mas sem despesas)
+
+### Funcionalidades de Email
+- ✅ Envio assíncrono via fila (pg-boss)
+- ✅ Retry automático em caso de falha
+- ✅ Log completo de todos os emails enviados na tabela `emails`
+- ✅ Controle de opt-out independente do SendGrid
+- ✅ Verificação de opt-out antes de enviar qualquer email
+- ✅ Status de envio: pendente, enviando, enviado, falhou, cancelado
+- ✅ Registro de erros e metadados do SendGrid
+- ✅ Tracking de tentativas de envio
+
+### Emails de Reativação
+- ✅ Job diário agendado verifica usuários/eventos inativos
+- ✅ Envio automático de emails de reativação
+- ✅ Prevenção de emails duplicados (tracking de última data de envio)
+- ✅ Configurável via cron (padrão: 09:00 BRT diariamente)
+
+### Preferências de Email
+- ✅ Usuários podem optar por não receber emails (opt-out)
+- ✅ Data e motivo do opt-out registrados
+- ✅ Endpoint para visualizar preferências
+- ✅ Endpoint para atualizar preferências (opt-in/opt-out)
+- ✅ Verificação automática antes de cada envio
+
+### Testes de Email (Desenvolvimento + ADMIN)
+- ✅ Endpoints dedicados para testar todos os tipos de emails
+- ✅ Apenas disponíveis em ambiente de desenvolvimento (NODE_ENV !== 'production')
+- ✅ Requer autenticação ADMIN (role = 'ADMIN')
+- ✅ Documentação completa com exemplos
+- ✅ Arquivo `.http` com exemplos prontos para uso
+- ✅ Proteção via middleware `requireAdmin`
+
+---
+
+## 📊 Status de Eventos
+
+### Status Disponíveis
+- ✅ **EM_ABERTO**: Evento ativo, permitindo todas as operações
+- ✅ **CONCLUIDO**: Evento finalizado (matematicamente ou manualmente), bloqueando novas ações
+- ✅ **CANCELADO**: Evento cancelado, bloqueando todas as ações
+
+### Conclusão de Eventos
+- ✅ Conclusão matemática: todos os saldos estão zerados
+- ✅ Conclusão manual: todos os pagamentos foram marcados e confirmados
+- ✅ Verificação híbrida: combina verificação matemática e manual
+- ✅ Marcação manual de evento como concluído
+- ✅ Interface desabilita ações para eventos concluídos/cancelados
 
 ---
 
@@ -307,6 +406,9 @@
 
 ### Autenticação (Protegidas)
 - `GET /api/auth/me` - Obter usuário atual
+- `PUT /api/auth/me` - Atualizar dados do usuário
+- `GET /api/auth/email-preferences` - Obter preferências de email
+- `PUT /api/auth/email-preferences` - Atualizar preferências de email (opt-in/opt-out)
 
 ### Participantes (Protegidas)
 - `GET /api/participantes` - Listar todos
@@ -326,6 +428,7 @@
 - `DELETE /api/grupos/:id/participantes` - Remover participante
 - `POST /api/grupos/:id/gerar-link` - Gerar link de compartilhamento
 - `GET /api/grupos/:id/link` - Obter link de compartilhamento existente
+- `PUT /api/grupos/:id/status` - Atualizar status do evento (EM_ABERTO, CONCLUIDO, CANCELADO)
 
 ### Despesas (Protegidas)
 - `GET /api/despesas` - Listar todas (opcional: ?grupoId=X)
@@ -343,6 +446,12 @@
 - `GET /api/grupos/:id/saldos-por-grupo` - Saldos por grupo
 - `GET /api/grupos/:id/sugestoes-pagamento` - Sugestões entre participantes
 - `GET /api/grupos/:id/sugestoes-pagamento-grupos` - Sugestões entre grupos
+
+### Pagamentos (Protegidas)
+- `POST /api/grupos/:id/pagamentos` - Marcar pagamento individual como pago
+- `POST /api/grupos/:id/pagamentos-grupos` - Marcar pagamento entre grupos como pago
+- `PUT /api/pagamentos/:id/confirmar` - Confirmar recebimento de pagamento
+- `GET /api/grupos/:id/pagamentos` - Listar pagamentos do evento
 
 ### Grupos de Participantes/Eventos (Protegidas)
 - `GET /api/grupos/:eventoId/grupos-participantes` - Listar todos
@@ -387,6 +496,21 @@
 - `GET /api/health` - Health check básico
 - `GET /api/health/db` - Health check com verificação de banco
 
+### Testes de Email (Desenvolvimento + ADMIN)
+- `GET /api/test/email/tipos` - Listar tipos de emails disponíveis (requer ADMIN)
+- `POST /api/test/email/boas-vindas` - Testar email de boas-vindas (requer ADMIN)
+- `POST /api/test/email/nova-despesa` - Testar email de nova despesa (requer ADMIN)
+- `POST /api/test/email/despesa-editada` - Testar email de despesa editada (requer ADMIN)
+- `POST /api/test/email/inclusao-evento` - Testar email de inclusão em evento (requer ADMIN)
+- `POST /api/test/email/reativacao-sem-evento` - Testar email de reativação sem evento (requer ADMIN)
+- `POST /api/test/email/reativacao-sem-participantes` - Testar email de reativação sem participantes (requer ADMIN)
+- `POST /api/test/email/reativacao-sem-despesas` - Testar email de reativação sem despesas (requer ADMIN)
+
+**Notas:**
+- Todos os endpoints de teste requerem autenticação ADMIN
+- Apenas disponíveis em desenvolvimento (NODE_ENV !== 'production')
+- Veja `backend/TEST_EMAILS.md` para documentação completa
+
 ---
 
 ## 🎨 Funcionalidades de Interface
@@ -428,10 +552,10 @@
 ## 📊 Estrutura de Dados
 
 ### Entidades Principais
-- **Usuario**: Usuários do sistema (suporta Google OAuth via `google_id` e `auth_provider`)
+- **Usuario**: Usuários do sistema (suporta Google OAuth via `google_id` e `auth_provider`, inclui controle de opt-out de emails)
 - **Participante**: Pessoas que participam dos eventos
-- **Grupo**: Grupos de despesas (eventos) (inclui `shareToken` para compartilhamento público)
-- **Despesa**: Despesas registradas
+- **Grupo**: Grupos de despesas (eventos) (inclui `shareToken` para compartilhamento público, status: EM_ABERTO, CONCLUIDO, CANCELADO)
+- **Despesa**: Despesas registradas (inclui histórico de alterações em `DespesaHistorico`)
 - **ParticipacaoDespesa**: Participações em despesas
 - **ParticipanteGrupo**: Relação participantes-grupos
 - **GrupoParticipantesEvento**: Grupos de participantes dentro de eventos
@@ -440,6 +564,9 @@
 - **GrupoMaiorGrupo**: Relação grupos maiores-grupos
 - **GrupoMaiorParticipante**: Relação grupos maiores-participantes
 - **PasswordResetToken**: Tokens de recuperação de senha
+- **Pagamento**: Registro de pagamentos realizados (individuais e entre grupos, com confirmação)
+- **Email**: Log completo de todos os emails enviados pelo sistema (status, erros, metadados)
+- **DespesaHistorico**: Histórico de alterações em despesas para auditoria
 
 ---
 
@@ -467,4 +594,11 @@
 - Templates permitem criar eventos rapidamente com despesas pré-configuradas
 - Google OAuth vincula automaticamente contas existentes por email
 - Consumo por padrão: ao criar despesas, todos os participantes são marcados por padrão
+- **Status de eventos**: Eventos podem ser marcados como EM_ABERTO, CONCLUIDO ou CANCELADO
+- **Controle de pagamentos**: Sistema completo de marcação e confirmação de pagamentos usando IDs (não nomes) para evitar ambiguidade
+- **Sistema de emails**: Todos os emails são enviados via fila assíncrona (pg-boss) e registrados na tabela `emails` para auditoria
+- **Opt-out de emails**: Usuários podem optar por não receber emails do sistema, e o sistema verifica isso antes de enviar qualquer email
+- **Emails de reativação**: Job diário agendado verifica usuários/eventos inativos e envia emails de reativação automaticamente
+- **Histórico de despesas**: Todas as alterações em despesas são registradas em `DespesaHistorico` para auditoria
+- **Matching por IDs**: Sistema de pagamentos usa IDs (não nomes) para matching, evitando problemas com nomes duplicados
 

@@ -43,6 +43,25 @@ class AuthService {
             telefone: data.telefone,
         });
         const usuarioSalvo = await this.repository.save(usuario);
+        // Processar referral se existir (tracking básico - implementação completa virá depois)
+        if (data.referralCode) {
+            try {
+                const parsed = this.parseReferralCode(data.referralCode);
+                if (parsed) {
+                    console.log(`[Referral] Novo usuário ${usuarioSalvo.id} cadastrado via referral: tipo=${parsed.tipo}, ids=${parsed.ids.join(',')}`);
+                    // TODO: Implementar tracking completo quando tabela Referral for criada
+                    // Por enquanto, apenas logamos o referral para análise futura
+                    // Quando tabela estiver pronta, criar registro de Referral aqui
+                }
+                else {
+                    console.warn(`[Referral] Código de referral inválido: ${data.referralCode}`);
+                }
+            }
+            catch (err) {
+                console.error('Erro ao processar referral:', err);
+                // Não falhar criação de usuário por causa de referral
+            }
+        }
         // Enviar email de boas-vindas (não bloquear se falhar)
         EmailService_1.EmailService.enviarEmailBoasVindas(usuarioSalvo.email, usuarioSalvo.nome).catch((error) => {
             console.error('Erro ao enviar email de boas-vindas:', error);
@@ -110,6 +129,8 @@ class AuthService {
                 senha: undefined, // Usuários OAuth não têm senha
             });
             usuario = await this.repository.save(usuario);
+            // TODO: Processar referral se vier no tokenId ou outro lugar (futuro)
+            // Por enquanto, referral só funciona no cadastro normal
         }
         // Enviar email de boas-vindas para novos usuários Google (não bloquear se falhar)
         if (isNewUser) {
@@ -224,15 +245,93 @@ class AuthService {
         if (data.email !== undefined)
             updateData.email = data.email;
         if (data.ddd !== undefined)
-            updateData.ddd = data.ddd || undefined;
+            updateData.ddd = data.ddd;
         if (data.telefone !== undefined)
-            updateData.telefone = data.telefone || undefined;
+            updateData.telefone = data.telefone;
         if (data.chavePix !== undefined)
-            updateData.chavePix = data.chavePix || undefined;
+            updateData.chavePix = data.chavePix;
         await this.repository.update(id, updateData);
         // Buscar usuário atualizado
         const usuarioAtualizado = await this.findById(id);
         return usuarioAtualizado;
+    }
+    /**
+     * Atualiza preferências de email do usuário (opt-in/opt-out)
+     */
+    static async updateEmailPreferences(id, data) {
+        const usuario = await this.findById(id);
+        if (!usuario) {
+            return null;
+        }
+        // Atualizar preferências de email
+        const updateData = {
+            receber_emails: data.receberEmails,
+        };
+        if (data.receberEmails === false) {
+            updateData.email_opt_out_data = new Date();
+            updateData.email_opt_out_reason = data.emailOptOutReason || null;
+        }
+        else {
+            updateData.email_opt_out_data = null;
+            updateData.email_opt_out_reason = null;
+        }
+        await this.repository.update(id, updateData);
+        // Buscar usuário atualizado
+        const usuarioAtualizado = await this.findById(id);
+        return usuarioAtualizado;
+    }
+    /**
+     * Gera código de referral único para um usuário
+     * Por enquanto, usa hash do ID do usuário + timestamp para criar código único
+     * TODO: Criar migration para adicionar campo referral_code na tabela usuarios
+     */
+    static gerarReferralCode(usuarioId) {
+        // Gerar código baseado no ID do usuário + hash simples
+        // Formato: USER_[ID]_[hash_curto]
+        const hash = crypto_1.default.createHash('md5').update(`${usuarioId}_${Date.now()}`).digest('hex').substring(0, 8).toUpperCase();
+        return `USER_${usuarioId}_${hash}`;
+    }
+    /**
+     * Obtém código de referral de um usuário (gera se não existir)
+     * Por enquanto, sempre gera dinamicamente baseado no ID
+     * TODO: Quando migration for criada, armazenar em campo referral_code
+     */
+    static async obterReferralCode(usuarioId) {
+        // Por enquanto, sempre gerar dinamicamente
+        // Quando migration for criada, buscar do campo referral_code
+        return this.gerarReferralCode(usuarioId);
+    }
+    /**
+     * Parse de código de referral para extrair informações
+     * Formato esperado: USER_[ID]_[hash] ou evento_[ID]_[ORGANIZADOR_ID] ou share_[EVENTO_ID]
+     */
+    static parseReferralCode(code) {
+        if (!code)
+            return null;
+        const parts = code.split('_');
+        if (parts.length < 2)
+            return null;
+        const tipo = parts[0].toLowerCase();
+        if (tipo === 'user' && parts.length >= 2) {
+            const userId = parseInt(parts[1]);
+            if (!isNaN(userId)) {
+                return { tipo: 'user', ids: [userId] };
+            }
+        }
+        else if (tipo === 'evento' && parts.length >= 3) {
+            const eventoId = parseInt(parts[1]);
+            const organizadorId = parseInt(parts[2]);
+            if (!isNaN(eventoId) && !isNaN(organizadorId)) {
+                return { tipo: 'evento', ids: [eventoId, organizadorId] };
+            }
+        }
+        else if (tipo === 'share' && parts.length >= 2) {
+            const eventoId = parseInt(parts[1]);
+            if (!isNaN(eventoId)) {
+                return { tipo: 'share', ids: [eventoId] };
+            }
+        }
+        return null;
     }
 }
 exports.AuthService = AuthService;

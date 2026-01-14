@@ -49,6 +49,30 @@ Abra seu navegador em: `http://localhost:3000`
 
 ## ✨ Funcionalidades
 
+### Status de Eventos
+- Eventos podem ter status: **EM_ABERTO**, **CONCLUIDO** ou **CANCELADO**
+- Eventos concluídos/cancelados bloqueiam novas ações (edição, adição de participantes/despesas)
+- Conclusão automática quando todos os saldos estão zerados
+- Conclusão manual quando todos os pagamentos são confirmados
+- Interface visual com badges de status
+
+### Controle de Pagamentos
+- Marcar pagamentos individuais como realizados
+- Marcar pagamentos entre grupos (famílias, casais) como realizados
+- Confirmar recebimento de pagamentos (qualquer participante do grupo credor pode confirmar)
+- Sistema baseado em IDs (não nomes) para evitar ambiguidade com nomes duplicados
+- Visualização de status de pagamentos (pago, confirmado, pendente)
+- Histórico completo de pagamentos
+
+### Sistema de Emails
+- Envio automático de emails para notificações e reativação
+- Tipos de emails: boas-vindas, recuperação de senha, nova despesa, despesa editada, inclusão em evento, mudança de saldo, evento finalizado, e emails de reativação
+- Envio assíncrono via fila (não bloqueia a aplicação)
+- Log completo de todos os emails enviados
+- Controle de opt-out: usuários podem optar por não receber emails
+- Emails de reativação automáticos para usuários/eventos inativos
+- Testes de emails disponíveis em desenvolvimento
+
 ### Página Inicial (Home)
 - Explicação clara sobre o que é o Racha Contas
 - Guia de como usar o sistema
@@ -112,6 +136,8 @@ O sistema agora oferece um fluxo intuitivo e guiado:
 - Cálculo automático de saldos: quem deve receber/pagar quanto
 - Visualização de resumo por grupo/família
 - Sugestão de pagamentos otimizados (quem deve pagar para quem, com mínimo de transações)
+- Visualização de status de pagamentos (pago, confirmado, pendente)
+- Histórico completo de pagamentos realizados
 
 ## 📖 Exemplo de Uso
 
@@ -169,6 +195,8 @@ DB_DATABASE=racha_contas
 - **Backend**: Node.js + Express + TypeScript + TypeORM + PostgreSQL
 - **Frontend**: React + TypeScript + Vite
 - **Interface**: HTML/CSS puro (sem frameworks CSS)
+- **Emails**: SendGrid (com fallback para log em desenvolvimento)
+- **Fila de Jobs**: pg-boss (para processamento assíncrono de emails)
 
 ## 📁 Estrutura do Projeto
 
@@ -235,6 +263,78 @@ racha-contas/
 - Senhas criptografadas com bcrypt
 - Validação de dados no backend
 - Proteção de rotas no frontend
+- Controle de opt-out de emails (independente do SendGrid)
+- Log completo de emails enviados para auditoria
+- Matching de pagamentos baseado em IDs (não nomes) para segurança
+
+## 📧 Sistema de Emails
+
+### Configuração
+
+O sistema utiliza SendGrid para envio de emails. Configure as variáveis de ambiente no backend:
+
+```env
+SENDGRID_API_KEY=sua-api-key-aqui
+SENDGRID_FROM_EMAIL=noreply@seu-dominio.com
+SENDGRID_FROM_NAME=Rachid
+FRONTEND_URL=http://localhost:5173
+```
+
+### Tipos de Emails
+
+O sistema envia automaticamente os seguintes emails:
+
+1. **Boas-vindas**: Quando um novo usuário se cadastra
+2. **Recuperação de senha**: Quando o usuário solicita reset de senha
+3. **Nova despesa**: Quando uma nova despesa é criada em um evento
+4. **Despesa editada**: Quando uma despesa é alterada
+5. **Inclusão em evento**: Quando um participante é adicionado a um evento
+6. **Evento finalizado**: Quando um evento é marcado como concluído
+7. **Reativação**: Emails automáticos para usuários/eventos inativos
+
+### Preferências de Email
+
+Usuários podem gerenciar suas preferências de email através da API:
+
+- `GET /api/auth/email-preferences` - Ver preferências
+- `PUT /api/auth/email-preferences` - Atualizar preferências (opt-in/opt-out)
+
+### Testes de Email (Desenvolvimento)
+
+Em ambiente de desenvolvimento, você pode testar os emails usando os endpoints:
+
+- `GET /api/test/email/tipos` - Listar tipos disponíveis
+- `POST /api/test/email/[tipo]` - Enviar email de teste
+
+Veja `backend/TEST_EMAILS.md` para documentação completa e exemplos.
+
+## 💳 Controle de Pagamentos
+
+### Funcionalidades
+
+- **Marcar como pago**: Qualquer participante pode marcar um pagamento como realizado
+- **Confirmar recebimento**: Qualquer participante do grupo credor pode confirmar o recebimento
+- **Status visual**: Interface mostra claramente quais pagamentos foram realizados e confirmados
+- **Baseado em IDs**: Sistema usa IDs (não nomes) para matching, evitando problemas com nomes duplicados
+- **Histórico completo**: Todos os pagamentos são registrados para auditoria
+
+### Tipos de Pagamento
+
+1. **INDIVIDUAL**: Entre participantes individuais
+2. **ENTRE_GRUPOS**: Entre grupos (famílias, casais, etc.)
+
+## 📊 Status de Eventos
+
+Os eventos podem ter os seguintes status:
+
+- **EM_ABERTO**: Evento ativo, permitindo todas as operações
+- **CONCLUIDO**: Evento finalizado (todos os saldos zerados e/ou pagamentos confirmados)
+- **CANCELADO**: Evento cancelado, bloqueando todas as ações
+
+Eventos concluídos ou cancelados não permitem:
+- Edição de participantes
+- Adição/edição de despesas
+- Novos pagamentos
 
 ## 📄 Licença
 

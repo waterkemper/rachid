@@ -11,6 +11,7 @@ const Usuario_1 = require("../entities/Usuario");
 const DespesaHistoricoService_1 = require("./DespesaHistoricoService");
 const Participante_1 = require("../entities/Participante");
 const EmailQueueService_1 = require("./EmailQueueService");
+const NotificationService_1 = require("./NotificationService");
 class DespesaService {
     static async findAll(usuarioId, grupoId) {
         // Buscar despesas onde o usuário é dono OU é membro do grupo
@@ -79,10 +80,11 @@ class DespesaService {
             return false;
         }
         const participantesGrupo = await this.participanteGrupoRepository.find({
-            where: { grupo_id: grupoId },
+            where: { grupoId: grupoId },
             relations: ['participante'],
         });
-        return participantesGrupo.some((pg) => pg.participante?.email?.toLowerCase() === usuario.email.toLowerCase());
+        const emailUsuarioNormalizado = usuario.email.trim().toLowerCase();
+        return participantesGrupo.some((pg) => pg.participante?.email?.trim().toLowerCase() === emailUsuarioNormalizado);
     }
     /**
      * Verifica se um usuário pode editar uma despesa
@@ -161,11 +163,11 @@ class DespesaService {
                 }
                 const participantesGrupo = (grupo.participantes || []);
                 // Filtrar participantes válidos (não nulos)
-                const participantesValidos = participantesGrupo.filter(pg => pg.participante_id);
+                const participantesValidos = participantesGrupo.filter(pg => pg.participanteId);
                 for (const pg of participantesValidos) {
                     const participacao = this.participacaoRepository.create({
                         despesa_id: despesaSalva.id,
-                        participante_id: pg.participante_id,
+                        participante_id: pg.participanteId,
                         valorDevePagar: 0,
                     });
                     await this.participacaoRepository.save(participacao);
@@ -183,6 +185,22 @@ class DespesaService {
         // Notificar participantes sobre nova despesa (não bloquear se falhar)
         try {
             await this.notificarNovaDespesa(despesaCompleta, data.grupo_id);
+            // Notificar mudanças de saldo (não bloquear se falhar)
+            // Calcular saldos antes e depois para detectar mudanças significativas
+            try {
+                // Por enquanto, não temos saldos antes (primeira vez calculando)
+                // Apenas calcular saldos depois e notificar se houver mudanças significativas
+                // TODO: Implementar cache de saldos anteriores para comparação
+                const saldosDepois = await NotificationService_1.NotificationService.calcularSaldosAtuais(data.grupo_id, data.usuario_id);
+                if (saldosDepois.length > 0) {
+                    // Notificar apenas participantes com saldo significativo (>=R$ 5)
+                    await NotificationService_1.NotificationService.notificarMudancasSaldo(data.grupo_id, [], saldosDepois);
+                }
+            }
+            catch (err) {
+                console.error('[DespesaService.create] Erro ao notificar mudanças de saldo:', err);
+                // Não falhar criação se notificação de saldo falhar
+            }
         }
         catch (err) {
             console.error('[DespesaService.create] Erro ao adicionar notificações à fila:', err);
@@ -337,7 +355,7 @@ class DespesaService {
             });
             if (grupo && grupo.participantes && grupo.participantes.length > 0) {
                 const participantesGrupo = (grupo.participantes || []);
-                const participantesValidos = participantesGrupo.filter(pg => pg.participante_id);
+                const participantesValidos = participantesGrupo.filter(pg => pg.participanteId);
                 if (participantesValidos.length > 0) {
                     const queryRunner = data_source_1.AppDataSource.createQueryRunner();
                     await queryRunner.connect();
@@ -347,7 +365,7 @@ class DespesaService {
                         for (const pg of participantesValidos) {
                             const participacao = queryRunner.manager.create(ParticipacaoDespesa_1.ParticipacaoDespesa, {
                                 despesa_id: id,
-                                participante_id: pg.participante_id,
+                                participante_id: pg.participanteId,
                                 valorDevePagar: 0,
                             });
                             await queryRunner.manager.save(participacao);
@@ -418,7 +436,26 @@ class DespesaService {
         }
         // Notificar participantes sobre despesa editada (não bloquear se falhar)
         try {
-            await this.notificarDespesaEditada(despesaAtualizada, historicoAlteracoes);
+            if (historicoAlteracoes.length > 0) {
+                console.log(`[DespesaService.update] Notificando ${historicoAlteracoes.length} mudança(s) na despesa ${id}`);
+                await this.notificarDespesaEditada(despesaAtualizada, historicoAlteracoes);
+                // Notificar mudanças de saldo após edição de despesa
+                // Calcular saldos antes e depois para detectar mudanças significativas
+                try {
+                    const grupoId = despesaAtualizada.grupo_id;
+                    // Por enquanto, apenas calcular saldos depois (saldos antes seriam difíceis de obter sem cache)
+                    // TODO: Implementar cache de saldos anteriores para comparação adequada
+                    const saldosDepois = await NotificationService_1.NotificationService.calcularSaldosAtuais(grupoId, usuarioId);
+                    if (saldosDepois.length > 0) {
+                        // Notificar apenas participantes com saldo significativo (>=R$ 5)
+                        await NotificationService_1.NotificationService.notificarMudancasSaldo(grupoId, [], saldosDepois);
+                    }
+                }
+                catch (err) {
+                    console.error('[DespesaService.update] Erro ao notificar mudanças de saldo:', err);
+                    // Não falhar atualização se notificação de saldo falhar
+                }
+            }
         }
         catch (err) {
             console.error('[DespesaService.update] Erro ao adicionar notificações à fila:', err);
@@ -479,12 +516,15 @@ class DespesaService {
             }).format(d);
         };
         // Adicionar jobs na fila para cada participante
+        let notificacoesEnviadas = 0;
+        let notificacoesFalhadas = 0;
         for (const participacao of participacoes) {
             const participante = participacao.participante;
             if (!participante)
                 continue;
             const email = await this.obterEmailParticipante(participante.id);
             if (!email) {
+                console.log(`[DespesaService.notificarDespesaEditada] Participante ${participante.nome} (ID: ${participante.id}) não tem email cadastrado`);
                 continue; // Pular se não tiver email
             }
             try {
@@ -499,12 +539,16 @@ class DespesaService {
                     mudancas: mudancasFormatadas,
                     linkEvento,
                 });
+                notificacoesEnviadas++;
+                console.log(`[DespesaService.notificarDespesaEditada] ✅ Notificação adicionada à fila para ${participante.nome} (${email})`);
             }
             catch (err) {
-                console.error(`Erro ao adicionar notificação para ${email}:`, err);
+                notificacoesFalhadas++;
+                console.error(`[DespesaService.notificarDespesaEditada] ❌ Erro ao adicionar notificação para ${participante.nome} (${email}):`, err);
                 // Continuar com outros participantes
             }
         }
+        console.log(`[DespesaService.notificarDespesaEditada] Resumo: ${notificacoesEnviadas} enviadas, ${notificacoesFalhadas} falhadas`);
     }
     /**
      * Registra histórico de alterações em uma despesa
@@ -557,8 +601,8 @@ class DespesaService {
         }
         // Obter IDs de todos os participantes do evento
         const participantesIds = grupo.participantes
-            .filter(pg => pg.participante_id)
-            .map(pg => pg.participante_id);
+            .filter(pg => pg.participanteId)
+            .map(pg => pg.participanteId);
         // Para cada despesa, garantir que todos os participantes tenham participação
         // MAS apenas se a despesa NÃO tiver pagador definido (despesas com pagador já estão "fechadas")
         for (const despesa of despesas) {

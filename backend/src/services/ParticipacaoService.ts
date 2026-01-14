@@ -4,6 +4,7 @@ import { Despesa } from '../entities/Despesa';
 import { Participante } from '../entities/Participante';
 import { Grupo } from '../entities/Grupo';
 import { EmailQueueService } from './EmailQueueService';
+import { NotificationService } from './NotificationService';
 
 export class ParticipacaoService {
   private static participacaoRepository = AppDataSource.getRepository(ParticipacaoDespesa);
@@ -31,6 +32,19 @@ export class ParticipacaoService {
     if (participacaoExistente) {
       await this.participacaoRepository.delete(participacaoExistente.id);
       await this.recalcularValores(despesaId, usuarioId);
+      
+      // Notificar mudanças de saldo após remover participação (não bloquear se falhar)
+      try {
+        const grupoId = despesa.grupo_id;
+        const saldosDepois = await NotificationService.calcularSaldosAtuais(grupoId, usuarioId);
+        if (saldosDepois.length > 0) {
+          await NotificationService.notificarMudancasSaldo(grupoId, [], saldosDepois);
+        }
+      } catch (err) {
+        console.error('[ParticipacaoService.toggleParticipacao] Erro ao notificar mudanças de saldo após remoção:', err);
+        // Não falhar remoção se notificação falhar
+      }
+      
       return null;
     } else {
       const valorPorPessoa = await this.calcularValorPorPessoa(despesaId);
@@ -45,6 +59,18 @@ export class ParticipacaoService {
       // Notificar participante sobre adição à despesa (não bloquear se falhar)
       try {
         await this.notificarParticipanteAdicionadoDespesa(despesaId, participanteId, participacaoSalva.valorDevePagar);
+        
+        // Notificar mudanças de saldo após adicionar participação (não bloquear se falhar)
+        try {
+          const grupoId = despesa.grupo_id;
+          const saldosDepois = await NotificationService.calcularSaldosAtuais(grupoId, usuarioId);
+          if (saldosDepois.length > 0) {
+            await NotificationService.notificarMudancasSaldo(grupoId, [], saldosDepois);
+          }
+        } catch (err) {
+          console.error('[ParticipacaoService.toggleParticipacao] Erro ao notificar mudanças de saldo:', err);
+          // Não falhar adição se notificação de saldo falhar
+        }
       } catch (err) {
         console.error('[ParticipacaoService.toggleParticipacao] Erro ao adicionar notificação à fila:', err);
         // Não falhar a adição se a notificação falhar
@@ -119,10 +145,10 @@ export class ParticipacaoService {
     // Buscar despesa sem filtrar por usuario_id para permitir colaboração
     const despesa = await this.despesaRepository.findOne({
       where: { id: despesaId },
-      relations: ['participacoes'],
+      relations: ['participacoes', 'grupo'],
     });
 
-    if (!despesa) return;
+    if (!despesa || !despesa.grupo) return;
 
     const participacoes = await this.participacaoRepository.find({
       where: { despesa_id: despesaId },
@@ -147,6 +173,18 @@ export class ParticipacaoService {
         primeiraParticipacao.valorDevePagar = Number(primeiraParticipacao.valorDevePagar) + diferenca;
         await this.participacaoRepository.save(primeiraParticipacao);
       }
+    }
+    
+    // Notificar mudanças de saldo após recalcular valores (não bloquear se falhar)
+    try {
+      const grupoId = despesa.grupo_id;
+      const saldosDepois = await NotificationService.calcularSaldosAtuais(grupoId, usuarioId);
+      if (saldosDepois.length > 0) {
+        await NotificationService.notificarMudancasSaldo(grupoId, [], saldosDepois);
+      }
+    } catch (err) {
+      console.error('[ParticipacaoService.recalcularValores] Erro ao notificar mudanças de saldo:', err);
+      // Não falhar recálculo se notificação falhar
     }
   }
 

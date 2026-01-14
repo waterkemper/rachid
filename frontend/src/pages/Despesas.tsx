@@ -6,6 +6,7 @@ import { Despesa, Grupo, Participante } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from '../components/Modal';
 import { FaPlus, FaEdit, FaTrash, FaChartBar, FaUsers, FaShare, FaLock } from 'react-icons/fa';
+import ShareButtons from '../components/ShareButtons';
 import './Despesas.css';
 
 const Despesas: React.FC = () => {
@@ -34,6 +35,8 @@ const Despesas: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [loadingShareLink, setLoadingShareLink] = useState(false);
 
   // Função helper para verificar se usuário pode editar uma despesa
   const canEditDespesa = useCallback((despesa: Despesa): boolean => {
@@ -92,12 +95,44 @@ const Despesas: React.FC = () => {
     }
   };
 
+  const loadShareLink = async (eventoId: number) => {
+    try {
+      setLoadingShareLink(true);
+      let linkData = await grupoApi.obterLink(eventoId);
+      if (!linkData.link) {
+        linkData = await grupoApi.gerarLink(eventoId);
+      }
+      if (linkData.link) {
+        const frontendUrl = window.location.origin;
+        // Extrair token do link ou usar o link completo
+        const tokenMatch = linkData.link.match(/\/evento\/([^\/]+)$/);
+        if (tokenMatch) {
+          setShareLink(`${frontendUrl}/evento/${tokenMatch[1]}`);
+        } else {
+          setShareLink(linkData.link);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao carregar link de compartilhamento:', err);
+      setShareLink(null);
+    } finally {
+      setLoadingShareLink(false);
+    }
+  };
+
   const loadDespesas = useCallback(async () => {
     try {
       const grupoId = filtroGrupo === '' ? undefined : filtroGrupo;
       // Sempre buscar dados frescos do servidor (sem cache)
       const data = await despesaApi.getAll(grupoId);
       setDespesas(data);
+      
+      // Carregar link de compartilhamento se houver evento selecionado
+      if (grupoId) {
+        loadShareLink(grupoId);
+      } else {
+        setShareLink(null);
+      }
     } catch (err) {
       setError('Erro ao carregar despesas');
     }
@@ -110,7 +145,7 @@ const Despesas: React.FC = () => {
   // Recarregar dados quando a página voltar ao foco
   usePageFocus(loadDespesas, [filtroGrupo]);
 
-  const loadParticipantesDoEvento = async (eventoId: number, incluirPagadorAtual?: number) => {
+  const loadParticipantesDoEvento = async (eventoId: number, incluirPagadorAtual?: number, participantesAdicionais?: Participante[]): Promise<Participante[]> => {
     try {
       const evento = await grupoApi.getById(eventoId);
       
@@ -131,40 +166,66 @@ const Despesas: React.FC = () => {
       }
       
       if (evento.participantes && evento.participantes.length > 0) {
-        const participantesIds = evento.participantes.map(p => p.participante_id);
-        let participantesFiltrados = participantes.filter(p => participantesIds.includes(p.id));
+        // IMPORTANTE: Extrair participantes diretamente do evento que já vem com os objetos completos
+        // Não filtrar pelo estado global 'participantes' que pode não ter todos os participantes do evento
+        let participantesFiltrados: Participante[] = evento.participantes
+          .map(pg => pg.participante)
+          .filter((p): p is Participante => p !== null && p !== undefined);
         
         // Se estiver editando e o pagador atual não estiver na lista, incluir ele também
-        if (incluirPagadorAtual && !participantesIds.includes(incluirPagadorAtual)) {
-          const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
-          if (pagadorAtual) {
-            participantesFiltrados = [...participantesFiltrados, pagadorAtual];
+        if (incluirPagadorAtual) {
+          const pagadorJaNaLista = participantesFiltrados.some(p => p.id === incluirPagadorAtual);
+          if (!pagadorJaNaLista) {
+            // Tentar encontrar o pagador no estado global primeiro
+            let pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
+            // Se não encontrar no estado global, pode estar nas participações da despesa
+            if (!pagadorAtual && participantesAdicionais) {
+              pagadorAtual = participantesAdicionais.find(p => p.id === incluirPagadorAtual);
+            }
+            if (pagadorAtual) {
+              participantesFiltrados = [...participantesFiltrados, pagadorAtual];
+            }
+          }
+        }
+        
+        // Se houver participantes adicionais (ex: de uma despesa sendo editada), incluí-los
+        // Isso garante que participantes que não estão mais no evento mas estão na despesa sejam exibidos
+        if (participantesAdicionais && participantesAdicionais.length > 0) {
+          const idsExistentes = new Set(participantesFiltrados.map(p => p.id));
+          const novosParticipantes = participantesAdicionais.filter(p => !idsExistentes.has(p.id));
+          if (novosParticipantes.length > 0) {
+            participantesFiltrados = [...participantesFiltrados, ...novosParticipantes];
           }
         }
         
         setParticipantesDoEvento(participantesFiltrados);
+        return participantesFiltrados;
       } else {
         // Se não houver participantes no evento mas houver um pagador atual, incluir ele
+        let participantesFiltrados: Participante[] = [];
         if (incluirPagadorAtual) {
           const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
-          setParticipantesDoEvento(pagadorAtual ? [pagadorAtual] : []);
-        } else {
-          // Mesmo sem participantes no evento, permitir que o usuário veja o campo
-          // O backend vai validar se pode criar/editar
-          setParticipantesDoEvento([]);
+          if (pagadorAtual) {
+            participantesFiltrados = [pagadorAtual];
+          }
         }
+        setParticipantesDoEvento(participantesFiltrados);
+        return participantesFiltrados;
       }
     } catch (err) {
       console.error('Erro ao carregar participantes do evento:', err);
       // Em caso de erro, ainda permitir que o campo seja exibido (pode ser problema de permissão temporário)
       // Se houver um pagador atual, incluir ele
+      let participantesFiltrados: Participante[] = [];
       if (incluirPagadorAtual) {
         const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
-        setParticipantesDoEvento(pagadorAtual ? [pagadorAtual] : []);
-      } else {
-        setParticipantesDoEvento([]);
+        if (pagadorAtual) {
+          participantesFiltrados = [pagadorAtual];
+        }
       }
+      setParticipantesDoEvento(participantesFiltrados);
       setParticipanteSubgrupoMap(new Map());
+      return participantesFiltrados;
     }
   };
 
@@ -178,12 +239,33 @@ const Despesas: React.FC = () => {
         participante_pagador_id: despesa.participante_pagador_id || 0,
         data: despesa.data.split('T')[0],
       });
-      // Carregar participantes do evento da despesa sendo editada
-      // Incluir o pagador atual caso ele não esteja mais no evento
-      await loadParticipantesDoEvento(despesa.grupo_id, despesa.participante_pagador_id);
       // Carregar participantes já selecionados da despesa
       const participantesIds = despesa.participacoes?.map(p => p.participante_id) || [];
       setParticipantesSelecionados(participantesIds);
+      
+      // IMPORTANTE: Extrair participantes das participacoes da despesa
+      // Isso garante que todos os participantes selecionados sejam visíveis, mesmo que não estejam mais no evento
+      const participantesDasParticipacoes: Participante[] = [];
+      if (despesa.participacoes && despesa.participacoes.length > 0) {
+        for (const participacao of despesa.participacoes) {
+          // Tentar pegar do objeto participacao.participante (se o backend enviou)
+          if (participacao.participante) {
+            participantesDasParticipacoes.push(participacao.participante);
+          } else {
+            // Se não tiver o objeto completo, buscar do estado global de participantes
+            const participanteEncontrado = participantes.find(p => p.id === participacao.participante_id);
+            if (participanteEncontrado) {
+              participantesDasParticipacoes.push(participanteEncontrado);
+            }
+          }
+        }
+      }
+      
+      // Carregar participantes do evento da despesa sendo editada
+      // Incluir o pagador atual caso ele não esteja mais no evento
+      // E incluir participantes das participacoes da despesa
+      await loadParticipantesDoEvento(despesa.grupo_id, despesa.participante_pagador_id, participantesDasParticipacoes);
+      
       setParticipantesExpandido(true); // Expandir ao editar
     } else {
       setEditingDespesa(null);
@@ -197,14 +279,9 @@ const Despesas: React.FC = () => {
       });
       // Carregar participantes do evento selecionado (ou do filtro)
       if (grupoId > 0) {
-        await loadParticipantesDoEvento(grupoId);
+        const participantesCarregados = await loadParticipantesDoEvento(grupoId);
         // Por padrão, selecionar todos os participantes do evento ao criar
-        const evento = await grupoApi.getById(grupoId);
-        if (evento.participantes) {
-          const participantesIds = evento.participantes.map(p => p.participante_id);
-          const participantesFiltrados = participantes.filter(p => participantesIds.includes(p.id));
-          setParticipantesSelecionados(participantesFiltrados.map(p => p.id));
-        }
+        setParticipantesSelecionados(participantesCarregados.map(p => p.id));
       } else {
         setParticipantesDoEvento([]);
         setParticipantesSelecionados([]);
@@ -362,6 +439,17 @@ const Despesas: React.FC = () => {
               <button className="btn btn-secondary" onClick={() => navigate(`/convidar-amigos/${filtroGrupo}`)}>
                 <FaShare /> <span>Convidar amigos</span>
               </button>
+              {shareLink && !loadingShareLink && filtroGrupo && (
+                <ShareButtons
+                  shareUrl={shareLink}
+                  shareText={`Confira as despesas do evento "${grupos.find(g => g.id === filtroGrupo)?.nome || 'Evento'}" no Rachid`}
+                  eventName={grupos.find(g => g.id === filtroGrupo)?.nome || 'Evento'}
+                  showQRCode={true}
+                  showEmail={true}
+                  showWhatsApp={true}
+                  showCopy={true}
+                />
+              )}
             </>
           )}
           <button className="btn btn-primary" onClick={() => handleOpenModal()}>
@@ -556,14 +644,9 @@ const Despesas: React.FC = () => {
                 setFormData({ ...formData, grupo_id: grupoId, participante_pagador_id: 0 });
                 // Carregar participantes do evento selecionado
                 if (grupoId > 0) {
-                  await loadParticipantesDoEvento(grupoId);
+                  const participantesCarregados = await loadParticipantesDoEvento(grupoId);
                   // Por padrão, selecionar todos os participantes do evento
-                  const evento = await grupoApi.getById(grupoId);
-                  if (evento.participantes) {
-                    const participantesIds = evento.participantes.map(p => p.participante_id);
-                    const participantesFiltrados = participantes.filter(p => participantesIds.includes(p.id));
-                    setParticipantesSelecionados(participantesFiltrados.map(p => p.id));
-                  }
+                  setParticipantesSelecionados(participantesCarregados.map(p => p.id));
                 } else {
                   setParticipantesDoEvento([]);
                   setParticipantesSelecionados([]);

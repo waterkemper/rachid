@@ -95,10 +95,12 @@ class EmailTemplateService {
      * Renderiza template de boas-vindas
      */
     static renderWelcome(data) {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         return this.render('welcome.html', {
             titulo: 'Bem-vindo ao Rachid!',
             nome: data.nome,
             linkLogin: data.linkLogin,
+            linkCriarEvento: data.linkCriarEvento || `${frontendUrl}/novo-evento`,
             linkDocumentacao: data.linkDocumentacao || 'https://orachid.com.br/docs',
         });
     }
@@ -106,10 +108,12 @@ class EmailTemplateService {
      * Renderiza template de boas-vindas para usuário Google
      */
     static renderWelcomeGoogle(data) {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         return this.render('welcome-google.html', {
             titulo: 'Bem-vindo ao Rachid!',
             nome: data.nome,
             linkLogin: data.linkLogin,
+            linkCriarEvento: data.linkCriarEvento || `${frontendUrl}/novo-evento`,
             linkDocumentacao: data.linkDocumentacao || 'https://orachid.com.br/docs',
         });
     }
@@ -174,14 +178,31 @@ class EmailTemplateService {
      * Renderiza template de inclusão em evento
      */
     static renderInclusaoEvento(data) {
-        const linkEventoHtml = data.linkEvento
-            ? `<p><a href="${data.linkEvento}" class="button">Ver Evento</a></p>`
-            : '';
+        const linkEventoHtml = data.linkEventoPublico
+            ? `<p style="margin: 20px 0;"><a href="${data.linkEventoPublico}" class="button">📊 Ver Resumo do Evento (sem criar conta)</a></p>`
+            : data.linkEvento
+                ? `<p style="margin: 20px 0;"><a href="${data.linkEvento}" class="button">Ver Evento</a></p>`
+                : '';
         const eventoDescricaoHtml = data.eventoDescricao
             ? `<p style="margin: 8px 0;"><strong>Descrição:</strong> ${data.eventoDescricao}</p>`
             : '';
         const eventoDataHtml = data.eventoData
             ? `<p style="margin: 8px 0;"><strong>Data:</strong> ${data.eventoData}</p>`
+            : '';
+        // Informações de valor total e participantes
+        const infoResumoHtml = data.totalDespesas || data.numeroParticipantes
+            ? `<div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin: 20px 0;">
+          ${data.totalDespesas ? `<p style="margin: 8px 0; font-size: 16px;"><strong>💰 Valor total:</strong> <span style="color: #667eea; font-size: 18px;">${data.totalDespesas}</span></p>` : ''}
+          ${data.numeroParticipantes ? `<p style="margin: 8px 0; font-size: 16px;"><strong>👥 Participantes:</strong> ${data.numeroParticipantes}</p>` : ''}
+        </div>`
+            : '';
+        // Call-to-action para criar conta
+        const ctaCadastroHtml = data.linkCadastro
+            ? `<div style="background-color: #e7f3ff; padding: 20px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #667eea;">
+          <p style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #333;">💡 Quer criar sua conta para organizar seus próprios eventos?</p>
+          <p style="margin: 0 0 16px 0; font-size: 14px; color: #666;">O Rachid calcula tudo automaticamente e ajuda você a dividir contas de forma simples!</p>
+          <p style="margin: 0;"><a href="${data.linkCadastro}" class="button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; display: inline-block;">👉 Criar Conta Gratuita</a></p>
+        </div>`
             : '';
         return this.render('inclusao-evento.html', {
             titulo: 'Você foi adicionado a um evento - Rachid',
@@ -191,6 +212,8 @@ class EmailTemplateService {
             eventoData: eventoDataHtml,
             adicionadoPor: data.adicionadoPor,
             linkEvento: linkEventoHtml,
+            infoResumo: infoResumoHtml,
+            ctaCadastro: ctaCadastroHtml,
         });
     }
     /**
@@ -208,6 +231,142 @@ class EmailTemplateService {
             despesaValorTotal: data.despesaValorTotal,
             valorDevePagar: data.valorDevePagar,
             linkEvento: linkEventoHtml,
+        });
+    }
+    /**
+     * Renderiza template de evento finalizado
+     */
+    static renderEventoFinalizado(data) {
+        const linkEventoHtml = data.linkEventoPublico
+            ? `<p style="margin: 16px 0;"><a href="${data.linkEventoPublico}" class="button" style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff !important; text-decoration: none; border-radius: 6px; font-weight: 600;">📊 Ver Resumo do Evento (sem criar conta)</a></p>`
+            : data.linkEvento
+                ? `<p style="margin: 16px 0;"><a href="${data.linkEvento}" class="button">Ver Evento</a></p>`
+                : '';
+        const eventoDataHtml = data.eventoData
+            ? `<p style="margin: 8px 0; font-size: 14px;"><strong>Data:</strong> ${data.eventoData}</p>`
+            : '';
+        const ctaCadastroHtml = `<div style="background-color: #fff3cd; padding: 20px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #ffc107;">
+      <p style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #333;">💡 Quer criar sua conta para organizar seus próprios eventos?</p>
+      <p style="margin: 0 0 16px 0; font-size: 14px; color: #666;">O Rachid calcula tudo automaticamente e ajuda você a dividir contas de forma simples!</p>
+      <p style="margin: 0;"><a href="${data.linkCadastro}" class="button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; display: inline-block;">👉 Criar Conta Gratuita</a></p>
+    </div>`;
+        return this.render('evento-finalizado.html', {
+            titulo: 'Evento Finalizado - Rachid',
+            nomeDestinatario: data.nomeDestinatario,
+            eventoNome: data.eventoNome,
+            eventoData: eventoDataHtml,
+            totalDespesas: data.totalDespesas,
+            numeroParticipantes: data.numeroParticipantes,
+            organizadorNome: data.organizadorNome,
+            linkEventoPublico: linkEventoHtml,
+            ctaCadastro: ctaCadastroHtml,
+        });
+    }
+    /**
+     * Renderiza template de mudança de saldo
+     */
+    static renderMudancaSaldo(data) {
+        const linkEventoHtml = data.linkEventoPublico
+            ? `<p style="margin: 20px 0;"><a href="${data.linkEventoPublico}" class="button">📊 Ver Resumo do Evento (sem criar conta)</a></p>`
+            : data.linkEvento
+                ? `<p style="margin: 20px 0;"><a href="${data.linkEvento}" class="button">Ver Evento</a></p>`
+                : '';
+        const eventoDataHtml = data.eventoData
+            ? `<p style="margin: 8px 0; font-size: 14px;"><strong>Data:</strong> ${data.eventoData}</p>`
+            : '';
+        const saldoAnteriorHtml = data.saldoAnterior
+            ? `<p style="margin: 8px 0; font-size: 14px;"><strong>Saldo Anterior:</strong> ${data.saldoAnterior}</p>`
+            : '';
+        // Determinar cores baseado na direção da mudança
+        let corCardSaldo = '#e7f3ff';
+        let corBordaSaldo = '#667eea';
+        let corSaldo = '#333333';
+        let mensagemMudanca = '';
+        if (data.direcao === 'aumentou') {
+            corCardSaldo = '#d4edda';
+            corBordaSaldo = '#28a745';
+            corSaldo = '#28a745';
+            mensagemMudanca = `📈 Seu saldo aumentou em ${data.diferenca}. Isso significa que você deve mais ao grupo, ou que o grupo deve mais a você.`;
+        }
+        else if (data.direcao === 'diminuiu') {
+            corCardSaldo = '#fff3cd';
+            corBordaSaldo = '#ffc107';
+            corSaldo = '#856404';
+            mensagemMudanca = `📉 Seu saldo diminuiu em ${data.diferenca}. O saldo está sendo ajustado.`;
+        }
+        else {
+            mensagemMudanca = `ℹ️ Seu saldo foi recalculado.`;
+        }
+        // CTA para ação
+        const linkCadastro = data.eventoId
+            ? `${process.env.FRONTEND_URL || 'http://localhost:5173'}/cadastro?ref=evento_${data.eventoId}`
+            : `${process.env.FRONTEND_URL || 'http://localhost:5173'}/cadastro`;
+        const ctaAcaoHtml = data.linkEventoPublico
+            ? `<div style="background-color: #e7f3ff; padding: 20px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #667eea;">
+          <p style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #333;">💡 Quer criar sua conta para organizar seus próprios eventos?</p>
+          <p style="margin: 0 0 16px 0; font-size: 14px; color: #666;">O Rachid calcula tudo automaticamente e ajuda você a dividir contas de forma simples!</p>
+          <p style="margin: 0;"><a href="${linkCadastro}" class="button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; display: inline-block;">👉 Criar Conta Gratuita</a></p>
+        </div>`
+            : '';
+        return this.render('mudanca-saldo.html', {
+            titulo: 'Mudança de Saldo - Rachid',
+            nomeDestinatario: data.nomeDestinatario,
+            eventoNome: data.eventoNome,
+            eventoData: eventoDataHtml,
+            saldoAnterior: saldoAnteriorHtml,
+            saldoAtual: data.saldoAtual,
+            diferenca: data.diferenca,
+            direcao: data.direcao,
+            corCardSaldo,
+            corBordaSaldo,
+            corSaldo,
+            mensagemMudanca,
+            linkEvento: linkEventoHtml,
+            ctaAcao: ctaAcaoHtml,
+        });
+    }
+    /**
+     * Renderiza template de reativação sem evento
+     */
+    static renderReativacaoSemEvento(data) {
+        return this.render('reativacao-sem-evento.html', {
+            titulo: 'Crie seu primeiro evento - Rachid',
+            nomeDestinatario: data.nomeDestinatario,
+            diasDesdeCadastro: data.diasDesdeCadastro,
+            linkCriarEvento: data.linkCriarEvento,
+        });
+    }
+    /**
+     * Renderiza template de reativação sem participantes
+     */
+    static renderReativacaoSemParticipantes(data) {
+        const linkEventoPublicoHtml = data.linkEventoPublico
+            ? `<div style="background-color: #e7f3ff; padding: 20px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #667eea;">
+          <p style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #333;">🔗 Link Público do Evento:</p>
+          <p style="margin: 0 0 16px 0; font-size: 14px; color: #666;">Compartilhe este link com os participantes. Eles podem visualizar o evento sem criar conta!</p>
+          <p style="margin: 0;"><a href="${data.linkEventoPublico}" class="button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; display: inline-block;">📊 Ver Link Público</a></p>
+        </div>`
+            : '';
+        return this.render('reativacao-sem-participantes.html', {
+            titulo: 'Adicione participantes ao evento - Rachid',
+            nomeDestinatario: data.nomeDestinatario,
+            eventoNome: data.eventoNome,
+            diasDesdeCriacao: data.diasDesdeCriacao,
+            linkAdicionarParticipantes: data.linkAdicionarParticipantes,
+            linkEventoPublico: linkEventoPublicoHtml,
+        });
+    }
+    /**
+     * Renderiza template de reativação sem despesas
+     */
+    static renderReativacaoSemDespesas(data) {
+        return this.render('reativacao-sem-despesas.html', {
+            titulo: 'Registre as despesas do evento - Rachid',
+            nomeDestinatario: data.nomeDestinatario,
+            eventoNome: data.eventoNome,
+            numeroParticipantes: data.numeroParticipantes,
+            diasDesdeUltimaParticipacao: data.diasDesdeUltimaParticipacao,
+            linkDespesas: data.linkDespesas,
         });
     }
 }

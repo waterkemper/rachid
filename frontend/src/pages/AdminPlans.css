@@ -1,0 +1,243 @@
+.admin-plans-page {
+  min-height: calc(100vh - 60px);
+  padding: 20px;
+  background-color: #f5f5f5;
+}
+
+.admin-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  background: white;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.admin-container h1 {
+  margin-bottom: 10px;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.subtitle {
+  color: #444;
+  margin-bottom: 30px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.success-message {
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.plans-table-container {
+  overflow-x: auto;
+  margin-bottom: 30px;
+}
+
+.plans-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+
+.plans-table th,
+.plans-table td {
+  padding: 15px;
+  text-align: left;
+  border-bottom: 1px solid #dee2e6;
+  color: #2c2c2c;
+}
+
+.plans-table th {
+  background-color: #e9ecef;
+  font-weight: 600;
+  color: #1a1a1a;
+  position: sticky;
+  top: 0;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.plans-table tr:hover {
+  background-color: #f8f9fa;
+}
+
+.plan-type {
+  min-width: 100px;
+}
+
+.plan-type strong {
+  display: block;
+  font-size: 14px;
+  color: #007bff;
+}
+
+.btn-edit,
+.btn-save,
+.btn-cancel {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-right: 5px;
+}
+
+.btn-edit {
+  background-color: #007bff;
+  color: white;
+}
+
+.btn-edit:hover {
+  background-color: #0056b3;
+}
+
+.btn-save {
+  background-color: #28a745;
+  color: white;
+}
+
+.btn-save:hover:not(:disabled) {
+  background-color: #218838;
+}
+
+.btn-cancel {
+  background-color: #6c757d;
+  color: white;
+}
+
+.btn-cancel:hover {
+  background-color: #545b62;
+}
+
+.btn-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.edit-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.edit-input,
+.edit-textarea,
+.edit-select {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #2c2c2c;
+  background-color: #fff;
+}
+
+.edit-input:focus,
+.edit-textarea:focus,
+.edit-select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.edit-textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.edit-input-small {
+  width: 60px;
+  padding: 6px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #2c2c2c;
+  background-color: #fff;
+}
+
+.edit-input-small:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.edit-interval {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.edit-interval label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.info-box {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: #e7f3ff;
+  border-left: 4px solid #007bff;
+  border-radius: 4px;
+}
+
+.info-box h3 {
+  margin-top: 0;
+  color: #007bff;
+}
+
+.info-box ul {
+  margin: 10px 0 0 20px;
+  color: #2c2c2c;
+  line-height: 1.6;
+}
+
+.info-box li {
+  margin-bottom: 5px;
+}
+
+.create-plan-form {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #ddd;
+}
+
+.create-plan-form h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.create-plan-form label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+  color: #2c2c2c;
+}
+
+.create-plan-form > div > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.create-plan-form > div > div > label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.create-plan-form > div > div > label input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}

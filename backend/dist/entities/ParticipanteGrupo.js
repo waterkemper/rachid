@@ -26,18 +26,18 @@ __decorate([
     __metadata("design:type", Participante_1.Participante)
 ], ParticipanteGrupo.prototype, "participante", void 0);
 __decorate([
-    (0, typeorm_1.Column)('integer'),
+    (0, typeorm_1.Column)('integer', { name: 'participante_id' }),
     __metadata("design:type", Number)
-], ParticipanteGrupo.prototype, "participante_id", void 0);
+], ParticipanteGrupo.prototype, "participanteId", void 0);
 __decorate([
     (0, typeorm_1.ManyToOne)(() => Grupo_1.Grupo, grupo => grupo.participantes),
     (0, typeorm_1.JoinColumn)({ name: 'grupo_id' }),
     __metadata("design:type", Grupo_1.Grupo)
 ], ParticipanteGrupo.prototype, "grupo", void 0);
 __decorate([
-    (0, typeorm_1.Column)('integer'),
+    (0, typeorm_1.Column)('integer', { name: 'grupo_id' }),
     __metadata("design:type", Number)
-], ParticipanteGrupo.prototype, "grupo_id", void 0);
+], ParticipanteGrupo.prototype, "grupoId", void 0);
 exports.ParticipanteGrupo = ParticipanteGrupo = __decorate([
     (0, typeorm_1.Entity)('participantes_grupos')
 ], ParticipanteGrupo);

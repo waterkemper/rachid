@@ -1,5 +1,8 @@
 import sgMail from '@sendgrid/mail';
 import { EmailTemplateService } from './email/EmailTemplateService';
+import { AppDataSource } from '../database/data-source';
+import { Email, EmailStatus, EmailTipo } from '../entities/Email';
+import { Usuario } from '../entities/Usuario';
 
 /**
  * Serviço de envio de email usando SendGrid
@@ -42,15 +45,183 @@ export class EmailService {
   }
 
   /**
+   * Verifica se o usuário optou por não receber emails
+   */
+  private static async verificarOptOut(email: string): Promise<{ podeEnviar: boolean; usuarioId?: number }> {
+    try {
+      const usuarioRepository = AppDataSource.getRepository(Usuario);
+      const usuario = await usuarioRepository.findOne({ where: { email } });
+
+      if (!usuario) {
+        // Se usuário não existe, permite enviar (pode ser email externo)
+        return { podeEnviar: true };
+      }
+
+      // Verifica se o usuário optou por não receber emails
+      if (usuario.receberEmails === false) {
+        console.log(`⚠️  Email bloqueado: usuário ${email} optou por não receber emails (opt-out)`);
+        return { podeEnviar: false, usuarioId: usuario.id };
+      }
+
+      return { podeEnviar: true, usuarioId: usuario.id };
+    } catch (error: any) {
+      console.error('Erro ao verificar opt-out:', error);
+      // Em caso de erro, permite enviar (fail-safe)
+      return { podeEnviar: true };
+    }
+  }
+
+  /**
+   * Registra email na tabela de log
+   */
+  private static async registrarEmail(
+    destinatario: string,
+    assunto: string,
+    tipoEmail: EmailTipo,
+    status: EmailStatus,
+    html?: string,
+    texto?: string,
+    usuarioId?: number,
+    eventoId?: number,
+    despesaId?: number,
+    sendgridMessageId?: string,
+    sendgridResponse?: any,
+    erroMessage?: string,
+    erroDetalhes?: any
+  ): Promise<Email> {
+    try {
+      const emailRepository = AppDataSource.getRepository(Email);
+      const from = this.getFrom();
+
+      const email = emailRepository.create({
+        destinatario,
+        assunto,
+        tipoEmail,
+        status,
+        corpoHtml: html,
+        corpoTexto: texto,
+        remetenteEmail: from.email,
+        remetenteNome: from.name,
+        usuarioId,
+        eventoId,
+        despesaId,
+        sendgridMessageId,
+        sendgridResponse,
+        erroMessage,
+        erroDetalhes,
+        tentativas: 1,
+        enviadoEm: status === 'enviado' ? new Date() : undefined,
+        falhouEm: status === 'falhou' ? new Date() : undefined,
+      });
+
+      return await emailRepository.save(email);
+    } catch (error: any) {
+      console.error('Erro ao registrar email no log:', error);
+      // Não lançar erro para não quebrar o fluxo de envio
+      throw error; // Mas re-lançar para que o chamador saiba que falhou
+    }
+  }
+
+  /**
+   * Atualiza status do email registrado
+   */
+  private static async atualizarStatusEmail(
+    emailId: number,
+    status: EmailStatus,
+    sendgridMessageId?: string,
+    sendgridResponse?: any,
+    erroMessage?: string,
+    erroDetalhes?: any
+  ): Promise<void> {
+    try {
+      const emailRepository = AppDataSource.getRepository(Email);
+      const email = await emailRepository.findOne({ where: { id: emailId } });
+      
+      if (!email) {
+        console.error(`Email com ID ${emailId} não encontrado para atualização`);
+        return;
+      }
+
+      await emailRepository.update(emailId, {
+        status,
+        sendgridMessageId,
+        sendgridResponse,
+        erroMessage,
+        erroDetalhes,
+        enviadoEm: status === 'enviado' ? new Date() : undefined,
+        falhouEm: status === 'falhou' ? new Date() : undefined,
+        tentativas: email.tentativas + 1,
+      });
+    } catch (error: any) {
+      console.error('Erro ao atualizar status do email:', error);
+      // Não lançar erro para não quebrar o fluxo
+    }
+  }
+
+  /**
    * Envia email usando SendGrid ou loga em modo desenvolvimento
+   * Agora com verificação de opt-out e registro na tabela de log
    */
   private static async sendEmail(
     to: string,
     subject: string,
     html: string,
-    text?: string
+    tipoEmail: EmailTipo,
+    text?: string,
+    usuarioId?: number,
+    eventoId?: number,
+    despesaId?: number
   ): Promise<void> {
     this.initialize();
+
+    // Verificar opt-out antes de enviar
+    const { podeEnviar, usuarioId: userIdFromDb } = await this.verificarOptOut(to);
+    
+    if (!podeEnviar) {
+      // Registrar como cancelado (opt-out)
+      try {
+        await this.registrarEmail(
+          to,
+          subject,
+          tipoEmail,
+          'cancelado',
+          html,
+          text,
+          userIdFromDb,
+          eventoId,
+          despesaId,
+          undefined,
+          undefined,
+          'Email bloqueado: usuário optou por não receber emails (opt-out)'
+        );
+      } catch (error) {
+        console.error('Erro ao registrar email cancelado:', error);
+      }
+      return; // Não envia email
+    }
+
+    // Usar userIdFromDb se não foi fornecido
+    const finalUserId = usuarioId || userIdFromDb;
+
+    // Registrar email como pendente
+    let emailLog: Email | undefined = undefined;
+    try {
+      emailLog = await this.registrarEmail(
+        to,
+        subject,
+        tipoEmail,
+        'pendente',
+        html,
+        text,
+        finalUserId,
+        eventoId,
+        despesaId
+      );
+    } catch (error) {
+      console.error('Erro ao registrar email inicial:', error);
+      // Continua tentando enviar mesmo se falhar o log
+      emailLog = undefined;
+    }
 
     const from = this.getFrom();
 
@@ -66,7 +237,25 @@ export class EmailService {
       console.log('HTML Preview:');
       console.log(html.substring(0, 500) + '...');
       console.log('='.repeat(70));
+      
+      // Atualizar como enviado (simulado)
+      if (emailLog) {
+        try {
+          await this.atualizarStatusEmail(emailLog.id, 'enviado');
+        } catch (error) {
+          console.error('Erro ao atualizar status do email simulado:', error);
+        }
+      }
       return;
+    }
+
+    // Atualizar status para enviando
+    if (emailLog) {
+      try {
+        await this.atualizarStatusEmail(emailLog.id, 'enviando');
+      } catch (error) {
+        console.error('Erro ao atualizar status para enviando:', error);
+      }
     }
 
     try {
@@ -81,13 +270,51 @@ export class EmailService {
         text: text || this.stripHtml(html),
       };
 
-      await sgMail.send(msg);
+      const response = await sgMail.send(msg);
       console.log(`✅ E-mail enviado com sucesso para: ${to}`);
+
+      // Extrair message ID do SendGrid se disponível
+      const responseItem = Array.isArray(response) ? response[0] : response;
+      const responseAny = responseItem as any;
+      const messageId = responseAny?.headers?.['x-message-id'] || responseAny?.body?.message_id || undefined;
+
+      // Atualizar como enviado
+      if (emailLog) {
+        try {
+          await this.atualizarStatusEmail(
+            emailLog.id,
+            'enviado',
+            messageId,
+            response
+          );
+        } catch (error) {
+          console.error('Erro ao atualizar status do email enviado:', error);
+        }
+      }
     } catch (error: any) {
       console.error('❌ Erro ao enviar e-mail:', error);
       
+      const erroDetalhes: any = {};
       if (error.response) {
         console.error('Resposta SendGrid:', JSON.stringify(error.response.body, null, 2));
+        erroDetalhes.sendgridResponse = error.response.body;
+        erroDetalhes.statusCode = error.code;
+      }
+
+      // Atualizar como falhou
+      if (emailLog) {
+        try {
+          await this.atualizarStatusEmail(
+            emailLog.id,
+            'falhou',
+            undefined,
+            undefined,
+            error.message,
+            erroDetalhes
+          );
+        } catch (logError) {
+          console.error('Erro ao atualizar status do email com falha:', logError);
+        }
       }
       
       // Em desenvolvimento, não lançar erro para não quebrar o fluxo
@@ -131,7 +358,8 @@ export class EmailService {
     await this.sendEmail(
       email,
       'Recuperação de Senha - Rachid',
-      html
+      html,
+      'recuperacao-senha'
     );
   }
 
@@ -144,18 +372,21 @@ export class EmailService {
     frontendUrl: string = process.env.FRONTEND_URL || 'http://localhost:5173'
   ): Promise<void> {
     const loginUrl = `${frontendUrl}/login`;
+    const criarEventoUrl = `${frontendUrl}/novo-evento`;
     const docsUrl = `${frontendUrl}/docs` || 'https://orachid.com.br/docs';
 
     const html = EmailTemplateService.renderWelcome({
       nome,
       linkLogin: loginUrl,
+      linkCriarEvento: criarEventoUrl,
       linkDocumentacao: docsUrl,
     });
 
     await this.sendEmail(
       email,
-      'Bem-vindo ao Rachid! 🎉',
-      html
+      'Bem-vindo ao Rachid! 🎉 Vamos começar?',
+      html,
+      'boas-vindas'
     );
   }
 
@@ -168,18 +399,21 @@ export class EmailService {
     frontendUrl: string = process.env.FRONTEND_URL || 'http://localhost:5173'
   ): Promise<void> {
     const loginUrl = `${frontendUrl}/login`;
+    const criarEventoUrl = `${frontendUrl}/novo-evento`;
     const docsUrl = `${frontendUrl}/docs` || 'https://orachid.com.br/docs';
 
     const html = EmailTemplateService.renderWelcomeGoogle({
       nome,
       linkLogin: loginUrl,
+      linkCriarEvento: criarEventoUrl,
       linkDocumentacao: docsUrl,
     });
 
     await this.sendEmail(
       email,
-      'Bem-vindo ao Rachid! 🎉',
-      html
+      'Bem-vindo ao Rachid! 🎉 Vamos começar?',
+      html,
+      'boas-vindas-google'
     );
   }
 
@@ -206,7 +440,8 @@ export class EmailService {
     await this.sendEmail(
       email,
       'Senha Alterada - Rachid',
-      html
+      html,
+      'senha-alterada'
     );
   }
 
@@ -236,12 +471,21 @@ export class EmailService {
     };
 
     const formatDate = (dateString: string): string => {
-      const date = new Date(dateString);
-      return new Intl.DateTimeFormat('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      }).format(date);
+      // Se já está no formato dd/mm/yyyy, retornar diretamente
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+        return dateString;
+      }
+      try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return dateString;
+        return new Intl.DateTimeFormat('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        }).format(date);
+      } catch {
+        return dateString;
+      }
     };
 
     const html = EmailTemplateService.renderNovaDespesa({
@@ -255,10 +499,19 @@ export class EmailService {
       linkEvento,
     });
 
+    // Buscar usuarioId e despesaId para registro
+    const usuarioRepository = AppDataSource.getRepository(Usuario);
+    const usuario = await usuarioRepository.findOne({ where: { email: data.destinatario } });
+    
     await this.sendEmail(
       data.destinatario,
       `Nova Despesa: ${data.despesaDescricao} - ${data.eventoNome}`,
-      html
+      html,
+      'nova-despesa',
+      undefined, // text (opcional)
+      usuario?.id,
+      data.eventoId
+      // despesaId não disponível neste contexto
     );
   }
 
@@ -275,6 +528,7 @@ export class EmailService {
     despesaData: string;
     mudancas: string[];
     linkEvento?: string;
+    despesaId?: number;
   }): Promise<void> {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const linkEvento = data.linkEvento || `${frontendUrl}/eventos/${data.eventoId}`;
@@ -287,12 +541,21 @@ export class EmailService {
     };
 
     const formatDate = (dateString: string): string => {
-      const date = new Date(dateString);
-      return new Intl.DateTimeFormat('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      }).format(date);
+      // Se já está no formato dd/mm/yyyy, retornar diretamente
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+        return dateString;
+      }
+      try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return dateString;
+        return new Intl.DateTimeFormat('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        }).format(date);
+      } catch {
+        return dateString;
+      }
     };
 
     const html = EmailTemplateService.renderDespesaEditada({
@@ -305,10 +568,19 @@ export class EmailService {
       linkEvento,
     });
 
+    // Buscar usuarioId para registro
+    const usuarioRepository = AppDataSource.getRepository(Usuario);
+    const usuario = await usuarioRepository.findOne({ where: { email: data.destinatario } });
+    
     await this.sendEmail(
       data.destinatario,
       `Despesa Atualizada: ${data.despesaDescricao} - ${data.eventoNome}`,
-      html
+      html,
+      'despesa-editada',
+      undefined, // text (opcional)
+      usuario?.id,
+      data.eventoId,
+      data.despesaId
     );
   }
 
@@ -324,17 +596,30 @@ export class EmailService {
     eventoData?: string;
     adicionadoPor: string;
     linkEvento?: string;
+    linkEventoPublico?: string | null;
+    totalDespesas?: string;
+    numeroParticipantes?: string;
+    linkCadastro?: string;
   }): Promise<void> {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const linkEvento = data.linkEvento || `${frontendUrl}/eventos/${data.eventoId}`;
+    const linkEvento = data.linkEvento || data.linkEventoPublico || `${frontendUrl}/eventos/${data.eventoId}`;
 
     const formatDate = (dateString: string): string => {
-      const date = new Date(dateString);
-      return new Intl.DateTimeFormat('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      }).format(date);
+      // Se já está no formato dd/mm/yyyy, retornar diretamente
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+        return dateString;
+      }
+      try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return dateString;
+        return new Intl.DateTimeFormat('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        }).format(date);
+      } catch {
+        return dateString;
+      }
     };
 
     const html = EmailTemplateService.renderInclusaoEvento({
@@ -344,12 +629,24 @@ export class EmailService {
       eventoData: data.eventoData ? formatDate(data.eventoData) : undefined,
       adicionadoPor: data.adicionadoPor,
       linkEvento,
+      linkEventoPublico: data.linkEventoPublico || null,
+      totalDespesas: data.totalDespesas,
+      numeroParticipantes: data.numeroParticipantes,
+      linkCadastro: data.linkCadastro || `${frontendUrl}/cadastro`,
     });
 
+    // Buscar usuarioId para registro
+    const usuarioRepository = AppDataSource.getRepository(Usuario);
+    const usuario = await usuarioRepository.findOne({ where: { email: data.destinatario } });
+    
     await this.sendEmail(
       data.destinatario,
-      `Você foi adicionado ao evento: ${data.eventoNome}`,
-      html
+      `Você foi adicionado ao evento: ${data.eventoNome} 🎉`,
+      html,
+      'inclusao-evento',
+      undefined, // text (opcional)
+      usuario?.id,
+      data.eventoId
     );
   }
 
@@ -385,10 +682,210 @@ export class EmailService {
       linkEvento,
     });
 
+    // Buscar usuarioId para registro
+    const usuarioRepository = AppDataSource.getRepository(Usuario);
+    const usuario = await usuarioRepository.findOne({ where: { email: data.destinatario } });
+    
     await this.sendEmail(
       data.destinatario,
       `Você foi adicionado a uma despesa: ${data.despesaDescricao}`,
-      html
+      html,
+      'participante-adicionado-despesa',
+      undefined, // text (opcional)
+      usuario?.id,
+      data.eventoId
+    );
+  }
+
+  /**
+   * Envia email de mudança de saldo (chamado pelo worker)
+   */
+  static async enviarEmailMudancaSaldo(data: {
+    destinatario: string;
+    nomeDestinatario: string;
+    eventoNome: string;
+    eventoId: number;
+    saldoAnterior?: string;
+    saldoAtual: string;
+    diferenca: string;
+    direcao: 'aumentou' | 'diminuiu' | 'manteve';
+    eventoData?: string;
+    linkEventoPublico?: string;
+  }): Promise<void> {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const linkEvento = data.linkEventoPublico || `${frontendUrl}/eventos/${data.eventoId}`;
+
+    const html = EmailTemplateService.renderMudancaSaldo({
+      nomeDestinatario: data.nomeDestinatario,
+      eventoNome: data.eventoNome,
+      eventoId: data.eventoId,
+      saldoAnterior: data.saldoAnterior,
+      saldoAtual: data.saldoAtual,
+      diferenca: data.diferenca,
+      direcao: data.direcao,
+      eventoData: data.eventoData,
+      linkEvento,
+      linkEventoPublico: data.linkEventoPublico || null,
+    });
+
+    // Buscar usuarioId para registro
+    const usuarioRepository = AppDataSource.getRepository(Usuario);
+    const usuario = await usuarioRepository.findOne({ where: { email: data.destinatario } });
+    
+    await this.sendEmail(
+      data.destinatario,
+      `Seu saldo no evento "${data.eventoNome}" mudou! 📊`,
+      html,
+      'mudanca-saldo',
+      undefined, // text (opcional)
+      usuario?.id,
+      data.eventoId
+    );
+  }
+
+  /**
+   * Envia email de evento finalizado (chamado pelo worker)
+   */
+  static async enviarEmailEventoFinalizado(data: {
+    destinatario: string;
+    nomeDestinatario: string;
+    eventoNome: string;
+    eventoId: number;
+    eventoData?: string;
+    totalDespesas: string;
+    numeroParticipantes: string;
+    organizadorNome: string;
+    linkEventoPublico?: string;
+    linkCadastro: string;
+  }): Promise<void> {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const linkEvento = data.linkEventoPublico || `${frontendUrl}/eventos/${data.eventoId}`;
+
+    const html = EmailTemplateService.renderEventoFinalizado({
+      nomeDestinatario: data.nomeDestinatario,
+      eventoNome: data.eventoNome,
+      eventoData: data.eventoData,
+      totalDespesas: data.totalDespesas,
+      numeroParticipantes: data.numeroParticipantes,
+      organizadorNome: data.organizadorNome,
+      linkEvento,
+      linkEventoPublico: data.linkEventoPublico || null,
+      linkCadastro: data.linkCadastro,
+    });
+
+    // Buscar usuarioId para registro
+    const usuarioRepository = AppDataSource.getRepository(Usuario);
+    const usuario = await usuarioRepository.findOne({ where: { email: data.destinatario } });
+    
+    await this.sendEmail(
+      data.destinatario,
+      `🎊 Evento "${data.eventoNome}" Finalizado com Sucesso!`,
+      html,
+      'evento-finalizado',
+      undefined, // text (opcional)
+      usuario?.id,
+      data.eventoId
+    );
+  }
+
+  /**
+   * Envia email de reativação sem evento (chamado pelo worker)
+   */
+  static async enviarEmailReativacaoSemEvento(data: {
+    destinatario: string;
+    nomeDestinatario: string;
+    diasDesdeCadastro: string;
+    linkCriarEvento: string;
+  }): Promise<void> {
+    const html = EmailTemplateService.renderReativacaoSemEvento({
+      nomeDestinatario: data.nomeDestinatario,
+      diasDesdeCadastro: data.diasDesdeCadastro,
+      linkCriarEvento: data.linkCriarEvento,
+    });
+
+    // Buscar usuarioId para registro
+    const usuarioRepository = AppDataSource.getRepository(Usuario);
+    const usuario = await usuarioRepository.findOne({ where: { email: data.destinatario } });
+    
+    await this.sendEmail(
+      data.destinatario,
+      `Crie seu primeiro evento e comece a rachar contas! 💰`,
+      html,
+      'reativacao-sem-evento',
+      undefined, // text (opcional)
+      usuario?.id
+    );
+  }
+
+  /**
+   * Envia email de reativação sem participantes (chamado pelo worker)
+   */
+  static async enviarEmailReativacaoSemParticipantes(data: {
+    destinatario: string;
+    nomeDestinatario: string;
+    eventoNome: string;
+    eventoId: number;
+    diasDesdeCriacao: string;
+    linkAdicionarParticipantes: string;
+    linkEventoPublico?: string | null;
+  }): Promise<void> {
+    const html = EmailTemplateService.renderReativacaoSemParticipantes({
+      nomeDestinatario: data.nomeDestinatario,
+      eventoNome: data.eventoNome,
+      eventoId: data.eventoId,
+      diasDesdeCriacao: data.diasDesdeCriacao,
+      linkAdicionarParticipantes: data.linkAdicionarParticipantes,
+      linkEventoPublico: data.linkEventoPublico || null,
+    });
+
+    // Buscar usuarioId para registro
+    const usuarioRepository = AppDataSource.getRepository(Usuario);
+    const usuario = await usuarioRepository.findOne({ where: { email: data.destinatario } });
+    
+    await this.sendEmail(
+      data.destinatario,
+      `Adicione participantes ao evento "${data.eventoNome}" 👥`,
+      html,
+      'reativacao-sem-participantes',
+      undefined, // text (opcional)
+      usuario?.id,
+      data.eventoId
+    );
+  }
+
+  /**
+   * Envia email de reativação sem despesas (chamado pelo worker)
+   */
+  static async enviarEmailReativacaoSemDespesas(data: {
+    destinatario: string;
+    nomeDestinatario: string;
+    eventoNome: string;
+    eventoId: number;
+    numeroParticipantes: string;
+    diasDesdeUltimaParticipacao: string;
+    linkDespesas: string;
+  }): Promise<void> {
+    const html = EmailTemplateService.renderReativacaoSemDespesas({
+      nomeDestinatario: data.nomeDestinatario,
+      eventoNome: data.eventoNome,
+      eventoId: data.eventoId,
+      numeroParticipantes: data.numeroParticipantes,
+      diasDesdeUltimaParticipacao: data.diasDesdeUltimaParticipacao,
+      linkDespesas: data.linkDespesas,
+    });
+
+    // Buscar usuarioId para registro
+    const usuarioRepository = AppDataSource.getRepository(Usuario);
+    const usuario = await usuarioRepository.findOne({ where: { email: data.destinatario } });
+    
+    await this.sendEmail(
+      data.destinatario,
+      `Registre as despesas do evento "${data.eventoNome}" 💸`,
+      html,
+      'reativacao-sem-despesas',
+      undefined, // text (opcional)
+      usuario?.id,
+      data.eventoId
     );
   }
 }

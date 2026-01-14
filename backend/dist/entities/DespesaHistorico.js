@@ -51,7 +51,7 @@ __decorate([
     __metadata("design:type", String)
 ], DespesaHistorico.prototype, "valor_novo", void 0);
 __decorate([
-    (0, typeorm_1.CreateDateColumn)(),
+    (0, typeorm_1.CreateDateColumn)({ name: 'criadoem' }),
     __metadata("design:type", Date)
 ], DespesaHistorico.prototype, "criadoEm", void 0);
 exports.DespesaHistorico = DespesaHistorico = __decorate([

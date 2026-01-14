@@ -96,7 +96,7 @@ export class PublicEventoService {
     });
 
     // Obter IDs dos participantes do evento
-    const participanteIds = (grupo.participantes || []).map((pg) => pg.participante_id);
+    const participanteIds = (grupo.participantes || []).map((pg) => pg.participanteId);
 
     // Buscar participantes do evento
     const participantes = await participanteRepository.find({
@@ -165,7 +165,7 @@ export class PublicEventoService {
     }
 
     const gruposParticipantes = await grupoParticipantesRepository.find({
-      where: { grupo_id: grupoId },
+      where: { grupoId: grupoId },
       relations: ['participantes', 'participantes.participante'],
     });
 
@@ -178,13 +178,13 @@ export class PublicEventoService {
     const participantesEmGrupos = new Set<number>();
     gruposParticipantes.forEach((gp) => {
       gp.participantes.forEach((p) => {
-        participantesEmGrupos.add(p.participante_id);
+        participantesEmGrupos.add(p.participanteId);
       });
     });
 
     // Identificar participantes do evento que não estão em nenhum grupo
     const participantesSolitarios = grupo.participantes
-      .filter((pg) => !participantesEmGrupos.has(pg.participante_id))
+      .filter((pg) => !participantesEmGrupos.has(pg.participanteId))
       .map((pg) => pg.participante);
 
     const saldosGrupos: SaldoGrupo[] = [];
@@ -203,7 +203,7 @@ export class PublicEventoService {
         saldo: 0,
       };
 
-      const participantesIds = grupoParticipantes.participantes.map((p) => p.participante_id);
+      const participantesIds = grupoParticipantes.participantes.map((p) => p.participanteId);
 
       despesas.forEach((despesa) => {
         // Ignorar despesas sem pagador (placeholders)
@@ -329,8 +329,8 @@ export class PublicEventoService {
           // Atualizar referências em participantes_grupos
           await queryRunner.manager.update(
             ParticipanteGrupo,
-            { participante_id: participante.id },
-            { participante_id: participanteExistente.id }
+            { participanteId: participante.id },
+            { participanteId: participanteExistente.id }
           );
 
           // Deletar o participante antigo

@@ -94,9 +94,23 @@ const AdminDashboard: React.FC = () => {
     <div className="admin-dashboard">
       <div className="admin-header">
         <h1>Dashboard Administrativo</h1>
-        <button className="btn btn-secondary" onClick={() => navigate('/eventos')}>
-          Voltar
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button className="btn btn-primary" onClick={() => navigate('/admin/feature-limits')}>
+            Gerenciar Limites
+          </button>
+          <button className="btn btn-primary" onClick={() => navigate('/admin/email-queue')}>
+            Fila de Emails
+          </button>
+          <button className="btn btn-primary" onClick={() => navigate('/admin/emails')}>
+            Emails Enviados
+          </button>
+          <button className="btn btn-primary" onClick={() => navigate('/admin/plans')}>
+            Gerenciar Planos
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate('/eventos')}>
+            Voltar
+          </button>
+        </div>
       </div>
 
       <div className="admin-tabs">

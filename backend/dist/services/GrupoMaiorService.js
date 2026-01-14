@@ -198,8 +198,8 @@ class GrupoMaiorService {
             for (const grupoMaiorGrupo of grupoMaior.grupos) {
                 if (grupoMaiorGrupo.grupo && grupoMaiorGrupo.grupo.participantes) {
                     grupoMaiorGrupo.grupo.participantes.forEach((p) => {
-                        if (p.participante_id) {
-                            participanteIds.add(p.participante_id);
+                        if (p.participanteId) {
+                            participanteIds.add(p.participanteId);
                         }
                     });
                 }

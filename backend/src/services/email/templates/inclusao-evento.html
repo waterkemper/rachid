@@ -2,17 +2,21 @@
 
 <p>Olá <strong>{{nomeDestinatario}}</strong>,</p>
 
-<p>Você foi adicionado ao evento <strong>{{eventoNome}}</strong> por <strong>{{adicionadoPor}}</strong>.</p>
+<p><strong>{{adicionadoPor}}</strong> te adicionou ao evento <strong>"{{eventoNome}}"</strong> no Rachid!</p>
 
 <div style="background-color: #f8f9fa; padding: 20px; border-radius: 6px; margin: 20px 0;">
-  <h3 style="color: #667eea; margin-top: 0;">Detalhes do Evento</h3>
-  <p style="margin: 8px 0;"><strong>Nome:</strong> {{eventoNome}}</p>
+  <h3 style="color: #667eea; margin-top: 0; font-size: 18px;">Detalhes do Evento</h3>
+  <p style="margin: 8px 0; font-size: 16px;"><strong>Nome:</strong> {{eventoNome}}</p>
   {{eventoDescricao}}
   {{eventoData}}
 </div>
 
+{{infoResumo}}
+
 {{linkEvento}}
 
-<p class="text-muted">
+{{ctaCadastro}}
+
+<p class="text-muted" style="margin-top: 30px; color: #6c757d; font-size: 14px;">
   Agora você pode visualizar e gerenciar as despesas deste evento no Rachid.
 </p>

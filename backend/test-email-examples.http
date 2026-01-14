@@ -1,0 +1,116 @@
+### Arquivo de exemplos para testar emails no localhost
+### Use com extensão REST Client no VS Code ou importe no Postman/Insomnia
+### IMPORTANTE: Requer autenticação ADMIN - faça login primeiro e use o token
+
+### Primeiro, faça login para obter o token (substitua email e senha)
+# @name login
+POST http://localhost:3001/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "senha": "senha123"
+}
+
+### Use o token retornado acima no header Authorization
+@token = {{login.response.body.token}}
+
+### 1. Listar tipos de emails disponíveis
+GET http://localhost:3001/api/test/email/tipos
+Authorization: Bearer {{token}}
+
+### 2. Enviar email de boas-vindas
+POST http://localhost:3001/api/test/email/boas-vindas
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "email": "seu-email@example.com",
+  "nome": "João Teste"
+}
+
+### 3. Enviar email de nova despesa
+POST http://localhost:3001/api/test/email/nova-despesa
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "email": "seu-email@example.com",
+  "nomeDestinatario": "João Teste",
+  "eventoNome": "Churrasco de Domingo",
+  "eventoId": 1,
+  "despesaDescricao": "Carne",
+  "despesaValorTotal": 150.00,
+  "despesaData": "2024-01-15",
+  "valorPorPessoa": 25.00,
+  "pagadorNome": "Maria"
+}
+
+### 4. Enviar email de despesa editada
+POST http://localhost:3001/api/test/email/despesa-editada
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "email": "seu-email@example.com",
+  "nomeDestinatario": "João Teste",
+  "eventoNome": "Churrasco de Domingo",
+  "eventoId": 1,
+  "despesaDescricao": "Carne",
+  "despesaValorTotal": 180.00,
+  "despesaData": "2024-01-15",
+  "mudancas": ["Valor alterado de R$ 150,00 para R$ 180,00", "Data alterada de 2024-01-10 para 2024-01-15"]
+}
+
+### 5. Enviar email de inclusão em evento
+POST http://localhost:3001/api/test/email/inclusao-evento
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "email": "seu-email@example.com",
+  "nomeDestinatario": "João Teste",
+  "eventoNome": "Churrasco de Domingo",
+  "eventoId": 1,
+  "eventoDescricao": "Churrasco na casa do João",
+  "eventoData": "2024-01-20",
+  "adicionadoPor": "Maria"
+}
+
+### 6. Enviar email de reativação sem evento
+POST http://localhost:3001/api/test/email/reativacao-sem-evento
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "email": "seu-email@example.com",
+  "nomeDestinatario": "João Teste",
+  "diasDesdeCadastro": "3"
+}
+
+### 7. Enviar email de reativação sem participantes
+POST http://localhost:3001/api/test/email/reativacao-sem-participantes
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "email": "seu-email@example.com",
+  "nomeDestinatario": "João Teste",
+  "eventoNome": "Churrasco de Domingo",
+  "eventoId": 1,
+  "diasDesdeCriacao": "2"
+}
+
+### 8. Enviar email de reativação sem despesas
+POST http://localhost:3001/api/test/email/reativacao-sem-despesas
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "email": "seu-email@example.com",
+  "nomeDestinatario": "João Teste",
+  "eventoNome": "Churrasco de Domingo",
+  "eventoId": 1,
+  "numeroParticipantes": "5",
+  "diasDesdeUltimaParticipacao": "3"
+}

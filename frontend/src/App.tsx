@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -22,6 +22,12 @@ import Ajuda from './pages/Ajuda';
 import ConvidarAmigos from './pages/ConvidarAmigos';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminEvento from './pages/AdminEvento';
+import Assinatura from './pages/Assinatura';
+import Precos from './pages/Precos';
+import AdminFeatureLimits from './pages/AdminFeatureLimits';
+import AdminPlans from './pages/AdminPlans';
+import AdminEmailQueue from './pages/AdminEmailQueue';
+import AdminEmails from './pages/AdminEmails';
 
 function Navbar() {
   const location = useLocation();
@@ -101,6 +107,15 @@ function Navbar() {
                 Criar evento
               </Link>
             </li>
+            <li>
+              <Link 
+                to="/precos" 
+                className={isActive('/precos') ? 'active' : ''}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Planos
+              </Link>
+            </li>
             {isAdmin() && (
               <li>
                 <Link 
@@ -114,6 +129,13 @@ function Navbar() {
             )}
           </ul>
           <div className="navbar-user">
+            <Link 
+              to="/assinatura" 
+              className={`navbar-user-link ${isActive('/assinatura') ? 'active' : ''}`}
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Assinatura
+            </Link>
             <Link 
               to="/conta" 
               className={`navbar-user-link ${isActive('/conta') ? 'active' : ''}`}
@@ -148,6 +170,7 @@ function AppContent() {
       location.pathname === '/cadastro' ||
       location.pathname === '/recuperar-senha' ||
       location.pathname === '/resetar-senha' ||
+      location.pathname === '/precos' ||
       location.pathname.startsWith('/evento/');
 
     // Páginas com layout "full bleed" (fundo e card centralizado sem container)
@@ -238,6 +261,7 @@ function AppContent() {
             </ProtectedRoute>
           }
         />
+        <Route path="/docs" element={<Navigate to="/ajuda" replace />} />
         <Route
           path="/convidar-amigos/:eventoId"
           element={
@@ -259,6 +283,47 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <AdminEvento />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/feature-limits"
+          element={
+            <ProtectedRoute>
+              <AdminFeatureLimits />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/plans"
+          element={
+            <ProtectedRoute>
+              <AdminPlans />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/email-queue"
+          element={
+            <ProtectedRoute>
+              <AdminEmailQueue />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/emails"
+          element={
+            <ProtectedRoute>
+              <AdminEmails />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/precos" element={<Precos />} />
+        <Route
+          path="/assinatura"
+          element={
+            <ProtectedRoute>
+              <Assinatura />
             </ProtectedRoute>
           }
         />

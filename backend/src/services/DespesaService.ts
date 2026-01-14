@@ -8,6 +8,7 @@ import { Usuario } from '../entities/Usuario';
 import { DespesaHistoricoService } from './DespesaHistoricoService';
 import { Participante } from '../entities/Participante';
 import { EmailQueueService } from './EmailQueueService';
+import { NotificationService } from './NotificationService';
 
 export interface CriarDespesaDTO {
   grupo_id: number;
@@ -103,7 +104,7 @@ export class DespesaService {
     }
 
     const participantesGrupo = await this.participanteGrupoRepository.find({
-      where: { grupo_id: grupoId },
+      where: { grupoId: grupoId },
       relations: ['participante'],
     });
 
@@ -206,12 +207,12 @@ export class DespesaService {
         const participantesGrupo = (grupo.participantes || []) as ParticipanteGrupo[];
         
         // Filtrar participantes válidos (não nulos)
-        const participantesValidos = participantesGrupo.filter(pg => pg.participante_id);
+        const participantesValidos = participantesGrupo.filter(pg => pg.participanteId);
         
         for (const pg of participantesValidos) {
           const participacao = this.participacaoRepository.create({
             despesa_id: despesaSalva.id,
-            participante_id: pg.participante_id,
+            participante_id: pg.participanteId,
             valorDevePagar: 0,
           });
           await this.participacaoRepository.save(participacao);
@@ -232,6 +233,22 @@ export class DespesaService {
     // Notificar participantes sobre nova despesa (não bloquear se falhar)
     try {
       await this.notificarNovaDespesa(despesaCompleta, data.grupo_id);
+      
+      // Notificar mudanças de saldo (não bloquear se falhar)
+      // Calcular saldos antes e depois para detectar mudanças significativas
+      try {
+        // Por enquanto, não temos saldos antes (primeira vez calculando)
+        // Apenas calcular saldos depois e notificar se houver mudanças significativas
+        // TODO: Implementar cache de saldos anteriores para comparação
+        const saldosDepois = await NotificationService.calcularSaldosAtuais(data.grupo_id, data.usuario_id);
+        if (saldosDepois.length > 0) {
+          // Notificar apenas participantes com saldo significativo (>=R$ 5)
+          await NotificationService.notificarMudancasSaldo(data.grupo_id, [], saldosDepois);
+        }
+      } catch (err) {
+        console.error('[DespesaService.create] Erro ao notificar mudanças de saldo:', err);
+        // Não falhar criação se notificação de saldo falhar
+      }
     } catch (err) {
       console.error('[DespesaService.create] Erro ao adicionar notificações à fila:', err);
       // Não falhar a criação da despesa se a notificação falhar
@@ -416,7 +433,7 @@ export class DespesaService {
 
       if (grupo && grupo.participantes && grupo.participantes.length > 0) {
         const participantesGrupo = (grupo.participantes || []) as ParticipanteGrupo[];
-        const participantesValidos = participantesGrupo.filter(pg => pg.participante_id);
+        const participantesValidos = participantesGrupo.filter(pg => pg.participanteId);
 
         if (participantesValidos.length > 0) {
           const queryRunner = AppDataSource.createQueryRunner();
@@ -428,7 +445,7 @@ export class DespesaService {
             for (const pg of participantesValidos) {
               const participacao = queryRunner.manager.create(ParticipacaoDespesa, {
                 despesa_id: id,
-                participante_id: pg.participante_id,
+                participante_id: pg.participanteId,
                 valorDevePagar: 0,
               });
               await queryRunner.manager.save(participacao);
@@ -509,6 +526,22 @@ export class DespesaService {
       if (historicoAlteracoes.length > 0) {
         console.log(`[DespesaService.update] Notificando ${historicoAlteracoes.length} mudança(s) na despesa ${id}`);
         await this.notificarDespesaEditada(despesaAtualizada, historicoAlteracoes);
+        
+        // Notificar mudanças de saldo após edição de despesa
+        // Calcular saldos antes e depois para detectar mudanças significativas
+        try {
+          const grupoId = despesaAtualizada.grupo_id;
+          // Por enquanto, apenas calcular saldos depois (saldos antes seriam difíceis de obter sem cache)
+          // TODO: Implementar cache de saldos anteriores para comparação adequada
+          const saldosDepois = await NotificationService.calcularSaldosAtuais(grupoId, usuarioId);
+          if (saldosDepois.length > 0) {
+            // Notificar apenas participantes com saldo significativo (>=R$ 5)
+            await NotificationService.notificarMudancasSaldo(grupoId, [], saldosDepois);
+          }
+        } catch (err) {
+          console.error('[DespesaService.update] Erro ao notificar mudanças de saldo:', err);
+          // Não falhar atualização se notificação de saldo falhar
+        }
       }
     } catch (err) {
       console.error('[DespesaService.update] Erro ao adicionar notificações à fila:', err);
@@ -683,8 +716,8 @@ export class DespesaService {
 
     // Obter IDs de todos os participantes do evento
     const participantesIds = grupo.participantes
-      .filter(pg => pg.participante_id)
-      .map(pg => pg.participante_id);
+      .filter(pg => pg.participanteId)
+      .map(pg => pg.participanteId);
 
     // Para cada despesa, garantir que todos os participantes tenham participação
     // MAS apenas se a despesa NÃO tiver pagador definido (despesas com pagador já estão "fechadas")

@@ -70,7 +70,7 @@ class PublicEventoService {
             relations: ['pagador', 'participacoes', 'participacoes.participante'],
         });
         // Obter IDs dos participantes do evento
-        const participanteIds = (grupo.participantes || []).map((pg) => pg.participante_id);
+        const participanteIds = (grupo.participantes || []).map((pg) => pg.participanteId);
         // Buscar participantes do evento
         const participantes = await participanteRepository.find({
             where: participanteIds.map((id) => ({ id })),
@@ -126,7 +126,7 @@ class PublicEventoService {
             throw new Error('Grupo não encontrado');
         }
         const gruposParticipantes = await grupoParticipantesRepository.find({
-            where: { grupo_id: grupoId },
+            where: { grupoId: grupoId },
             relations: ['participantes', 'participantes.participante'],
         });
         const despesas = await despesaRepository.find({
@@ -137,12 +137,12 @@ class PublicEventoService {
         const participantesEmGrupos = new Set();
         gruposParticipantes.forEach((gp) => {
             gp.participantes.forEach((p) => {
-                participantesEmGrupos.add(p.participante_id);
+                participantesEmGrupos.add(p.participanteId);
             });
         });
         // Identificar participantes do evento que não estão em nenhum grupo
         const participantesSolitarios = grupo.participantes
-            .filter((pg) => !participantesEmGrupos.has(pg.participante_id))
+            .filter((pg) => !participantesEmGrupos.has(pg.participanteId))
             .map((pg) => pg.participante);
         const saldosGrupos = [];
         // Calcular saldos para grupos reais
@@ -158,7 +158,7 @@ class PublicEventoService {
                 totalDeve: 0,
                 saldo: 0,
             };
-            const participantesIds = grupoParticipantes.participantes.map((p) => p.participante_id);
+            const participantesIds = grupoParticipantes.participantes.map((p) => p.participanteId);
             despesas.forEach((despesa) => {
                 // Ignorar despesas sem pagador (placeholders)
                 if (!despesa.participante_pagador_id) {
@@ -250,7 +250,7 @@ class PublicEventoService {
                     // Atualizar participações em despesas
                     await queryRunner.manager.update(ParticipacaoDespesa_1.ParticipacaoDespesa, { participante_id: participante.id }, { participante_id: participanteExistente.id });
                     // Atualizar referências em participantes_grupos
-                    await queryRunner.manager.update(ParticipanteGrupo_1.ParticipanteGrupo, { participante_id: participante.id }, { participante_id: participanteExistente.id });
+                    await queryRunner.manager.update(ParticipanteGrupo_1.ParticipanteGrupo, { participanteId: participante.id }, { participanteId: participanteExistente.id });
                     // Deletar o participante antigo
                     await queryRunner.manager.delete(Participante_1.Participante, { id: participante.id });
                     transferidos++;

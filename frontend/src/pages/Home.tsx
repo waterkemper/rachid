@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import SocialProof from '../components/SocialProof';
 import logoUrl from '../assets/logo.png';
 import './Home.css';
 
@@ -252,6 +253,10 @@ const Home: React.FC = () => {
               </button>
             </div>
           </div>
+        </section>
+
+        <section className="home-section" style={{ paddingTop: '40px' }}>
+          <SocialProof variant="full" showOnHome={true} />
         </section>
 
         <footer className="home-footer">

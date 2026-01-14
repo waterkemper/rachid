@@ -81,6 +81,15 @@ class EmailQueueService {
         }
         catch (error) {
             console.error('❌ Erro ao inicializar EmailQueueService:', error);
+            // Verificar se é erro de schema não encontrado
+            if (error.message?.includes('schema') ||
+                error.message?.includes('pgboss') ||
+                error.message?.includes('relation') ||
+                error.code === '42P01') {
+                console.error('⚠️  Schema do pg-boss não encontrado!');
+                console.error('📋 Execute o script de setup: npm run setup-pgboss');
+                console.error('📋 Ou via Railway: railway run npm run setup-pgboss');
+            }
             throw error;
         }
     }
@@ -107,8 +116,12 @@ class EmailQueueService {
             }
         });
         // Worker para despesa-editada
-        await this.boss.work('despesa-editada', async (job) => {
+        await this.boss.work('despesa-editada', {
+            teamSize: 1,
+            teamConcurrency: 1,
+        }, async (job) => {
             const data = job.data;
+            console.log(`[EmailQueueService] 🔄 Processando job de despesa editada (ID: ${job.id}) para: ${data.destinatario}`);
             try {
                 await EmailService_1.EmailService.enviarEmailDespesaEditada(data);
                 console.log(`✅ Email de despesa editada enviado para: ${data.destinatario}`);
@@ -142,7 +155,168 @@ class EmailQueueService {
                 throw error;
             }
         });
-        console.log('✅ Workers de email iniciados');
+        // Worker para mudanca-saldo
+        await this.boss.work('mudanca-saldo', async (job) => {
+            const data = job.data;
+            try {
+                await EmailService_1.EmailService.enviarEmailMudancaSaldo(data);
+                console.log(`✅ Email de mudança de saldo enviado para: ${data.destinatario}`);
+            }
+            catch (error) {
+                console.error(`❌ Erro ao enviar email de mudança de saldo para ${data.destinatario}:`, error);
+                throw error;
+            }
+        });
+        // Worker para evento-finalizado
+        await this.boss.work('evento-finalizado', async (job) => {
+            const data = job.data;
+            try {
+                await EmailService_1.EmailService.enviarEmailEventoFinalizado(data);
+                console.log(`✅ Email de evento finalizado enviado para: ${data.destinatario}`);
+            }
+            catch (error) {
+                console.error(`❌ Erro ao enviar email de evento finalizado para ${data.destinatario}:`, error);
+                throw error;
+            }
+        });
+        // Worker para reativacao-sem-evento
+        await this.boss.work('reativacao-sem-evento', async (job) => {
+            const data = job.data;
+            try {
+                await EmailService_1.EmailService.enviarEmailReativacaoSemEvento(data);
+                console.log(`✅ Email de reativação (sem evento) enviado para: ${data.destinatario}`);
+            }
+            catch (error) {
+                console.error(`❌ Erro ao enviar email de reativação (sem evento) para ${data.destinatario}:`, error);
+                throw error;
+            }
+        });
+        // Worker para reativacao-sem-participantes
+        await this.boss.work('reativacao-sem-participantes', async (job) => {
+            const data = job.data;
+            try {
+                await EmailService_1.EmailService.enviarEmailReativacaoSemParticipantes(data);
+                console.log(`✅ Email de reativação (sem participantes) enviado para: ${data.destinatario}`);
+            }
+            catch (error) {
+                console.error(`❌ Erro ao enviar email de reativação (sem participantes) para ${data.destinatario}:`, error);
+                throw error;
+            }
+        });
+        // Worker para reativacao-sem-despesas
+        await this.boss.work('reativacao-sem-despesas', async (job) => {
+            const data = job.data;
+            try {
+                await EmailService_1.EmailService.enviarEmailReativacaoSemDespesas(data);
+                console.log(`✅ Email de reativação (sem despesas) enviado para: ${data.destinatario}`);
+            }
+            catch (error) {
+                console.error(`❌ Erro ao enviar email de reativação (sem despesas) para ${data.destinatario}:`, error);
+                throw error;
+            }
+        });
+        console.log('✅ Workers de email iniciados e prontos para processar jobs');
+        console.log('📋 Workers registrados: nova-despesa, despesa-editada, inclusao-evento, participante-adicionado-despesa, mudanca-saldo, evento-finalizado, reativacao-sem-evento, reativacao-sem-participantes, reativacao-sem-despesas');
+        // Verificar se há jobs pendentes na fila
+        try {
+            const queues = ['nova-despesa', 'despesa-editada', 'inclusao-evento', 'participante-adicionado-despesa', 'mudanca-saldo', 'evento-finalizado', 'reativacao-sem-evento', 'reativacao-sem-participantes', 'reativacao-sem-despesas'];
+            for (const queue of queues) {
+                const count = await this.boss.getQueueSize(queue);
+                if (count > 0) {
+                    console.log(`📬 Fila "${queue}": ${count} job(s) pendente(s)`);
+                }
+            }
+        }
+        catch (error) {
+            console.warn('⚠️  Não foi possível verificar tamanho das filas:', error.message);
+        }
+    }
+    /**
+     * Obtém informações sobre as filas de email (tamanho e jobs pendentes)
+     */
+    static async obterStatusFilas() {
+        if (!this.boss || !this.initialized) {
+            await this.initialize();
+        }
+        if (!this.boss) {
+            throw new Error('pg-boss não foi inicializado');
+        }
+        const queues = [
+            'nova-despesa',
+            'despesa-editada',
+            'inclusao-evento',
+            'participante-adicionado-despesa',
+            'mudanca-saldo',
+            'evento-finalizado',
+            'reativacao-sem-evento',
+            'reativacao-sem-participantes',
+            'reativacao-sem-despesas'
+        ];
+        const status = await Promise.all(queues.map(async (queue) => {
+            try {
+                const size = await this.boss.getQueueSize(queue);
+                // Buscar jobs pendentes (limitado a 50 para não sobrecarregar)
+                let jobs = [];
+                try {
+                    // pg-boss não tem método direto para listar jobs, mas podemos usar fetch
+                    // Por enquanto, retornamos apenas o tamanho
+                    // Para ver jobs detalhados, seria necessário acessar diretamente o banco
+                }
+                catch (err) {
+                    // Ignorar erro ao buscar jobs detalhados
+                }
+                return { queue, size, jobs };
+            }
+            catch (error) {
+                console.error(`Erro ao obter status da fila ${queue}:`, error);
+                return { queue, size: 0, jobs: [] };
+            }
+        }));
+        return status;
+    }
+    /**
+     * Obtém jobs pendentes de uma fila específica (via query direta no banco)
+     */
+    static async obterJobsPendentes(queue, limit = 50) {
+        if (!this.boss || !this.initialized) {
+            await this.initialize();
+        }
+        if (!this.boss) {
+            throw new Error('pg-boss não foi inicializado');
+        }
+        try {
+            // pg-boss armazena jobs na tabela pgboss.job
+            // Vamos usar o AppDataSource para consultar diretamente
+            const queryRunner = data_source_1.AppDataSource.createQueryRunner();
+            await queryRunner.connect();
+            try {
+                const jobs = await queryRunner.query(`SELECT id, name, data, state, createdon, startedon, completedon, retrylimit, retrycount, retrydelay, retrybackoff
+           FROM pgboss.job
+           WHERE name = $1 AND state = 'created'
+           ORDER BY createdon DESC
+           LIMIT $2`, [queue, limit]);
+                return jobs.map((job) => ({
+                    id: job.id,
+                    queue: job.name,
+                    data: job.data,
+                    state: job.state,
+                    createdOn: job.createdon,
+                    startedOn: job.startedon,
+                    completedOn: job.completedon,
+                    retryLimit: job.retrylimit,
+                    retryCount: job.retrycount,
+                    retryDelay: job.retrydelay,
+                    retryBackoff: job.retrybackoff,
+                }));
+            }
+            finally {
+                await queryRunner.release();
+            }
+        }
+        catch (error) {
+            console.error(`Erro ao obter jobs pendentes da fila ${queue}:`, error);
+            return [];
+        }
     }
     /**
      * Adiciona job de nova despesa à fila
@@ -229,6 +403,111 @@ class EmailQueueService {
         }
     }
     /**
+     * Adiciona job de mudança de saldo à fila
+     */
+    static async adicionarEmailMudancaSaldo(data) {
+        if (!this.boss || !this.initialized) {
+            await this.initialize();
+        }
+        if (!this.boss) {
+            throw new Error('pg-boss não foi inicializado');
+        }
+        try {
+            await this.boss.send('mudanca-saldo', data, {
+                priority: 2, // Média prioridade
+            });
+            console.log(`📧 Job de mudança de saldo adicionado à fila para: ${data.destinatario}`);
+        }
+        catch (error) {
+            console.error('❌ Erro ao adicionar job de mudança de saldo à fila:', error);
+            throw error;
+        }
+    }
+    /**
+     * Adiciona job de evento finalizado à fila
+     */
+    static async adicionarEmailEventoFinalizado(data) {
+        if (!this.boss || !this.initialized) {
+            await this.initialize();
+        }
+        if (!this.boss) {
+            throw new Error('pg-boss não foi inicializado');
+        }
+        try {
+            await this.boss.send('evento-finalizado', data, {
+                priority: 1, // Alta prioridade (evento finalizado é importante)
+            });
+            console.log(`📧 Job de evento finalizado adicionado à fila para: ${data.destinatario}`);
+        }
+        catch (error) {
+            console.error('❌ Erro ao adicionar job de evento finalizado à fila:', error);
+            throw error;
+        }
+    }
+    /**
+     * Adiciona job de reativação sem evento à fila
+     */
+    static async adicionarEmailReativacaoSemEvento(data) {
+        if (!this.boss || !this.initialized) {
+            await this.initialize();
+        }
+        if (!this.boss) {
+            throw new Error('pg-boss não foi inicializado');
+        }
+        try {
+            await this.boss.send('reativacao-sem-evento', data, {
+                priority: 3, // Baixa prioridade (reativação não é urgente)
+            });
+            console.log(`📧 Job de reativação (sem evento) adicionado à fila para: ${data.destinatario}`);
+        }
+        catch (error) {
+            console.error('❌ Erro ao adicionar job de reativação (sem evento) à fila:', error);
+            throw error;
+        }
+    }
+    /**
+     * Adiciona job de reativação sem participantes à fila
+     */
+    static async adicionarEmailReativacaoSemParticipantes(data) {
+        if (!this.boss || !this.initialized) {
+            await this.initialize();
+        }
+        if (!this.boss) {
+            throw new Error('pg-boss não foi inicializado');
+        }
+        try {
+            await this.boss.send('reativacao-sem-participantes', data, {
+                priority: 3, // Baixa prioridade (reativação não é urgente)
+            });
+            console.log(`📧 Job de reativação (sem participantes) adicionado à fila para: ${data.destinatario}`);
+        }
+        catch (error) {
+            console.error('❌ Erro ao adicionar job de reativação (sem participantes) à fila:', error);
+            throw error;
+        }
+    }
+    /**
+     * Adiciona job de reativação sem despesas à fila
+     */
+    static async adicionarEmailReativacaoSemDespesas(data) {
+        if (!this.boss || !this.initialized) {
+            await this.initialize();
+        }
+        if (!this.boss) {
+            throw new Error('pg-boss não foi inicializado');
+        }
+        try {
+            await this.boss.send('reativacao-sem-despesas', data, {
+                priority: 3, // Baixa prioridade (reativação não é urgente)
+            });
+            console.log(`📧 Job de reativação (sem despesas) adicionado à fila para: ${data.destinatario}`);
+        }
+        catch (error) {
+            console.error('❌ Erro ao adicionar job de reativação (sem despesas) à fila:', error);
+            throw error;
+        }
+    }
+    /**
      * Encerra o serviço e limpa recursos
      */
     static async shutdown() {
@@ -237,6 +516,136 @@ class EmailQueueService {
             this.boss = null;
             this.initialized = false;
             console.log('✅ EmailQueueService encerrado');
+        }
+    }
+    /**
+     * Agenda job diário para verificar e enviar emails de reativação
+     * Executa diariamente às 09:00 AM horário de Brasília (12:00 UTC)
+     */
+    static async agendarJobReativacao() {
+        if (!this.boss || !this.initialized) {
+            await this.initialize();
+        }
+        if (!this.boss) {
+            throw new Error('pg-boss não foi inicializado');
+        }
+        try {
+            const jobName = 'verificar-reativacao-daily';
+            // IMPORTANTE: A queue precisa existir ANTES de criar o schedule
+            // Criar a queue explicitamente na tabela pgboss.queue via SQL direto
+            try {
+                const queryRunner = data_source_1.AppDataSource.createQueryRunner();
+                await queryRunner.connect();
+                try {
+                    // Verificar se a queue já existe
+                    const queueExists = await queryRunner.query(`SELECT 1 FROM pgboss.queue WHERE name = $1 LIMIT 1`, [jobName]);
+                    if (!queueExists || queueExists.length === 0) {
+                        // Criar a queue explicitamente
+                        await queryRunner.query(`INSERT INTO pgboss.queue (name, created_on) VALUES ($1, NOW()) ON CONFLICT (name) DO NOTHING`, [jobName]);
+                        console.log(`✅ Queue "${jobName}" criada explicitamente na tabela pgboss.queue`);
+                    }
+                    else {
+                        console.log(`✅ Queue "${jobName}" já existe na tabela pgboss.queue`);
+                    }
+                }
+                finally {
+                    await queryRunner.release();
+                }
+            }
+            catch (queueError) {
+                console.warn(`⚠️  Não foi possível criar queue explicitamente:`, queueError.message);
+                // Continuar mesmo se falhar - tentar criar via boss.work depois
+            }
+            // Registrar worker (que também cria a queue implicitamente se não existir)
+            try {
+                await this.boss.work(jobName, async (job) => {
+                    console.log('[EmailQueueService] 🔄 Executando job agendado de verificação de reativação...');
+                    try {
+                        const { ReminderService } = await Promise.resolve().then(() => __importStar(require('./ReminderService')));
+                        await ReminderService.enviarEmailsReativacao();
+                        console.log('[EmailQueueService] ✅ Job de reativação concluído com sucesso');
+                    }
+                    catch (error) {
+                        console.error('[EmailQueueService] ❌ Erro ao executar job de reativação:', error);
+                        // Não fazer throw para não marcar job como falho e permitir tentar novamente no próximo dia
+                    }
+                });
+                console.log(`✅ Worker registrado para "${jobName}"`);
+            }
+            catch (error) {
+                // Worker já pode estar registrado, ignorar erro de "already exists"
+                if (error.message?.includes('already') || error.message?.includes('duplicate')) {
+                    console.log(`✅ Worker já está registrado para "${jobName}"`);
+                }
+                else {
+                    console.warn(`⚠️  Não foi possível registrar worker para "${jobName}":`, error.message);
+                    // Mesmo se falhar, continuar tentando criar o schedule
+                }
+            }
+            // Aguardar um pouco para garantir que a queue foi criada/verificada no banco
+            await new Promise(resolve => setTimeout(resolve, 500));
+            // Agora criar o schedule (a queue já deve existir)
+            try {
+                // Expressão cron: '0 12 * * *' = todo dia às 12:00 UTC (09:00 BRT)
+                // Alternativamente, usar timezone do sistema ou definir variável de ambiente
+                const cronExpression = process.env.REATIVACAO_CRON || '0 12 * * *'; // Default: 12:00 UTC (09:00 BRT)
+                await this.boss.schedule(jobName, cronExpression, {});
+                console.log(`✅ Job de reativação diária agendado: ${cronExpression} (12:00 UTC = 09:00 BRT)`);
+            }
+            catch (error) {
+                // Se job já existe, isso é ok (idempotente)
+                if (error.message?.includes('already exists') || error.message?.includes('duplicate') || error.message?.includes('already')) {
+                    console.log('📅 Job de reativação diária já está agendado');
+                }
+                else if (error.code === '23503' || error.message?.includes('schedule_name_fkey')) {
+                    // Erro de foreign key significa que a queue ainda não existe
+                    // Tentar forçar criação da queue enviando um job vazio
+                    console.warn('⚠️  Queue não existe, tentando criar explicitamente...');
+                    try {
+                        // Forçar criação da queue enviando um job e cancelando imediatamente
+                        await this.boss.send(jobName, { temp: true });
+                        // Aguardar um pouco para a queue ser criada
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        // Tentar criar o schedule novamente
+                        const cronExpression = process.env.REATIVACAO_CRON || '0 12 * * *';
+                        await this.boss.schedule(jobName, cronExpression, {});
+                        console.log(`✅ Job de reativação diária agendado após criar queue: ${cronExpression}`);
+                    }
+                    catch (retryError) {
+                        console.error('❌ Erro ao criar schedule após retry:', retryError);
+                        throw retryError;
+                    }
+                }
+                else {
+                    // Tentar verificar se método getScheduledJobs existe
+                    try {
+                        if (typeof this.boss.getScheduledJobs === 'function') {
+                            const existingJobs = await this.boss.getScheduledJobs();
+                            const jobExists = existingJobs.some((job) => job.name === jobName);
+                            if (jobExists) {
+                                console.log('📅 Job de reativação diária já está agendado');
+                            }
+                            else {
+                                throw error; // Se não existe, re-throw o erro original
+                            }
+                        }
+                        else {
+                            throw error; // Método não existe, re-throw
+                        }
+                    }
+                    catch (checkError) {
+                        console.warn('⚠️  Não foi possível verificar jobs agendados existentes:', checkError.message);
+                        throw error;
+                    }
+                }
+            }
+        }
+        catch (error) {
+            console.error('❌ Erro ao agendar job de reativação:', error);
+            // Não falhar inicialização se agendamento falhar
+            if (process.env.NODE_ENV === 'production') {
+                console.warn('⚠️  Job de reativação não foi agendado, mas servidor continuará funcionando');
+            }
         }
     }
 }

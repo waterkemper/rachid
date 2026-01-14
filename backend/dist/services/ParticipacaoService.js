@@ -7,6 +7,7 @@ const Despesa_1 = require("../entities/Despesa");
 const Participante_1 = require("../entities/Participante");
 const Grupo_1 = require("../entities/Grupo");
 const EmailQueueService_1 = require("./EmailQueueService");
+const NotificationService_1 = require("./NotificationService");
 class ParticipacaoService {
     static async toggleParticipacao(despesaId, participanteId, usuarioId) {
         const despesa = await this.despesaRepository.findOne({
@@ -25,6 +26,18 @@ class ParticipacaoService {
         if (participacaoExistente) {
             await this.participacaoRepository.delete(participacaoExistente.id);
             await this.recalcularValores(despesaId, usuarioId);
+            // Notificar mudanças de saldo após remover participação (não bloquear se falhar)
+            try {
+                const grupoId = despesa.grupo_id;
+                const saldosDepois = await NotificationService_1.NotificationService.calcularSaldosAtuais(grupoId, usuarioId);
+                if (saldosDepois.length > 0) {
+                    await NotificationService_1.NotificationService.notificarMudancasSaldo(grupoId, [], saldosDepois);
+                }
+            }
+            catch (err) {
+                console.error('[ParticipacaoService.toggleParticipacao] Erro ao notificar mudanças de saldo após remoção:', err);
+                // Não falhar remoção se notificação falhar
+            }
             return null;
         }
         else {
@@ -39,6 +52,18 @@ class ParticipacaoService {
             // Notificar participante sobre adição à despesa (não bloquear se falhar)
             try {
                 await this.notificarParticipanteAdicionadoDespesa(despesaId, participanteId, participacaoSalva.valorDevePagar);
+                // Notificar mudanças de saldo após adicionar participação (não bloquear se falhar)
+                try {
+                    const grupoId = despesa.grupo_id;
+                    const saldosDepois = await NotificationService_1.NotificationService.calcularSaldosAtuais(grupoId, usuarioId);
+                    if (saldosDepois.length > 0) {
+                        await NotificationService_1.NotificationService.notificarMudancasSaldo(grupoId, [], saldosDepois);
+                    }
+                }
+                catch (err) {
+                    console.error('[ParticipacaoService.toggleParticipacao] Erro ao notificar mudanças de saldo:', err);
+                    // Não falhar adição se notificação de saldo falhar
+                }
             }
             catch (err) {
                 console.error('[ParticipacaoService.toggleParticipacao] Erro ao adicionar notificação à fila:', err);
@@ -102,9 +127,9 @@ class ParticipacaoService {
         // Buscar despesa sem filtrar por usuario_id para permitir colaboração
         const despesa = await this.despesaRepository.findOne({
             where: { id: despesaId },
-            relations: ['participacoes'],
+            relations: ['participacoes', 'grupo'],
         });
-        if (!despesa)
+        if (!despesa || !despesa.grupo)
             return;
         const participacoes = await this.participacaoRepository.find({
             where: { despesa_id: despesaId },
@@ -125,6 +150,18 @@ class ParticipacaoService {
                 primeiraParticipacao.valorDevePagar = Number(primeiraParticipacao.valorDevePagar) + diferenca;
                 await this.participacaoRepository.save(primeiraParticipacao);
             }
+        }
+        // Notificar mudanças de saldo após recalcular valores (não bloquear se falhar)
+        try {
+            const grupoId = despesa.grupo_id;
+            const saldosDepois = await NotificationService_1.NotificationService.calcularSaldosAtuais(grupoId, usuarioId);
+            if (saldosDepois.length > 0) {
+                await NotificationService_1.NotificationService.notificarMudancasSaldo(grupoId, [], saldosDepois);
+            }
+        }
+        catch (err) {
+            console.error('[ParticipacaoService.recalcularValores] Erro ao notificar mudanças de saldo:', err);
+            // Não falhar recálculo se notificação falhar
         }
     }
     static async calcularValorPorPessoa(despesaId) {

@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const Participante_1 = require("./Participante");
 const Grupo_1 = require("./Grupo");
 const Despesa_1 = require("./Despesa");
+const Subscription_1 = require("./Subscription");
 let Usuario = class Usuario {
 };
 exports.Usuario = Usuario;
@@ -62,9 +63,42 @@ __decorate([
     __metadata("design:type", Date)
 ], Usuario.prototype, "planoValidoAte", void 0);
 __decorate([
+    (0, typeorm_1.Column)('varchar', { nullable: true, unique: true, name: 'paypal_payer_id' }),
+    __metadata("design:type", String)
+], Usuario.prototype, "paypalPayerId", void 0);
+__decorate([
+    (0, typeorm_1.OneToOne)(() => Subscription_1.Subscription, subscription => subscription.usuario, { nullable: true }),
+    (0, typeorm_1.JoinColumn)({ name: 'subscription_id' }),
+    __metadata("design:type", Subscription_1.Subscription)
+], Usuario.prototype, "subscription", void 0);
+__decorate([
+    (0, typeorm_1.Column)('integer', { nullable: true, name: 'subscription_id' }),
+    __metadata("design:type", Number)
+], Usuario.prototype, "subscriptionId", void 0);
+__decorate([
     (0, typeorm_1.Column)('varchar', { default: 'USER' }),
     __metadata("design:type", String)
 ], Usuario.prototype, "role", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamp', nullable: true, name: 'ultimo_email_reativacao_sem_evento' }),
+    __metadata("design:type", Date)
+], Usuario.prototype, "ultimoEmailReativacaoSemEvento", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'integer', default: 0, name: 'tentativa_email_reativacao_sem_evento' }),
+    __metadata("design:type", Number)
+], Usuario.prototype, "tentativaEmailReativacaoSemEvento", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'boolean', default: true, name: 'receber_emails' }),
+    __metadata("design:type", Boolean)
+], Usuario.prototype, "receberEmails", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamp', nullable: true, name: 'email_opt_out_data' }),
+    __metadata("design:type", Date)
+], Usuario.prototype, "emailOptOutData", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'varchar', nullable: true, length: 255, name: 'email_opt_out_reason' }),
+    __metadata("design:type", String)
+], Usuario.prototype, "emailOptOutReason", void 0);
 __decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)

@@ -14,6 +14,14 @@ import { GrupoMaiorParticipante } from '../entities/GrupoMaiorParticipante';
 import { PasswordResetToken } from '../entities/PasswordResetToken';
 import { DespesaHistorico } from '../entities/DespesaHistorico';
 import { EventoAcesso } from '../entities/EventoAcesso';
+import { Pagamento } from '../entities/Pagamento';
+import { Subscription } from '../entities/Subscription';
+import { SubscriptionHistory } from '../entities/SubscriptionHistory';
+import { SubscriptionFeature } from '../entities/SubscriptionFeature';
+import { PlanLimit } from '../entities/PlanLimit';
+import { PromoCode } from '../entities/PromoCode';
+import { Plan } from '../entities/Plan';
+import { Email } from '../entities/Email';
 
 // Suporta DATABASE_URL (formato URI) ou variáveis individuais
 function getDataSourceConfig() {
@@ -43,6 +51,14 @@ function getDataSourceConfig() {
         PasswordResetToken,
         DespesaHistorico,
         EventoAcesso,
+        Pagamento,
+        Subscription,
+        SubscriptionHistory,
+        SubscriptionFeature,
+        PlanLimit,
+        PromoCode,
+        Plan,
+        Email,
       ],
       migrations: [],
       subscribers: [],
@@ -59,7 +75,7 @@ function getDataSourceConfig() {
     username: process.env.DB_USERNAME || 'postgres',
     password: process.env.DB_PASSWORD || 'postgres',
     database: process.env.DB_DATABASE || 'racha_contas',
-      synchronize: false, // Desabilitado - migrations são aplicadas manualmente via SQL
+    synchronize: false, // Desabilitado - migrations são aplicadas manualmente via SQL
     logging: false,
     entities: [
       Usuario,
@@ -76,6 +92,14 @@ function getDataSourceConfig() {
       PasswordResetToken,
       DespesaHistorico,
       EventoAcesso,
+      Pagamento,
+      Subscription,
+      SubscriptionHistory,
+      SubscriptionFeature,
+        PlanLimit,
+        PromoCode,
+        Plan,
+        Email,
     ],
     migrations: [],
     subscribers: [],

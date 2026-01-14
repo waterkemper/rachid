@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const Despesa_1 = require("./Despesa");
 const ParticipanteGrupo_1 = require("./ParticipanteGrupo");
 const Usuario_1 = require("./Usuario");
+const Pagamento_1 = require("./Pagamento");
 let Grupo = class Grupo {
 };
 exports.Grupo = Grupo;
@@ -51,6 +52,26 @@ __decorate([
     __metadata("design:type", String)
 ], Grupo.prototype, "shareToken", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'varchar', length: 20, default: 'EM_ABERTO', name: 'status' }),
+    __metadata("design:type", String)
+], Grupo.prototype, "status", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamp', nullable: true, name: 'ultimo_email_reativacao_sem_participantes' }),
+    __metadata("design:type", Date)
+], Grupo.prototype, "ultimoEmailReativacaoSemParticipantes", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamp', nullable: true, name: 'ultimo_email_reativacao_sem_despesas' }),
+    __metadata("design:type", Date)
+], Grupo.prototype, "ultimoEmailReativacaoSemDespesas", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'integer', default: 0, name: 'tentativa_email_reativacao_sem_participantes' }),
+    __metadata("design:type", Number)
+], Grupo.prototype, "tentativaEmailReativacaoSemParticipantes", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'integer', default: 0, name: 'tentativa_email_reativacao_sem_despesas' }),
+    __metadata("design:type", Number)
+], Grupo.prototype, "tentativaEmailReativacaoSemDespesas", void 0);
+__decorate([
     (0, typeorm_1.OneToMany)(() => Despesa_1.Despesa, despesa => despesa.grupo),
     __metadata("design:type", Array)
 ], Grupo.prototype, "despesas", void 0);
@@ -58,6 +79,10 @@ __decorate([
     (0, typeorm_1.OneToMany)(() => ParticipanteGrupo_1.ParticipanteGrupo, participanteGrupo => participanteGrupo.grupo),
     __metadata("design:type", Array)
 ], Grupo.prototype, "participantes", void 0);
+__decorate([
+    (0, typeorm_1.OneToMany)(() => Pagamento_1.Pagamento, pagamento => pagamento.grupo),
+    __metadata("design:type", Array)
+], Grupo.prototype, "pagamentos", void 0);
 exports.Grupo = Grupo = __decorate([
     (0, typeorm_1.Entity)('grupos')
 ], Grupo);

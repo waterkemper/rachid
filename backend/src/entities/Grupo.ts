@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany, Ma
 import { Despesa } from './Despesa';
 import { ParticipanteGrupo } from './ParticipanteGrupo';
 import { Usuario } from './Usuario';
+import { Pagamento } from './Pagamento';
 
 @Entity('grupos')
 export class Grupo {
@@ -30,10 +31,28 @@ export class Grupo {
   @Column({ type: 'varchar', nullable: true, unique: true, name: 'share_token' })
   shareToken?: string;
 
+  @Column({ type: 'varchar', length: 20, default: 'EM_ABERTO', name: 'status' })
+  status!: 'EM_ABERTO' | 'CONCLUIDO' | 'CANCELADO';
+
+  @Column({ type: 'timestamp', nullable: true, name: 'ultimo_email_reativacao_sem_participantes' })
+  ultimoEmailReativacaoSemParticipantes?: Date;
+
+  @Column({ type: 'timestamp', nullable: true, name: 'ultimo_email_reativacao_sem_despesas' })
+  ultimoEmailReativacaoSemDespesas?: Date;
+
+  @Column({ type: 'integer', default: 0, name: 'tentativa_email_reativacao_sem_participantes' })
+  tentativaEmailReativacaoSemParticipantes!: number;
+
+  @Column({ type: 'integer', default: 0, name: 'tentativa_email_reativacao_sem_despesas' })
+  tentativaEmailReativacaoSemDespesas!: number;
+
   @OneToMany(() => Despesa, despesa => despesa.grupo)
   despesas!: Despesa[];
 
   @OneToMany(() => ParticipanteGrupo, participanteGrupo => participanteGrupo.grupo)
   participantes!: ParticipanteGrupo[];
+
+  @OneToMany(() => Pagamento, pagamento => pagamento.grupo)
+  pagamentos!: Pagamento[];
 }
 

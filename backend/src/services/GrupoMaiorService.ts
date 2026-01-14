@@ -243,9 +243,9 @@ export class GrupoMaiorService {
     if (grupoMaior.grupos) {
       for (const grupoMaiorGrupo of grupoMaior.grupos) {
         if (grupoMaiorGrupo.grupo && grupoMaiorGrupo.grupo.participantes) {
-          grupoMaiorGrupo.grupo.participantes.forEach((p: { participante_id: number }) => {
-            if (p.participante_id) {
-              participanteIds.add(p.participante_id);
+          grupoMaiorGrupo.grupo.participantes.forEach((p) => {
+            if (p.participanteId) {
+              participanteIds.add(p.participanteId);
             }
           });
         }

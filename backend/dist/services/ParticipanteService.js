@@ -38,7 +38,7 @@ class ParticipanteService {
         }
         // Buscar grupos onde o participante está e verificar se o usuário é colaborador
         const gruposComParticipante = await this.participanteGrupoRepository.find({
-            where: { participante_id: id },
+            where: { participanteId: id },
             relations: ['grupo'],
         });
         for (const pg of gruposComParticipante) {
@@ -49,10 +49,11 @@ class ParticipanteService {
             }
             // Verificar se o usuário é participante do grupo (via email)
             const participantesGrupo = await this.participanteGrupoRepository.find({
-                where: { grupo_id: grupo.id },
+                where: { grupoId: grupo.id },
                 relations: ['participante'],
             });
-            const isMember = participantesGrupo.some((pg2) => pg2.participante?.email?.toLowerCase() === usuario.email.toLowerCase());
+            const emailUsuarioNormalizado = usuario.email.trim().toLowerCase();
+            const isMember = participantesGrupo.some((pg2) => pg2.participante?.email?.trim().toLowerCase() === emailUsuarioNormalizado);
             if (isMember) {
                 return participanteEncontrado;
             }

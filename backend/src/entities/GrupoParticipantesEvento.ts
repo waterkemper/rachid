@@ -11,8 +11,8 @@ export class GrupoParticipantesEvento {
   @JoinColumn({ name: 'grupo_id' })
   grupo!: Grupo;
 
-  @Column('integer')
-  grupo_id!: number;
+  @Column('integer', { name: 'grupo_id' })
+  grupoId!: number;
 
   @Column('varchar')
   nome!: string;

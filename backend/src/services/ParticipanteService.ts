@@ -48,7 +48,7 @@ export class ParticipanteService {
 
     // Buscar grupos onde o participante está e verificar se o usuário é colaborador
     const gruposComParticipante = await this.participanteGrupoRepository.find({
-      where: { participante_id: id },
+      where: { participanteId: id },
       relations: ['grupo'],
     });
 
@@ -62,7 +62,7 @@ export class ParticipanteService {
 
       // Verificar se o usuário é participante do grupo (via email)
       const participantesGrupo = await this.participanteGrupoRepository.find({
-        where: { grupo_id: grupo.id },
+        where: { grupoId: grupo.id },
         relations: ['participante'],
       });
 

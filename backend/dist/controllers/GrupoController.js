@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GrupoController = void 0;
 const GrupoService_1 = require("../services/GrupoService");
+const FeatureService_1 = require("../services/FeatureService");
 class GrupoController {
     static async getAll(req, res) {
         try {
@@ -43,6 +44,18 @@ class GrupoController {
         try {
             const { nome, descricao, data, participanteIds, templateId } = req.body;
             const usuarioId = req.usuarioId;
+            // Check event limit
+            const canCreate = await FeatureService_1.FeatureService.canCreateEvent(usuarioId);
+            if (!canCreate.allowed) {
+                return res.status(402).json({
+                    error: `Limite de eventos excedido. Você pode criar até ${canCreate.limit} eventos no plano grátis.`,
+                    errorCode: 'LIMIT_EXCEEDED',
+                    feature: 'max_events',
+                    limit: canCreate.limit,
+                    current: canCreate.current,
+                    upgradeUrl: '/precos',
+                });
+            }
             // Se templateId fornecido, usar createFromTemplate
             if (templateId) {
                 const grupo = await GrupoService_1.GrupoService.createFromTemplate({
@@ -99,6 +112,18 @@ class GrupoController {
             const grupoId = parseInt(req.params.id);
             const { participanteId } = req.body;
             const usuarioId = req.usuarioId;
+            // Check participant limit for this event
+            const canAdd = await FeatureService_1.FeatureService.canAddParticipant(usuarioId, grupoId);
+            if (!canAdd.allowed) {
+                return res.status(402).json({
+                    error: `Limite de participantes excedido. Você pode adicionar até ${canAdd.limit} participantes por evento no plano grátis.`,
+                    errorCode: 'LIMIT_EXCEEDED',
+                    feature: 'max_participants_per_event',
+                    limit: canAdd.limit,
+                    current: canAdd.current,
+                    upgradeUrl: '/precos',
+                });
+            }
             const sucesso = await GrupoService_1.GrupoService.adicionarParticipante(grupoId, participanteId, usuarioId);
             if (!sucesso) {
                 return res.status(400).json({ error: 'Participante já está no grupo ou não existe' });
@@ -169,6 +194,16 @@ class GrupoController {
         try {
             const usuarioId = req.usuarioId;
             const id = parseInt(req.params.id);
+            // Check if user has public sharing enabled
+            const hasPublicSharing = await FeatureService_1.FeatureService.checkFeature(usuarioId, 'public_sharing_enabled');
+            if (!hasPublicSharing) {
+                return res.status(402).json({
+                    error: 'Compartilhamento público requer assinatura PRO',
+                    errorCode: 'PRO_REQUIRED',
+                    feature: 'public_sharing',
+                    upgradeUrl: '/precos',
+                });
+            }
             const token = await GrupoService_1.GrupoService.gerarShareToken(id, usuarioId);
             res.json({ token, link: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/evento/${token}` });
         }
@@ -191,6 +226,31 @@ class GrupoController {
         }
         catch (error) {
             res.status(500).json({ error: 'Erro ao obter link de compartilhamento' });
+        }
+    }
+    static async updateStatus(req, res) {
+        try {
+            const id = parseInt(req.params.id);
+            const { status } = req.body;
+            const usuarioId = req.usuarioId;
+            if (!status || (status !== 'CONCLUIDO' && status !== 'CANCELADO')) {
+                return res.status(400).json({ error: 'Status inválido. Use "CONCLUIDO" ou "CANCELADO"' });
+            }
+            const grupo = await GrupoService_1.GrupoService.updateStatus(id, usuarioId, status);
+            if (!grupo) {
+                return res.status(404).json({ error: 'Grupo não encontrado' });
+            }
+            res.json(grupo);
+        }
+        catch (error) {
+            if (error.message?.includes('Apenas o organizador')) {
+                return res.status(403).json({ error: error.message });
+            }
+            if (error.message?.includes('não é possível alterar') || error.message?.includes('ainda há pagamentos pendentes')) {
+                return res.status(400).json({ error: error.message });
+            }
+            console.error('Erro ao atualizar status:', error);
+            res.status(500).json({ error: 'Erro ao atualizar status do evento' });
         }
     }
 }

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PublicEventoService } from '../services/PublicEventoService';
-import { authMiddleware } from '../middleware/auth';
+import { AdminService } from '../services/AdminService';
 
 export class PublicEventoController {
   static async getByToken(req: Request, res: Response) {
@@ -171,6 +171,36 @@ export class PublicEventoController {
     } catch (error) {
       console.error('Erro ao reivindicar participação:', error);
       res.status(500).json({ error: 'Erro ao reivindicar participação' });
+    }
+  }
+
+  /**
+   * Retorna estatísticas públicas básicas para social proof (sem autenticação)
+   */
+  static async getEstatisticasPublicas(req: Request, res: Response) {
+    try {
+      // Obter apenas estatísticas básicas (sem dados sensíveis)
+      const [estatisticasUsuarios, estatisticasEventos] = await Promise.all([
+        AdminService.getEstatisticasUsuarios(),
+        AdminService.getEstatisticasEventos(),
+      ]);
+
+      // Retornar apenas dados públicos para social proof
+      res.json({
+        totalUsuarios: estatisticasUsuarios.total,
+        totalEventos: estatisticasEventos.total,
+        eventosCompartilhados: estatisticasEventos.comAcessoPublico,
+        novosEventosUltimos30Dias: estatisticasEventos.criadosUltimos30Dias,
+      });
+    } catch (error) {
+      console.error('Erro ao obter estatísticas públicas:', error);
+      // Em caso de erro, retornar valores padrão para não quebrar a UI
+      res.json({
+        totalUsuarios: 0,
+        totalEventos: 0,
+        eventosCompartilhados: 0,
+        novosEventosUltimos30Dias: 0,
+      });
     }
   }
 }

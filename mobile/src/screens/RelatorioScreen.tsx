@@ -8,7 +8,7 @@ import { MainTabParamList } from '../navigation/AppNavigator';
 import { relatorioApi, grupoApi, grupoParticipantesApi, despesaApi, participanteApi } from '../services/api';
 import { SaldoParticipante, SugestaoPagamento, Grupo, Despesa, Participante, GrupoParticipantesEvento, SaldoGrupo } from '../../shared/types';
 import { menuTheme, customColors } from '../theme';
-import { formatarSugestoesPagamento } from '../utils/whatsappFormatter';
+import { formatarSugestoesPagamento, filtrarDespesasPlaceholder } from '../utils/whatsappFormatter';
 
 const STORAGE_KEY_SELECTED_EVENT = '@rachid:selectedEventId';
 
@@ -25,9 +25,9 @@ const RelatorioScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [carregandoRelatorio, setCarregandoRelatorio] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Ref para rastrear o último evento que teve dados carregados
+  // Ref para rastrear o Ãºltimo evento que teve dados carregados
   const ultimoEventoCarregado = useRef<number | null>(null);
-  // Refs para evitar recarregamentos desnecessários
+  // Refs para evitar recarregamentos desnecessÃ¡rios
   const grupoSelecionadoRef = useRef<number | null>(null);
   const gruposRef = useRef<Grupo[]>([]);
   const [menuEventoVisible, setMenuEventoVisible] = useState(false);
@@ -164,7 +164,7 @@ const RelatorioScreen: React.FC = () => {
         // Salvar no storage
         AsyncStorage.setItem(STORAGE_KEY_SELECTED_EVENT, eventoIdFromRoute.toString());
       } else if (!eventoExiste) {
-        // Se o evento não existe, limpar storage
+        // Se o evento nÃ£o existe, limpar storage
         AsyncStorage.removeItem(STORAGE_KEY_SELECTED_EVENT);
       }
     }
@@ -188,22 +188,22 @@ const RelatorioScreen: React.FC = () => {
               const eventoExiste = gruposAtuais.some(g => g.id === eventId);
               
               if (!eventoExiste) {
-                // Se o evento não existe mais, limpar o storage
+                // Se o evento nÃ£o existe mais, limpar o storage
                 await AsyncStorage.removeItem(STORAGE_KEY_SELECTED_EVENT);
-                // Se o evento selecionado atual também não existe, limpar
+                // Se o evento selecionado atual tambÃ©m nÃ£o existe, limpar
                 if (grupoSelecionadoAtual && !gruposAtuais.some(g => g.id === grupoSelecionadoAtual)) {
                   setGrupoSelecionado(null);
                   ultimoEventoCarregado.current = null;
                 }
               } else {
-                // IMPORTANTE: Só atualizar se realmente mudou para evitar recarregamentos desnecessários
-                // Usar === para garantir comparação estrita
+                // IMPORTANTE: SÃ³ atualizar se realmente mudou para evitar recarregamentos desnecessÃ¡rios
+                // Usar === para garantir comparaÃ§Ã£o estrita
                 if (grupoSelecionadoAtual !== eventId) {
                   setGrupoSelecionado(eventId);
                 }
               }
             } else if (grupoSelecionadoAtual && !gruposAtuais.some(g => g.id === grupoSelecionadoAtual)) {
-              // Se não há evento salvo mas o selecionado não existe mais, limpar
+              // Se nÃ£o hÃ¡ evento salvo mas o selecionado nÃ£o existe mais, limpar
               setGrupoSelecionado(null);
               ultimoEventoCarregado.current = null;
             }
@@ -218,14 +218,14 @@ const RelatorioScreen: React.FC = () => {
 
   useEffect(() => {
     if (grupoSelecionado) {
-      // Só recarregar se o evento realmente mudou (não é apenas uma sincronização de foco)
+      // SÃ³ recarregar se o evento realmente mudou (nÃ£o Ã© apenas uma sincronizaÃ§Ã£o de foco)
       if (ultimoEventoCarregado.current !== grupoSelecionado) {
         loadRelatorio();
         // Salvar evento selecionado sempre que mudar
         AsyncStorage.setItem(STORAGE_KEY_SELECTED_EVENT, grupoSelecionado.toString());
       }
     } else {
-      // Se grupoSelecionado for null, limpar o ref também
+      // Se grupoSelecionado for null, limpar o ref tambÃ©m
       ultimoEventoCarregado.current = null;
     }
   }, [grupoSelecionado]);
@@ -253,7 +253,7 @@ const RelatorioScreen: React.FC = () => {
           console.error('Erro ao carregar evento do storage:', error);
         }
         
-        // Se não encontrou nenhum, usar o primeiro
+        // Se nÃ£o encontrou nenhum, usar o primeiro
         if (data.length > 0) {
           setGrupoSelecionado(data[0].id);
         }
@@ -272,11 +272,11 @@ const RelatorioScreen: React.FC = () => {
     // Validar se o evento ainda existe antes de tentar carregar
     const eventoExiste = grupos.some(g => g.id === grupoSelecionado);
     if (!eventoExiste) {
-      // Se o evento não existe mais, limpar seleção e storage
+      // Se o evento nÃ£o existe mais, limpar seleÃ§Ã£o e storage
       setGrupoSelecionado(null);
       ultimoEventoCarregado.current = null;
       await AsyncStorage.removeItem(STORAGE_KEY_SELECTED_EVENT);
-      setError('Evento não encontrado. Por favor, selecione outro evento.');
+      setError('Evento nÃ£o encontrado. Por favor, selecione outro evento.');
       return;
     }
 
@@ -287,8 +287,10 @@ const RelatorioScreen: React.FC = () => {
       // Carregar total de despesas do evento e armazenar para uso posterior
       try {
         const despesasEvento = await despesaApi.getAll(grupoSelecionado);
-        setDespesas(despesasEvento);
-        const total = despesasEvento.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
+        // Filtrar despesas placeholder (zeradas ou sem participantes vÃ¡lidos)
+        const despesasValidas = filtrarDespesasPlaceholder(despesasEvento);
+        setDespesas(despesasValidas);
+        const total = despesasValidas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
         setTotalDespesas(total);
       } catch (err) {
         console.error('Erro ao carregar total de despesas:', err);
@@ -304,7 +306,7 @@ const RelatorioScreen: React.FC = () => {
       setSaldos(saldosData);
       setSaldosGrupos(saldosGruposData);
       
-      // Verificar se há grupos no evento e carregar sugestões
+      // Verificar se hÃ¡ grupos no evento e carregar sugestÃµes
       try {
         const gruposParticipantes = await grupoParticipantesApi.getAll(grupoSelecionado);
         setSubgrupos(gruposParticipantes || []);
@@ -323,10 +325,10 @@ const RelatorioScreen: React.FC = () => {
       // Marcar que este evento foi carregado
       ultimoEventoCarregado.current = grupoSelecionado;
     } catch (err: any) {
-      const errorMessage = err?.response?.data?.error || 'Erro ao carregar relatório';
+      const errorMessage = err?.response?.data?.error || 'Erro ao carregar relatÃ³rio';
       setError(errorMessage);
-      // Se o erro for 404 ou 500 relacionado a evento não encontrado, limpar seleção
-      if (err?.response?.status === 404 || errorMessage.includes('não encontrado')) {
+      // Se o erro for 404 ou 500 relacionado a evento nÃ£o encontrado, limpar seleÃ§Ã£o
+      if (err?.response?.status === 404 || errorMessage.includes('nÃ£o encontrado')) {
         setGrupoSelecionado(null);
         ultimoEventoCarregado.current = null;
         await AsyncStorage.removeItem(STORAGE_KEY_SELECTED_EVENT);
@@ -336,7 +338,7 @@ const RelatorioScreen: React.FC = () => {
     }
   };
 
-  // Carregar participantes quando necessário
+  // Carregar participantes quando necessÃ¡rio
   useEffect(() => {
     const loadParticipantes = async () => {
       try {
@@ -351,7 +353,7 @@ const RelatorioScreen: React.FC = () => {
 
   const handleCompartilharWhatsApp = async () => {
     if (!grupoSelecionado || sugestoes.length === 0) {
-      Alert.alert('Atenção', 'Não há sugestões de pagamento para compartilhar');
+      Alert.alert('AtenÃ§Ã£o', 'NÃ£o hÃ¡ sugestÃµes de pagamento para compartilhar');
       return;
     }
 
@@ -359,26 +361,31 @@ const RelatorioScreen: React.FC = () => {
       setCarregandoMensagem(true);
       setModalWhatsAppVisible(true);
 
-      // Buscar dados completos se necessário
+      // Buscar dados completos se necessÃ¡rio
       const evento = grupos.find(g => g.id === grupoSelecionado);
       if (!evento) {
-        Alert.alert('Erro', 'Evento não encontrado');
+        Alert.alert('Erro', 'Evento nÃ£o encontrado');
         return;
       }
 
-      // Garantir que temos todos os dados necessários e atualizados
+      // Garantir que temos todos os dados necessÃ¡rios e atualizados
       let despesasParaFormatar = despesas;
       let subgruposParaFormatar = subgrupos;
-      
+
       // SEMPRE recarregar participantes para garantir dados atualizados (especialmente chaves PIX)
       const participantesAtualizados = await participanteApi.getAll();
       let participantesParaFormatar = participantesAtualizados;
-      
-      // Atualizar o estado também para manter sincronizado
+
+      // Atualizar o estado tambÃ©m para manter sincronizado
       setParticipantes(participantesAtualizados);
 
       if (despesasParaFormatar.length === 0) {
-        despesasParaFormatar = await despesaApi.getAll(grupoSelecionado);
+        const todasDespesas = await despesaApi.getAll(grupoSelecionado);
+        // Filtrar despesas placeholder antes de formatar
+        despesasParaFormatar = filtrarDespesasPlaceholder(todasDespesas);
+      } else {
+        // Garantir que as despesas jÃ¡ carregadas tambÃ©m estÃ£o filtradas
+        despesasParaFormatar = filtrarDespesasPlaceholder(despesasParaFormatar);
       }
       if (subgruposParaFormatar.length === 0) {
         try {
@@ -388,7 +395,7 @@ const RelatorioScreen: React.FC = () => {
         }
       }
 
-      // Carregar participantes dos subgrupos se necessário e preencher dados completos
+      // Carregar participantes dos subgrupos se necessÃ¡rio e preencher dados completos
       if (subgruposParaFormatar.length > 0) {
         const subgruposCompletos = await Promise.all(
           subgruposParaFormatar.map(async (sg) => {
@@ -406,7 +413,7 @@ const RelatorioScreen: React.FC = () => {
               }
               return subgrupoCompleto;
             } catch {
-              // Se não conseguir buscar, tentar preencher com dados já carregados
+              // Se nÃ£o conseguir buscar, tentar preencher com dados jÃ¡ carregados
               if (sg.participantes) {
                 sg.participantes = sg.participantes.map(pge => {
                   const participanteCompleto = participantesParaFormatar.find(p => p.id === pge.participante_id);
@@ -424,25 +431,25 @@ const RelatorioScreen: React.FC = () => {
       }
 
       // Obter ou gerar link de compartilhamento primeiro
-      let textoInicio = '📊 Pessoal, organizei as contas do evento em oRachid.\n';
-      textoInicio += 'Ele calcula tudo automaticamente (inclusive por famílias) e mostra quem paga quem, sem confusão.\n\n';
+      let textoInicio = 'ðŸ“Š Pessoal, organizei as contas do evento em oRachid.\n';
+      textoInicio += 'Ele calcula tudo automaticamente (inclusive por famÃ­lias) e mostra quem paga quem, sem confusÃ£o.\n\n';
       
       let linkCompartilhamento = '';
       try {
         let linkData = await grupoApi.obterLink(grupoSelecionado);
         if (!linkData.link) {
-          // Se não existe, gera um novo
+          // Se nÃ£o existe, gera um novo
           linkData = await grupoApi.gerarLink(grupoSelecionado);
         }
         
         if (linkData.link) {
           linkCompartilhamento = linkData.link;
-          textoInicio += '🔗 *Visualize o evento online:*\n';
+          textoInicio += 'ðŸ”— *Visualize o evento online:*\n';
           textoInicio += linkData.link + '\n';
-          textoInicio += '👉 Dá pra ver o resumo e seus saldos sem criar conta.\n\n';
+          textoInicio += 'ðŸ‘‰ DÃ¡ pra ver o resumo e seus saldos sem criar conta.\n\n';
         }
       } catch (err) {
-        // Se falhar ao obter link, continua sem adicionar o link mas mantém o texto inicial
+        // Se falhar ao obter link, continua sem adicionar o link mas mantÃ©m o texto inicial
         console.error('Erro ao obter link de compartilhamento:', err);
         textoInicio += '\n';
       }
@@ -459,7 +466,7 @@ const RelatorioScreen: React.FC = () => {
         linkCompartilhamento
       );
 
-      // Adicionar texto inicial no início da mensagem
+      // Adicionar texto inicial no inÃ­cio da mensagem
       mensagem = textoInicio + mensagem;
 
       setMensagemWhatsApp(mensagem);
@@ -473,9 +480,9 @@ const RelatorioScreen: React.FC = () => {
 
   const handleCopiarMensagem = async () => {
     try {
-      // Usar expo-clipboard (compatível com Expo)
+      // Usar expo-clipboard (compatÃ­vel com Expo)
       await Clipboard.setStringAsync(mensagemWhatsApp);
-      Alert.alert('Sucesso', 'Mensagem copiada para a área de transferência!');
+      Alert.alert('Sucesso', 'Mensagem copiada para a Ã¡rea de transferÃªncia!');
     } catch (err) {
       console.error('Erro ao copiar:', err);
       Alert.alert('Erro', 'Erro ao copiar mensagem. Por favor, copie manualmente.');
@@ -487,10 +494,10 @@ const RelatorioScreen: React.FC = () => {
     setMensagemWhatsApp('');
   };
 
-  // Função para organizar saldos por grupo
+  // FunÃ§Ã£o para organizar saldos por grupo
   const organizarSaldosPorGrupo = () => {
     if (saldosGrupos.length === 0) {
-      // Se não há grupos, retornar saldos sem agrupamento
+      // Se nÃ£o hÃ¡ grupos, retornar saldos sem agrupamento
       return { gruposOrdenados: [], saldosSemGrupo: saldos };
     }
 
@@ -629,11 +636,11 @@ const RelatorioScreen: React.FC = () => {
             </View>
           ) : (
             <>
-              {/* 1. Sugestões de Pagamento */}
+              {/* 1. SugestÃµes de Pagamento */}
               <Card style={styles.card}>
                 <Card.Title 
-                  title="Sugestões de Pagamento"
-                  subtitle="🧩 Por grupo de pessoas"
+                  title="SugestÃµes de Pagamento"
+                  subtitle="ðŸ§© Por grupo de pessoas"
                   titleStyle={{ marginBottom: 4 }}
                   subtitleStyle={{ fontSize: 12, color: customColors.textSecondary }}
                   right={(props) => (
@@ -655,18 +662,18 @@ const RelatorioScreen: React.FC = () => {
                 {sugestoes.length > 0 && (
                   <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
                     <Text variant="bodySmall" style={{ fontSize: 12, color: customColors.textSecondary, fontStyle: 'italic' }}>
-                      O Rachid reduz o número de transferências agrupando pagamentos entre famílias.
+                      O Rachid reduz o nÃºmero de transferÃªncias agrupando pagamentos entre famÃ­lias.
                     </Text>
                   </View>
                 )}
                 <Card.Content>
                   {sugestoes.length === 0 ? (
-                    <Text style={styles.emptyText}>Nenhuma sugestão encontrada</Text>
+                    <Text style={styles.emptyText}>Nenhuma sugestÃ£o encontrada</Text>
                   ) : (
                     sugestoes.map((sugestao, index) => {
                       // Buscar chave PIX do recebedor
                       const obterChavesPix = (nomeRecebedor: string): string[] => {
-                        // Primeiro, verificar se é um subgrupo
+                        // Primeiro, verificar se Ã© um subgrupo
                         if (subgrupos && subgrupos.length > 0) {
                           const grupoNomeNormalizado = nomeRecebedor.trim().toLowerCase();
                           let subgrupo = subgrupos.find(sg => {
@@ -695,7 +702,7 @@ const RelatorioScreen: React.FC = () => {
                           }
                         }
                         
-                        // Verificar se é um grupo em saldosGrupos
+                        // Verificar se Ã© um grupo em saldosGrupos
                         const grupo = saldosGrupos.find(g => g.grupoNome === nomeRecebedor);
                         if (grupo) {
                           const pixKeys: string[] = [];
@@ -708,7 +715,7 @@ const RelatorioScreen: React.FC = () => {
                           if (pixKeys.length > 0) return pixKeys;
                         }
                         
-                        // Verificar se é um participante individual
+                        // Verificar se Ã© um participante individual
                         const participante = participantes.find(p => p.nome === nomeRecebedor);
                         if (participante?.chavePix && participante.chavePix.trim()) {
                           return [participante.chavePix.trim()];
@@ -722,7 +729,7 @@ const RelatorioScreen: React.FC = () => {
                       return (
                         <View key={index} style={styles.sugestaoItem}>
                           <Text variant="bodyLarge">
-                            {sugestao.de} → {sugestao.para}
+                            {sugestao.de} â†’ {sugestao.para}
                           </Text>
                           <Text variant="titleMedium" style={styles.sugestaoValor}>
                             {formatCurrency(sugestao.valor)}
@@ -730,7 +737,7 @@ const RelatorioScreen: React.FC = () => {
                           {chavesPix.length > 0 && (
                             <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
                               <Text variant="bodySmall" style={styles.pixInfo}>
-                                💳 PIX:
+                                ðŸ’³ PIX:
                               </Text>
                               {chavesPix.length === 1 ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 4 }}>
@@ -744,7 +751,7 @@ const RelatorioScreen: React.FC = () => {
                                     onPress={async () => {
                                       try {
                                         await Clipboard.setStringAsync(chavesPix[0]);
-                                        Alert.alert('Sucesso', 'PIX copiado para a área de transferência!');
+                                        Alert.alert('Sucesso', 'PIX copiado para a Ã¡rea de transferÃªncia!');
                                       } catch (err) {
                                         Alert.alert('Erro', 'Erro ao copiar PIX');
                                       }
@@ -766,7 +773,7 @@ const RelatorioScreen: React.FC = () => {
                                         onPress={async () => {
                                           try {
                                             await Clipboard.setStringAsync(pix);
-                                            Alert.alert('Sucesso', 'PIX copiado para a área de transferência!');
+                                            Alert.alert('Sucesso', 'PIX copiado para a Ã¡rea de transferÃªncia!');
                                           } catch (err) {
                                             Alert.alert('Erro', 'Erro ao copiar PIX');
                                           }
@@ -856,7 +863,7 @@ const RelatorioScreen: React.FC = () => {
                               <View style={styles.semGrupoHeader}>
                                 <Text variant="titleMedium" style={styles.semGrupoTitle}>Sem Grupo</Text>
                                 <Text variant="bodySmall" style={styles.semGrupoSubtitle}>
-                                  Participantes que não estão em nenhum grupo
+                                  Participantes que nÃ£o estÃ£o em nenhum grupo
                                 </Text>
                                 <View style={styles.grupoTotais}>
                                   <View style={styles.grupoTotalItem}>
@@ -925,7 +932,7 @@ const RelatorioScreen: React.FC = () => {
               {/* 3. Detalhamento de Despesas */}
               {despesas.length > 0 && (
                 <Card style={styles.card}>
-                  <Card.Title title="📋 Detalhamento" />
+                  <Card.Title title="ðŸ“‹ Detalhamento" />
                   <Card.Content>
                     {despesas.map((despesa) => (
                       <View key={despesa.id} style={styles.detalhamentoItem}>
@@ -1111,7 +1118,7 @@ const RelatorioScreen: React.FC = () => {
                             {algumParticipantePagou && (
                               <View style={styles.transacaoItem}>
                                 <View style={styles.transacaoIconContainer}>
-                                  <Text style={styles.transacaoIcon}>💵</Text>
+                                  <Text style={styles.transacaoIcon}>ðŸ’µ</Text>
                                 </View>
                                 <View style={styles.transacaoInfo}>
                                   <Text variant="bodyMedium" style={styles.transacaoLabel}>
@@ -1127,7 +1134,7 @@ const RelatorioScreen: React.FC = () => {
                             {participacoesDoGrupo.length > 0 && (
                               <View style={styles.transacaoItem}>
                                 <View style={styles.transacaoIconContainer}>
-                                  <Text style={styles.transacaoIcon}>📋</Text>
+                                  <Text style={styles.transacaoIcon}>ðŸ“‹</Text>
                                 </View>
                                 <View style={styles.transacaoInfo}>
                                   <Text variant="bodyMedium" style={styles.transacaoLabel}>
@@ -1167,7 +1174,7 @@ const RelatorioScreen: React.FC = () => {
                             {participantePagou && (
                               <View style={styles.transacaoItem}>
                                 <View style={styles.transacaoIconContainer}>
-                                  <Text style={styles.transacaoIcon}>💵</Text>
+                                  <Text style={styles.transacaoIcon}>ðŸ’µ</Text>
                                 </View>
                                 <View style={styles.transacaoInfo}>
                                   <Text variant="bodyMedium" style={styles.transacaoLabel}>
@@ -1183,7 +1190,7 @@ const RelatorioScreen: React.FC = () => {
                             {participacao && (
                               <View style={styles.transacaoItem}>
                                 <View style={styles.transacaoIconContainer}>
-                                  <Text style={styles.transacaoIcon}>📋</Text>
+                                  <Text style={styles.transacaoIcon}>ðŸ“‹</Text>
                                 </View>
                                 <View style={styles.transacaoInfo}>
                                   <Text variant="bodyMedium" style={styles.transacaoLabel}>
@@ -1614,7 +1621,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   detalhamentoDetalhes: {
-    // gap não é suportado no React Native, usar marginBottom em cada item
+    // gap nÃ£o Ã© suportado no React Native, usar marginBottom em cada item
   },
   detalhamentoDetalhe: {
     flexDirection: 'row',

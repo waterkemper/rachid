@@ -36,8 +36,8 @@ class CalculadoraService {
         const participantesIdsDoEvento = new Set();
         if (grupo.participantes) {
             grupo.participantes.forEach(pg => {
-                if (pg.participante_id) {
-                    participantesIdsDoEvento.add(pg.participante_id);
+                if (pg.participanteId) {
+                    participantesIdsDoEvento.add(pg.participanteId);
                 }
             });
         }
@@ -99,7 +99,7 @@ class CalculadoraService {
             throw new Error('Grupo não encontrado ou não pertence ao usuário');
         }
         const gruposParticipantes = await grupoParticipantesRepository.find({
-            where: { grupo_id: grupoId },
+            where: { grupoId: grupoId },
             relations: ['participantes', 'participantes.participante'],
         });
         const despesas = await despesaRepository.find({
@@ -110,12 +110,12 @@ class CalculadoraService {
         const participantesEmGrupos = new Set();
         gruposParticipantes.forEach(gp => {
             gp.participantes.forEach(p => {
-                participantesEmGrupos.add(p.participante_id);
+                participantesEmGrupos.add(p.participanteId);
             });
         });
         // Identificar participantes do evento que não estão em nenhum grupo
         const participantesSolitarios = grupo.participantes
-            .filter(pg => !participantesEmGrupos.has(pg.participante_id))
+            .filter(pg => !participantesEmGrupos.has(pg.participanteId))
             .map(pg => pg.participante);
         const saldosGrupos = [];
         // Calcular saldos para grupos reais
@@ -131,7 +131,7 @@ class CalculadoraService {
                 totalDeve: 0,
                 saldo: 0,
             };
-            const participantesIds = grupoParticipantes.participantes.map(p => p.participante_id);
+            const participantesIds = grupoParticipantes.participantes.map(p => p.participanteId);
             despesas.forEach(despesa => {
                 // Ignorar despesas sem pagador (placeholders)
                 if (!despesa.participante_pagador_id) {
@@ -199,6 +199,9 @@ class CalculadoraService {
                     de: devedor.participanteNome,
                     para: credor.participanteNome,
                     valor: Math.round(valorTransferencia * 100) / 100,
+                    deParticipanteId: devedor.participanteId,
+                    paraParticipanteId: credor.participanteId,
+                    tipo: 'INDIVIDUAL',
                 });
                 credor.saldoRestante -= valorTransferencia;
                 devedor.saldoRestante += valorTransferencia;
@@ -231,6 +234,9 @@ class CalculadoraService {
                     de: devedor.grupoNome,
                     para: credor.grupoNome,
                     valor: Math.round(valorTransferencia * 100) / 100,
+                    deGrupoId: devedor.grupoId,
+                    paraGrupoId: credor.grupoId,
+                    tipo: 'ENTRE_GRUPOS',
                 });
                 credor.saldoRestante -= valorTransferencia;
                 devedor.saldoRestante += valorTransferencia;

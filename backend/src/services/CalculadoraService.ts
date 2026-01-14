@@ -27,9 +27,15 @@ export interface SaldoGrupo {
 }
 
 export interface SugestaoPagamento {
-  de: string;
-  para: string;
+  de: string; // Nome - mantido para compatibilidade e exibição
+  para: string; // Nome - mantido para compatibilidade e exibição
   valor: number;
+  // IDs para identificação única (obrigatórios para matching)
+  deParticipanteId?: number; // ID do participante devedor (se tipo INDIVIDUAL)
+  paraParticipanteId?: number; // ID do participante credor (se tipo INDIVIDUAL)
+  deGrupoId?: number; // ID do GrupoParticipantesEvento devedor (se tipo ENTRE_GRUPOS)
+  paraGrupoId?: number; // ID do GrupoParticipantesEvento credor (se tipo ENTRE_GRUPOS)
+  tipo?: 'INDIVIDUAL' | 'ENTRE_GRUPOS'; // Tipo da sugestão
 }
 
 export class CalculadoraService {
@@ -64,8 +70,8 @@ export class CalculadoraService {
     const participantesIdsDoEvento = new Set<number>();
     if (grupo.participantes) {
       grupo.participantes.forEach(pg => {
-        if (pg.participante_id) {
-          participantesIdsDoEvento.add(pg.participante_id);
+        if (pg.participanteId) {
+          participantesIdsDoEvento.add(pg.participanteId);
         }
       });
     }
@@ -139,7 +145,7 @@ export class CalculadoraService {
     }
 
     const gruposParticipantes = await grupoParticipantesRepository.find({
-      where: { grupo_id: grupoId },
+      where: { grupoId: grupoId },
       relations: ['participantes', 'participantes.participante'],
     });
 
@@ -152,13 +158,13 @@ export class CalculadoraService {
     const participantesEmGrupos = new Set<number>();
     gruposParticipantes.forEach(gp => {
       gp.participantes.forEach(p => {
-        participantesEmGrupos.add(p.participante_id);
+        participantesEmGrupos.add(p.participanteId);
       });
     });
 
     // Identificar participantes do evento que não estão em nenhum grupo
     const participantesSolitarios = grupo.participantes
-      .filter(pg => !participantesEmGrupos.has(pg.participante_id))
+      .filter(pg => !participantesEmGrupos.has(pg.participanteId))
       .map(pg => pg.participante);
 
     const saldosGrupos: SaldoGrupo[] = [];
@@ -177,7 +183,7 @@ export class CalculadoraService {
         saldo: 0,
       };
 
-      const participantesIds = grupoParticipantes.participantes.map(p => p.participante_id);
+      const participantesIds = grupoParticipantes.participantes.map(p => p.participanteId);
 
       despesas.forEach(despesa => {
         // Ignorar despesas sem pagador (placeholders)
@@ -265,6 +271,9 @@ export class CalculadoraService {
           de: devedor.participanteNome,
           para: credor.participanteNome,
           valor: Math.round(valorTransferencia * 100) / 100,
+          deParticipanteId: devedor.participanteId,
+          paraParticipanteId: credor.participanteId,
+          tipo: 'INDIVIDUAL',
         });
 
         credor.saldoRestante -= valorTransferencia;
@@ -308,6 +317,9 @@ export class CalculadoraService {
           de: devedor.grupoNome,
           para: credor.grupoNome,
           valor: Math.round(valorTransferencia * 100) / 100,
+          deGrupoId: devedor.grupoId,
+          paraGrupoId: credor.grupoId,
+          tipo: 'ENTRE_GRUPOS',
         });
 
         credor.saldoRestante -= valorTransferencia;

@@ -3,9 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { publicEventoApi, EventoPublico as EventoPublicoType } from '../services/api';
 import { SaldoParticipante, SugestaoPagamento, SaldoGrupo, Despesa, Grupo } from '../types';
-import { formatarSugestoesPagamento } from '../utils/whatsappFormatter';
+import { formatarSugestoesPagamento, filtrarDespesasPlaceholder } from '../utils/whatsappFormatter';
 import { FaShareAlt, FaCopy } from 'react-icons/fa';
 import { FaWhatsapp } from 'react-icons/fa6';
+import ShareButtons from '../components/ShareButtons';
+import SocialProof from '../components/SocialProof';
 import './EventoPublico.css';
 
 const EventoPublico: React.FC = () => {
@@ -45,7 +47,9 @@ const EventoPublico: React.FC = () => {
       setSaldos(saldosData);
       setSaldosGrupos(saldosGruposData || []);
       setSugestoes(sugestoesData || []);
-      setDespesas(despesasData || []);
+      // Filtrar despesas placeholder (zeradas ou sem participantes válidos)
+      const despesasValidas = filtrarDespesasPlaceholder(despesasData || []);
+      setDespesas(despesasValidas);
       setError(null);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Evento não encontrado');
@@ -101,26 +105,27 @@ const EventoPublico: React.FC = () => {
       // Obter link de compartilhamento
       const ogUrl = getAbsoluteUrl(`/evento/${token}`);
       
-      // Gerar mensagem formatada
+      // Calcular número de participantes e total
+      const numeroParticipantes = evento?.participantes?.length || 0;
+      // Filtrar despesas placeholder antes de calcular total e formatar
+      const despesasValidas = filtrarDespesasPlaceholder(despesas);
+      const totalDespesas = despesasValidas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
+
+      // Gerar mensagem formatada com as melhorias
       const mensagem = formatarSugestoesPagamento(
         eventoParaFormatar,
         sugestoes,
-        despesas,
+        despesasValidas,
         evento?.participantes || [],
         saldos,
         saldosGrupos,
         undefined, // subgrupos não disponíveis na API pública
-        ogUrl
+        ogUrl,
+        numeroParticipantes,
+        totalDespesas
       );
 
-      // Adicionar texto inicial
-      let textoInicio = '📊 Pessoal, organizei as contas do evento em oRachid.\n';
-      textoInicio += 'Ele calcula tudo automaticamente (inclusive por famílias) e mostra quem paga quem, sem confusão.\n\n';
-      textoInicio += '🔗 *Visualize o evento online:*\n';
-      textoInicio += ogUrl + '\n';
-      textoInicio += '👉 Dá pra ver o resumo e seus saldos sem criar conta.\n\n';
-
-      setMensagemWhatsApp(textoInicio + mensagem);
+      setMensagemWhatsApp(mensagem);
     } catch (err) {
       alert('Erro ao gerar mensagem para WhatsApp');
       console.error(err);
@@ -371,6 +376,8 @@ const EventoPublico: React.FC = () => {
           </button>
         </div>
 
+        <SocialProof variant="compact" />
+
         {saldos.length > 0 && (
           <>
             {/* 1. Tabela de Sugestões de Pagamento */}
@@ -392,20 +399,34 @@ const EventoPublico: React.FC = () => {
                 </div>
                 {sugestoes.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                    <button
-                      className="btn btn-primary"
-                      onClick={handleCompartilharWhatsApp}
-                      style={{ 
-                        padding: '8px 16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
-                      }}
-                    >
-                      <FaShareAlt />
-                      <FaWhatsapp />
-                      <span>Compartilhar resumo (WhatsApp)</span>
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleCompartilharWhatsApp}
+                        style={{ 
+                          padding: '8px 16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          backgroundColor: '#25D366'
+                        }}
+                      >
+                        <FaShareAlt />
+                        <FaWhatsapp />
+                        <span>Compartilhar resumo (WhatsApp)</span>
+                      </button>
+                      {token && (
+                        <ShareButtons
+                          shareUrl={ogUrl}
+                          shareText={`Confira o evento "${evento?.nome || 'Evento'}" no Rachid! Veja os saldos e sugestões de pagamento.`}
+                          eventName={evento?.nome || 'Evento'}
+                          showQRCode={true}
+                          showEmail={true}
+                          showWhatsApp={false}
+                          showCopy={true}
+                        />
+                      )}
+                    </div>
                     <span style={{ fontSize: '11px', color: 'rgba(226, 232, 240, 0.6)', whiteSpace: 'nowrap' }}>
                       Qualquer pessoa pode visualizar sem criar conta
                     </span>

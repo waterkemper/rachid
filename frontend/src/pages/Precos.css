@@ -1,0 +1,188 @@
+.precos-page {
+  min-height: calc(100vh - 60px);
+  padding: 40px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.precos-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.precos-container h1 {
+  color: white;
+  font-size: 48px;
+  margin-bottom: 10px;
+}
+
+.subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 20px;
+  margin-bottom: 50px;
+}
+
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 30px;
+  margin-top: 40px;
+}
+
+.plan-card {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  position: relative;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.plan-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+}
+
+.plan-card.pro {
+  border: 3px solid #007bff;
+}
+
+.plan-card.lifetime {
+  border: 3px solid #28a745;
+}
+
+.plan-badge {
+  position: absolute;
+  top: -15px;
+  right: 20px;
+  background: #007bff;
+  color: white;
+  padding: 5px 15px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.plan-card.lifetime .plan-badge {
+  background: #28a745;
+}
+
+.plan-header {
+  margin-bottom: 30px;
+}
+
+.plan-header h2 {
+  font-size: 28px;
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.plan-price {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+}
+
+.plan-price .price {
+  font-size: 48px;
+  font-weight: bold;
+  color: #007bff;
+}
+
+.plan-card.lifetime .plan-price .price {
+  color: #28a745;
+}
+
+.plan-price .period {
+  font-size: 18px;
+  color: #666;
+}
+
+.plan-savings {
+  margin-top: 10px;
+  color: #28a745;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.plan-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 30px 0;
+  text-align: left;
+}
+
+.plan-features li {
+  padding: 10px 0;
+  border-bottom: 1px solid #eee;
+  color: #555;
+}
+
+.plan-features li:last-child {
+  border-bottom: none;
+}
+
+.btn-plan {
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.btn-plan:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.btn-lifetime {
+  background-color: #28a745;
+  color: white;
+}
+
+.btn-lifetime:hover:not(:disabled) {
+  background-color: #218838;
+}
+
+.promo-code-section {
+  margin: 20px 0;
+}
+
+.promo-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.promo-error {
+  color: #dc3545;
+  font-size: 12px;
+  text-align: left;
+  margin-top: 5px;
+}
+
+@media (max-width: 768px) {
+  .plans-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .precos-container h1 {
+    font-size: 36px;
+  }
+}

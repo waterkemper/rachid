@@ -9,6 +9,10 @@ import {
   SaldoGrupo,
   Usuario,
   EventTemplate,
+  Subscription,
+  Plan,
+  FeatureLimit,
+  Usage,
 } from '../types';
 
 // URL da API: usa variável de ambiente em produção ou proxy em desenvolvimento
@@ -66,6 +70,7 @@ export const authApi = {
     senha: string;
     ddd?: string;
     telefone?: string;
+    referralCode?: string;
   }): Promise<Usuario> => {
     const response = await api.post('/auth/create-user', data);
     return response.data.usuario;
@@ -179,6 +184,11 @@ export const grupoApi = {
 
   obterLink: async (id: number): Promise<{ token: string | null; link: string | null }> => {
     const response = await api.get(`/grupos/${id}/link`);
+    return response.data;
+  },
+
+  updateStatus: async (id: number, status: 'CONCLUIDO' | 'CANCELADO'): Promise<Grupo> => {
+    const response = await api.put(`/grupos/${id}/status`, { status });
     return response.data;
   },
 };
@@ -326,6 +336,55 @@ export const relatorioApi = {
 
   getSugestoesPagamentoGrupos: async (grupoId: number): Promise<SugestaoPagamento[]> => {
     const response = await api.get(`/grupos/${grupoId}/sugestoes-pagamento-grupos`, { params: { _t: Date.now() } });
+    return response.data;
+  },
+};
+
+export const pagamentoApi = {
+  marcarComoPago: async (grupoId: number, data: {
+    sugestaoIndex: number;
+    deParticipanteId: number;
+    paraParticipanteId: number;
+    sugestaoValor: number;
+    pagoPorParticipanteId: number;
+    valor: number;
+    deNome?: string;
+    paraNome?: string;
+  }): Promise<any> => {
+    const response = await api.post(`/grupos/${grupoId}/pagamentos`, data);
+    return response.data;
+  },
+
+  marcarComoPagoEntreGrupos: async (grupoId: number, data: {
+    sugestaoIndex: number;
+    deGrupoId: number;
+    paraGrupoId: number;
+    sugestaoValor: number;
+    pagoPorParticipanteId: number;
+    valor: number;
+    deNome?: string;
+    paraNome?: string;
+  }): Promise<any> => {
+    const response = await api.post(`/grupos/${grupoId}/pagamentos-grupos`, data);
+    return response.data;
+  },
+
+  confirmarPagamento: async (pagamentoId: number, confirmadoPorParticipanteId: number): Promise<any> => {
+    const response = await api.put(`/pagamentos/${pagamentoId}/confirmar`, { confirmadoPorParticipanteId });
+    return response.data;
+  },
+
+  desconfirmarPagamento: async (pagamentoId: number): Promise<any> => {
+    const response = await api.put(`/pagamentos/${pagamentoId}/desconfirmar`, {});
+    return response.data;
+  },
+
+  getPagamentosPorEvento: async (grupoId: number, tipo?: 'INDIVIDUAL' | 'ENTRE_GRUPOS'): Promise<any[]> => {
+    const params: any = { _t: Date.now() };
+    if (tipo) {
+      params.tipo = tipo;
+    }
+    const response = await api.get(`/grupos/${grupoId}/pagamentos`, { params });
     return response.data;
   },
 };
@@ -558,6 +617,160 @@ export const adminApi = {
     const response = await api.get(`/admin/eventos/${eventoId}/despesas`);
     return response.data;
   },
+
+  getEmailQueueStatus: async (): Promise<Array<{ queue: string; size: number; jobs?: any[] }>> => {
+    const response = await api.get('/admin/email-queue/status');
+    return response.data;
+  },
+
+  getEmailQueueJobs: async (queue: string, limit: number = 50): Promise<{ queue: string; count: number; jobs: any[] }> => {
+    const response = await api.get(`/admin/email-queue/${queue}/jobs`, { params: { limit } });
+    return response.data;
+  },
+
+  getEmails: async (params?: {
+    status?: string;
+    tipo?: string;
+    destinatario?: string;
+    limit?: number;
+    offset?: number;
+    dataInicio?: string;
+    dataFim?: string;
+  }): Promise<{ emails: any[]; total: number; limit: number; offset: number; hasMore: boolean }> => {
+    const response = await api.get('/admin/emails', { params });
+    return response.data;
+  },
+
+  getEmailById: async (id: number): Promise<any> => {
+    const response = await api.get(`/admin/emails/${id}`);
+    return response.data;
+  },
+
+  getEmailStats: async (): Promise<any> => {
+    const response = await api.get('/admin/emails/stats');
+    return response.data;
+  },
+  
+  // Subscription management
+  getAllSubscriptions: async (): Promise<any[]> => {
+    const response = await api.get('/admin/subscriptions');
+    return response.data;
+  },
+  
+  getSubscriptionById: async (id: number): Promise<any> => {
+    const response = await api.get(`/admin/subscriptions/${id}`);
+    return response.data;
+  },
+  
+  refundSubscription: async (id: number): Promise<{ message: string; subscription: any }> => {
+    const response = await api.post(`/admin/subscriptions/${id}/refund`);
+    return response.data;
+  },
+  
+  extendSubscription: async (id: number, days: number): Promise<{
+    message: string;
+    subscription: any;
+  }> => {
+    const response = await api.post(`/admin/subscriptions/${id}/extend`, { days });
+    return response.data;
+  },
+  
+  updateSubscriptionFeatures: async (id: number, features: any): Promise<{
+    message: string;
+    subscriptionId: number;
+  }> => {
+    const response = await api.put(`/admin/subscriptions/${id}/features`, { features });
+    return response.data;
+  },
+  
+  getSubscriptionStats: async (): Promise<{
+    total: number;
+    active: number;
+    byPlanType: { monthly: number; yearly: number; lifetime: number };
+    cancelled: number;
+  }> => {
+    const response = await api.get('/admin/subscriptions/stats');
+    return response.data;
+  },
+  
+  // Feature limits management
+  getAllPlanLimits: async (): Promise<Record<string, Record<string, any>>> => {
+    const response = await api.get('/admin/feature-limits');
+    return response.data;
+  },
+  
+  getPlanLimits: async (planType: 'FREE' | 'PRO' | 'LIFETIME'): Promise<{
+    planType: string;
+    limits: Record<string, any>;
+  }> => {
+    const response = await api.get(`/admin/feature-limits/${planType}`);
+    return response.data;
+  },
+  
+  updatePlanLimit: async (
+    planType: 'FREE' | 'PRO' | 'LIFETIME',
+    featureKey: string,
+    updates: {
+      limitValue?: number | null;
+      enabled?: boolean | null;
+      description?: string;
+    }
+  ): Promise<{ message: string; limit: any }> => {
+    const response = await api.put(`/admin/feature-limits/${planType}/${featureKey}`, updates);
+    return response.data;
+  },
+  
+  getLimitHistory: async (): Promise<{ history: any[] }> => {
+    const response = await api.get('/admin/feature-limits/history');
+    return response.data;
+  },
+
+  // Plans management
+  createPlan: async (planData: {
+    planType: 'MONTHLY' | 'YEARLY' | 'LIFETIME';
+    name: string;
+    description?: string;
+    price: number;
+    currency?: string;
+    intervalUnit?: 'month' | 'year';
+    intervalCount?: number;
+    isOneTime?: boolean;
+    enabled?: boolean;
+    displayOrder?: number;
+    createInPayPal?: boolean;
+  }): Promise<any> => {
+    const response = await api.post('/admin/plans', planData);
+    return response.data;
+  },
+
+  getAllPlans: async (): Promise<any[]> => {
+    const response = await api.get('/admin/plans');
+    return response.data;
+  },
+
+  getPlan: async (planType: 'MONTHLY' | 'YEARLY' | 'LIFETIME'): Promise<any> => {
+    const response = await api.get(`/admin/plans/${planType}`);
+    return response.data;
+  },
+
+  updatePlan: async (
+    planType: 'MONTHLY' | 'YEARLY' | 'LIFETIME',
+    updates: {
+      name?: string;
+      description?: string;
+      price?: number;
+      currency?: string;
+      intervalUnit?: 'month' | 'year';
+      intervalCount?: number;
+      isOneTime?: boolean;
+      paypalPlanId?: string;
+      enabled?: boolean;
+      displayOrder?: number;
+    }
+  ): Promise<any> => {
+    const response = await api.put(`/admin/plans/${planType}`, updates);
+    return response.data;
+  },
 };
 
 export interface EventoPublico {
@@ -602,6 +815,127 @@ export const publicEventoApi = {
 
   reivindicar: async (token: string, email: string): Promise<{ message: string; transferidos: number }> => {
     const response = await api.post(`/public/eventos/${token}/reivindicar`, { email });
+    return response.data;
+  },
+};
+
+export const subscriptionApi = {
+  create: async (data: {
+    planType: 'MONTHLY' | 'YEARLY';
+    returnUrl: string;
+    cancelUrl: string;
+  }): Promise<{ subscriptionId: number; approvalUrl: string }> => {
+    const response = await api.post('/subscriptions', data);
+    return response.data;
+  },
+
+  activate: async (data: {
+    subscriptionId?: number;
+    payerId?: string;
+    subscription_id?: string;
+    ba_token?: string;
+    subscription_token?: string;
+  }): Promise<{ subscription: Subscription; message: string }> => {
+    const response = await api.post('/subscriptions/activate', data);
+    return response.data;
+  },
+
+  getMe: async (): Promise<{
+    subscription: Subscription | null;
+    limits: Record<string, any>;
+    usage: Usage;
+  }> => {
+    const response = await api.get('/subscriptions/me');
+    return response.data;
+  },
+
+  update: async (id: number, planType: 'MONTHLY' | 'YEARLY'): Promise<{
+    subscription: Subscription;
+    message: string;
+  }> => {
+    const response = await api.put(`/subscriptions/${id}`, { planType });
+    return response.data;
+  },
+
+  cancel: async (id: number, immediately?: boolean): Promise<{
+    subscription: Subscription;
+    message: string;
+  }> => {
+    const response = await api.post(`/subscriptions/${id}/cancel`, { immediately });
+    return response.data;
+  },
+
+  resume: async (id: number): Promise<{
+    subscription: Subscription;
+    message: string;
+  }> => {
+    const response = await api.post(`/subscriptions/${id}/resume`);
+    return response.data;
+  },
+
+  getPlans: async (): Promise<{ plans: Record<string, Plan> }> => {
+    const response = await api.get('/subscriptions/plans');
+    return response.data;
+  },
+
+  createLifetime: async (data: {
+    promoCode?: string;
+    returnUrl: string;
+    cancelUrl: string;
+  }): Promise<{ orderId: string; approvalUrl: string; amount: number }> => {
+    const response = await api.post('/subscriptions/lifetime', data);
+    return response.data;
+  },
+
+  captureLifetime: async (data: {
+    orderId: string;
+    promoCode?: string;
+  }): Promise<{
+    subscription: Subscription;
+    order: any;
+    message: string;
+  }> => {
+    const response = await api.post('/subscriptions/lifetime/capture', data);
+    return response.data;
+  },
+
+  getUsage: async (): Promise<{
+    subscription: Subscription | null;
+    planType: string;
+    limits: Record<string, FeatureLimit>;
+    usage: Usage;
+  }> => {
+    const response = await api.get('/subscriptions/usage');
+    return response.data;
+  },
+};
+
+export const featureApi = {
+  check: async (featureKey: string): Promise<{ featureKey: string; hasAccess: boolean }> => {
+    const response = await api.get('/features/check', { params: { featureKey } });
+    return response.data;
+  },
+
+  getLimits: async (): Promise<{
+    planType: string;
+    limits: Record<string, FeatureLimit>;
+    usage: Usage;
+  }> => {
+    const response = await api.get('/features/limits');
+    return response.data;
+  },
+};
+
+export interface EstatisticasPublicas {
+  totalUsuarios: number;
+  totalEventos: number;
+  eventosCompartilhados: number;
+  novosEventosUltimos30Dias: number;
+}
+
+export const publicApi = {
+  getEstatisticas: async (): Promise<EstatisticasPublicas> => {
+    const response = await api.get('/public/estatisticas');
     return response.data;
   },
 };

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { isPro } from '../utils/plan';
 import { authApi } from '../services/api';
 
 const Conta: React.FC = () => {
   const { usuario, login } = useAuth();
+  const navigate = useNavigate();
   const usuarioPro = isPro(usuario);
 
   const [nome, setNome] = useState('');
@@ -329,13 +331,37 @@ const Conta: React.FC = () => {
       <div className="card" style={{ marginBottom: '20px' }}>
         <h3 style={{ marginBottom: '10px' }}>Seu plano</h3>
         <p style={{ margin: 0, color: 'rgba(226, 232, 240, 0.92)' }}>
-          Plano atual: <strong style={{ color: 'rgba(255, 255, 255, 0.96)' }}>{usuarioPro ? 'Pro' : 'Grátis'}</strong>
+          Plano atual: <strong style={{ color: 'rgba(255, 255, 255, 0.96)' }}>
+            {usuario?.plano === 'LIFETIME' ? 'PRO Vitalício' : usuarioPro ? 'Pro' : 'Grátis'}
+          </strong>
         </p>
         {usuario?.planoValidoAte && (
           <p style={{ marginTop: '8px', color: 'rgba(226, 232, 240, 0.75)', fontSize: '14px' }}>
             Válido até: {new Date(usuario.planoValidoAte).toLocaleDateString('pt-BR')}
           </p>
         )}
+        {usuario?.plano === 'LIFETIME' && (
+          <p style={{ marginTop: '8px', color: '#28a745', fontSize: '14px', fontWeight: 'bold' }}>
+            ✓ Assinatura vitalícia - Sem renovação necessária
+          </p>
+        )}
+        <div style={{ marginTop: '15px' }}>
+          <button
+            onClick={() => navigate('/assinatura')}
+            className="btn btn-primary"
+            style={{ marginRight: '10px' }}
+          >
+            Gerenciar Assinatura
+          </button>
+          {!usuarioPro && (
+            <button
+              onClick={() => navigate('/precos')}
+              className="btn btn-secondary"
+            >
+              Ver Planos
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: '20px' }}>
@@ -354,24 +380,29 @@ const Conta: React.FC = () => {
         <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
           <div style={{ border: '1px solid rgba(148, 163, 184, 0.20)', borderRadius: '10px', padding: '12px' }}>
             <div style={{ fontWeight: 700, color: 'rgba(255, 255, 255, 0.94)' }}>Mensal</div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>R$ 12,90</div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>R$ 19,90</div>
             <div style={{ color: 'rgba(226, 232, 240, 0.75)' }}>/mês</div>
           </div>
           <div style={{ border: '2px solid rgba(99, 102, 241, 0.50)', borderRadius: '10px', padding: '12px' }}>
             <div style={{ fontWeight: 700, color: 'rgba(255, 255, 255, 0.94)' }}>Anual</div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>R$ 99,90</div>
-            <div style={{ color: 'rgba(226, 232, 240, 0.75)' }}>/ano (melhor custo-benefício)</div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>R$ 199,00</div>
+            <div style={{ color: 'rgba(226, 232, 240, 0.75)' }}>/ano (economize 17%)</div>
           </div>
           <div style={{ border: '1px solid rgba(148, 163, 184, 0.20)', borderRadius: '10px', padding: '12px' }}>
             <div style={{ fontWeight: 700, color: 'rgba(255, 255, 255, 0.94)' }}>Vitalício</div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>R$ 199,90</div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>R$ 499,00</div>
             <div style={{ color: 'rgba(226, 232, 240, 0.75)' }}>pagamento único</div>
           </div>
         </div>
 
-        <div className="alert" style={{ marginTop: '15px' }}>
-          Integração de pagamento ainda não está ativa neste build. Quando você conectar o checkout (Pix/cartão),
-          os botões “Assinar Pro” vão direcionar para o pagamento.
+        <div style={{ marginTop: '20px' }}>
+          <button
+            onClick={() => navigate('/precos')}
+            className="btn btn-primary"
+            style={{ width: '100%' }}
+          >
+            Ver Todos os Planos e Assinar
+          </button>
         </div>
       </div>
     </div>
