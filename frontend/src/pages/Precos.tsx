@@ -1,19 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { subscriptionApi } from '../services/api';
+import { subscriptionApi, featureApi } from '../services/api';
 import './Precos.css';
+
+// Função helper para formatar preço em formato brasileiro
+const formatPrice = (price: number | string | undefined): string => {
+  if (price === undefined || price === null) return 'R$ 0,00';
+  const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+  if (isNaN(numPrice)) return 'R$ 0,00';
+  return `R$ ${numPrice.toFixed(2).replace('.', ',')}`;
+};
+
+// Função para formatar features baseado nos limites do plano
+const formatFeatureText = (limit: any, featureKey: string): string => {
+  if (limit === undefined) {
+    // Fallback para quando não há dados
+    if (featureKey.includes('_enabled')) return '✗';
+    return '';
+  }
+  
+  // Features booleanas
+  if (featureKey.includes('_enabled')) {
+    return limit.enabled ? '✓' : '✗';
+  }
+  
+  // Features numéricas
+  if (limit.limitValue !== null && limit.limitValue !== undefined) {
+    return '✓';
+  }
+  
+  // Ilimitado (null significa ilimitado para PRO/LIFETIME)
+  return '✓';
+};
 
 const Precos: React.FC = () => {
   const { usuario } = useAuth();
   const navigate = useNavigate();
   const [plans, setPlans] = useState<Record<string, any>>({});
+  const [planLimits, setPlanLimits] = useState<Record<string, Record<string, any>>>({});
   const [loading, setLoading] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [promoCodeError, setPromoCodeError] = useState('');
 
   useEffect(() => {
     loadPlans();
+    loadPlanLimits();
   }, []);
 
   const loadPlans = async () => {
@@ -22,6 +54,15 @@ const Precos: React.FC = () => {
       setPlans(data.plans);
     } catch (error) {
       console.error('Erro ao carregar planos:', error);
+    }
+  };
+
+  const loadPlanLimits = async () => {
+    try {
+      const limits = await featureApi.getPlanLimits();
+      setPlanLimits(limits);
+    } catch (error) {
+      console.error('Erro ao carregar limites dos planos:', error);
     }
   };
 
@@ -134,18 +175,43 @@ const Precos: React.FC = () => {
             <div className="plan-header">
               <h2>Grátis</h2>
               <div className="plan-price">
-                <span className="price">R$ 0</span>
+                <span className="price">{formatPrice(0)}</span>
                 <span className="period">/sempre</span>
               </div>
             </div>
             <ul className="plan-features">
-              <li>✓ Até 5 eventos ativos</li>
-              <li>✓ Até 20 participantes por evento</li>
+              <li>
+                {formatFeatureText(planLimits.FREE?.max_events, 'max_events')} 
+                {planLimits.FREE?.max_events?.limitValue 
+                  ? ` Até ${planLimits.FREE.max_events.limitValue} eventos ativos`
+                  : planLimits.FREE?.max_events?.description || 'Eventos limitados'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.FREE?.max_participants_per_event, 'max_participants_per_event')} 
+                {planLimits.FREE?.max_participants_per_event?.limitValue 
+                  ? ` Até ${planLimits.FREE.max_participants_per_event.limitValue} participantes por evento`
+                  : planLimits.FREE?.max_participants_per_event?.description || 'Participantes limitados'}
+              </li>
               <li>✓ Cálculo automático de saldos</li>
               <li>✓ Sugestões de pagamento</li>
-              <li>✗ Exportação em PDF</li>
-              <li>✗ Compartilhamento público</li>
-              <li>✗ Templates personalizados</li>
+              <li>
+                {formatFeatureText(planLimits.FREE?.pdf_export_enabled, 'pdf_export_enabled')} 
+                {planLimits.FREE?.pdf_export_enabled?.description || 'Exportação em PDF'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.FREE?.public_sharing_enabled, 'public_sharing_enabled')} 
+                {planLimits.FREE?.public_sharing_enabled?.description || 'Compartilhamento público'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.FREE?.templates_enabled, 'templates_enabled')} 
+                {planLimits.FREE?.templates_enabled?.description || 'Templates personalizados'}
+              </li>
+              {planLimits.FREE?.receipt_upload_enabled && (
+                <li>
+                  {formatFeatureText(planLimits.FREE?.receipt_upload_enabled, 'receipt_upload_enabled')} 
+                  {planLimits.FREE?.receipt_upload_enabled?.description || 'Upload de anexos'}
+                </li>
+              )}
             </ul>
             <button className="btn-plan" disabled>
               Plano Atual
@@ -158,18 +224,45 @@ const Precos: React.FC = () => {
             <div className="plan-header">
               <h2>PRO Mensal</h2>
               <div className="plan-price">
-                <span className="price">R$ {plans.MONTHLY?.price || '19,90'}</span>
+                <span className="price">{formatPrice(plans.MONTHLY?.price)}</span>
                 <span className="period">/mês</span>
               </div>
             </div>
             <ul className="plan-features">
-              <li>✓ Eventos ilimitados</li>
-              <li>✓ Participantes ilimitados</li>
-              <li>✓ Exportação em PDF</li>
-              <li>✓ Compartilhamento público</li>
-              <li>✓ Templates personalizados</li>
-              <li>✓ Todas as notificações</li>
-              <li>✓ Analytics avançado</li>
+              <li>
+                {formatFeatureText(planLimits.PRO?.max_events, 'max_events')} 
+                {planLimits.PRO?.max_events?.description || 'Eventos ilimitados'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.PRO?.max_participants_per_event, 'max_participants_per_event')} 
+                {planLimits.PRO?.max_participants_per_event?.description || 'Participantes ilimitados'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.PRO?.pdf_export_enabled, 'pdf_export_enabled')} 
+                {planLimits.PRO?.pdf_export_enabled?.description || 'Exportação em PDF'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.PRO?.public_sharing_enabled, 'public_sharing_enabled')} 
+                {planLimits.PRO?.public_sharing_enabled?.description || 'Compartilhamento público'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.PRO?.templates_enabled, 'templates_enabled')} 
+                {planLimits.PRO?.templates_enabled?.description || 'Templates personalizados'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.PRO?.email_notifications_enabled, 'email_notifications_enabled')} 
+                {planLimits.PRO?.email_notifications_enabled?.description || 'Todas as notificações'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.PRO?.analytics_enabled, 'analytics_enabled')} 
+                {planLimits.PRO?.analytics_enabled?.description || 'Analytics avançado'}
+              </li>
+              {planLimits.PRO?.receipt_upload_enabled && (
+                <li>
+                  {formatFeatureText(planLimits.PRO?.receipt_upload_enabled, 'receipt_upload_enabled')} 
+                  {planLimits.PRO?.receipt_upload_enabled?.description || 'Upload de anexos'}
+                </li>
+              )}
             </ul>
             <button
               className="btn-plan btn-primary"
@@ -186,7 +279,7 @@ const Precos: React.FC = () => {
             <div className="plan-header">
               <h2>PRO Anual</h2>
               <div className="plan-price">
-                <span className="price">R$ {plans.YEARLY?.price || '199'}</span>
+                <span className="price">{formatPrice(plans.YEARLY?.price)}</span>
                 <span className="period">/ano</span>
               </div>
               {plans.YEARLY?.savings && (
@@ -194,13 +287,40 @@ const Precos: React.FC = () => {
               )}
             </div>
             <ul className="plan-features">
-              <li>✓ Eventos ilimitados</li>
-              <li>✓ Participantes ilimitados</li>
-              <li>✓ Exportação em PDF</li>
-              <li>✓ Compartilhamento público</li>
-              <li>✓ Templates personalizados</li>
-              <li>✓ Todas as notificações</li>
-              <li>✓ Analytics avançado</li>
+              <li>
+                {formatFeatureText(planLimits.PRO?.max_events, 'max_events')} 
+                {planLimits.PRO?.max_events?.description || 'Eventos ilimitados'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.PRO?.max_participants_per_event, 'max_participants_per_event')} 
+                {planLimits.PRO?.max_participants_per_event?.description || 'Participantes ilimitados'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.PRO?.pdf_export_enabled, 'pdf_export_enabled')} 
+                {planLimits.PRO?.pdf_export_enabled?.description || 'Exportação em PDF'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.PRO?.public_sharing_enabled, 'public_sharing_enabled')} 
+                {planLimits.PRO?.public_sharing_enabled?.description || 'Compartilhamento público'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.PRO?.templates_enabled, 'templates_enabled')} 
+                {planLimits.PRO?.templates_enabled?.description || 'Templates personalizados'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.PRO?.email_notifications_enabled, 'email_notifications_enabled')} 
+                {planLimits.PRO?.email_notifications_enabled?.description || 'Todas as notificações'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.PRO?.analytics_enabled, 'analytics_enabled')} 
+                {planLimits.PRO?.analytics_enabled?.description || 'Analytics avançado'}
+              </li>
+              {planLimits.PRO?.receipt_upload_enabled && (
+                <li>
+                  {formatFeatureText(planLimits.PRO?.receipt_upload_enabled, 'receipt_upload_enabled')} 
+                  {planLimits.PRO?.receipt_upload_enabled?.description || 'Upload de anexos'}
+                </li>
+              )}
             </ul>
             <button
               className="btn-plan btn-primary"
@@ -217,12 +337,45 @@ const Precos: React.FC = () => {
             <div className="plan-header">
               <h2>PRO Vitalício</h2>
               <div className="plan-price">
-                <span className="price">R$ {plans.LIFETIME?.price || '499'}</span>
+                <span className="price">{formatPrice(plans.LIFETIME?.price)}</span>
                 <span className="period">pagamento único</span>
               </div>
             </div>
             <ul className="plan-features">
-              <li>✓ Todos os recursos PRO</li>
+              <li>
+                {formatFeatureText(planLimits.LIFETIME?.max_events, 'max_events')} 
+                {planLimits.LIFETIME?.max_events?.description || 'Eventos ilimitados'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.LIFETIME?.max_participants_per_event, 'max_participants_per_event')} 
+                {planLimits.LIFETIME?.max_participants_per_event?.description || 'Participantes ilimitados'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.LIFETIME?.pdf_export_enabled, 'pdf_export_enabled')} 
+                {planLimits.LIFETIME?.pdf_export_enabled?.description || 'Exportação em PDF'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.LIFETIME?.public_sharing_enabled, 'public_sharing_enabled')} 
+                {planLimits.LIFETIME?.public_sharing_enabled?.description || 'Compartilhamento público'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.LIFETIME?.templates_enabled, 'templates_enabled')} 
+                {planLimits.LIFETIME?.templates_enabled?.description || 'Templates personalizados'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.LIFETIME?.email_notifications_enabled, 'email_notifications_enabled')} 
+                {planLimits.LIFETIME?.email_notifications_enabled?.description || 'Todas as notificações'}
+              </li>
+              <li>
+                {formatFeatureText(planLimits.LIFETIME?.analytics_enabled, 'analytics_enabled')} 
+                {planLimits.LIFETIME?.analytics_enabled?.description || 'Analytics avançado'}
+              </li>
+              {planLimits.LIFETIME?.receipt_upload_enabled && (
+                <li>
+                  {formatFeatureText(planLimits.LIFETIME?.receipt_upload_enabled, 'receipt_upload_enabled')} 
+                  {planLimits.LIFETIME?.receipt_upload_enabled?.description || 'Upload de anexos'}
+                </li>
+              )}
               <li>✓ Sem renovação</li>
               <li>✓ Sempre atualizado</li>
               <li>✓ Suporte prioritário</li>

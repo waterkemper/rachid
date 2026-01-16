@@ -15,6 +15,7 @@ export interface Grupo {
   criadoEm: string;
   status?: 'EM_ABERTO' | 'CONCLUIDO' | 'CANCELADO';
   usuario_id?: number;
+  usuario?: Usuario;
   participantes?: ParticipanteGrupo[];
 }
 
@@ -23,6 +24,22 @@ export interface ParticipanteGrupo {
   participante_id: number;
   grupo_id: number;
   participante?: Participante;
+}
+
+export interface DespesaAnexo {
+  id: number;
+  despesa_id: number;
+  nome_original: string;
+  nome_arquivo: string;
+  tipo_mime: string;
+  tamanho_original: number;
+  tamanho_otimizado?: number;
+  largura?: number;
+  altura?: number;
+  otimizado: boolean;
+  url_s3: string;
+  url_cloudfront: string;
+  criado_em: string;
 }
 
 export interface Despesa {
@@ -38,6 +55,7 @@ export interface Despesa {
   grupo?: Grupo;
   pagador?: Participante;
   participacoes?: ParticipacaoDespesa[];
+  anexos?: DespesaAnexo[];
 }
 
 export interface ParticipacaoDespesa {

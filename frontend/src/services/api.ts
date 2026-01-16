@@ -3,6 +3,7 @@ import {
   Participante,
   Grupo,
   Despesa,
+  DespesaAnexo,
   SaldoParticipante,
   SugestaoPagamento,
   GrupoParticipantesEvento,
@@ -187,7 +188,7 @@ export const grupoApi = {
     return response.data;
   },
 
-  updateStatus: async (id: number, status: 'CONCLUIDO' | 'CANCELADO'): Promise<Grupo> => {
+  updateStatus: async (id: number, status: 'CONCLUIDO' | 'CANCELADO' | 'EM_ABERTO'): Promise<Grupo> => {
     const response = await api.put(`/grupos/${id}/status`, { status });
     return response.data;
   },
@@ -315,6 +316,34 @@ export const despesaApi = {
 
   delete: async (id: number): Promise<void> => {
     await api.delete(`/despesas/${id}`);
+  },
+
+  // Anexos
+  uploadAnexo: async (despesaId: number, file: File): Promise<DespesaAnexo> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await api.post(`/despesas/${despesaId}/anexos`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    
+    return response.data;
+  },
+
+  listAnexos: async (despesaId: number): Promise<DespesaAnexo[]> => {
+    const response = await api.get(`/despesas/${despesaId}/anexos`);
+    return response.data;
+  },
+
+  deleteAnexo: async (despesaId: number, anexoId: number): Promise<void> => {
+    await api.delete(`/despesas/${despesaId}/anexos/${anexoId}`);
+  },
+
+  getDownloadUrl: async (despesaId: number, anexoId: number): Promise<string> => {
+    const response = await api.get(`/despesas/${despesaId}/anexos/${anexoId}/download`);
+    return response.data.url;
   },
 };
 
@@ -628,6 +657,51 @@ export const adminApi = {
     return response.data;
   },
 
+  cancelEmailQueueJob: async (jobId: string): Promise<{ message: string; jobId: string }> => {
+    const response = await api.delete(`/admin/email-queue/jobs/${jobId}`);
+    return response.data;
+  },
+
+  cancelAllEmailQueueJobs: async (queue: string): Promise<{ message: string; queue: string; count: number }> => {
+    const response = await api.delete(`/admin/email-queue/${queue}/jobs`);
+    return response.data;
+  },
+
+  getEmailAggregationStats: async (): Promise<{
+    totalPendentes: number;
+    totalProcessados: number;
+    proximosAProcessar: number;
+    emailsEstimados: number;
+    porTipo: Record<string, number>;
+    pendentes: Array<{
+      id: number;
+      destinatario: string;
+      eventoId: number;
+      tipoNotificacao: string;
+      criadoEm: string;
+      processarApos: string;
+    }>;
+    warning?: string;
+  }> => {
+    const response = await api.get('/admin/email-aggregation/stats');
+    return response.data;
+  },
+
+  deleteEmailPendente: async (id: number): Promise<{ message: string; id: number }> => {
+    const response = await api.delete(`/admin/email-aggregation/pending/${id}`);
+    return response.data;
+  },
+
+  deleteAllEmailPendentes: async (): Promise<{ message: string; count: number }> => {
+    const response = await api.delete('/admin/email-aggregation/pending');
+    return response.data;
+  },
+
+  deleteEmailPendentesByTipo: async (tipo: string): Promise<{ message: string; tipo: string; count: number }> => {
+    const response = await api.delete(`/admin/email-aggregation/pending/tipo/${tipo}`);
+    return response.data;
+  },
+
   getEmails: async (params?: {
     status?: string;
     tipo?: string;
@@ -813,6 +887,11 @@ export const publicEventoApi = {
     return response.data;
   },
 
+  getAnexos: async (token: string, despesaId: number): Promise<DespesaAnexo[]> => {
+    const response = await api.get(`/public/eventos/${token}/despesas/${despesaId}/anexos`);
+    return response.data;
+  },
+
   reivindicar: async (token: string, email: string): Promise<{ message: string; transferidos: number }> => {
     const response = await api.post(`/public/eventos/${token}/reivindicar`, { email });
     return response.data;
@@ -922,6 +1001,11 @@ export const featureApi = {
     usage: Usage;
   }> => {
     const response = await api.get('/features/limits');
+    return response.data;
+  },
+
+  getPlanLimits: async (): Promise<Record<string, Record<string, any>>> => {
+    const response = await api.get('/features/plan-limits');
     return response.data;
   },
 };

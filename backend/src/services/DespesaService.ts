@@ -9,6 +9,7 @@ import { DespesaHistoricoService } from './DespesaHistoricoService';
 import { Participante } from '../entities/Participante';
 import { EmailQueueService } from './EmailQueueService';
 import { NotificationService } from './NotificationService';
+import { EmailAggregationService } from './EmailAggregationService';
 
 export interface CriarDespesaDTO {
   grupo_id: number;
@@ -230,25 +231,10 @@ export class DespesaService {
       throw new Error('Erro ao criar despesa');
     }
 
-    // Notificar participantes sobre nova despesa (não bloquear se falhar)
+    // Notificar participantes sobre nova despesa (já inclui info de saldo)
+    // Não chama notificarMudancasSaldo separadamente pois o saldo é incluído na notificação da despesa
     try {
-      await this.notificarNovaDespesa(despesaCompleta, data.grupo_id);
-      
-      // Notificar mudanças de saldo (não bloquear se falhar)
-      // Calcular saldos antes e depois para detectar mudanças significativas
-      try {
-        // Por enquanto, não temos saldos antes (primeira vez calculando)
-        // Apenas calcular saldos depois e notificar se houver mudanças significativas
-        // TODO: Implementar cache de saldos anteriores para comparação
-        const saldosDepois = await NotificationService.calcularSaldosAtuais(data.grupo_id, data.usuario_id);
-        if (saldosDepois.length > 0) {
-          // Notificar apenas participantes com saldo significativo (>=R$ 5)
-          await NotificationService.notificarMudancasSaldo(data.grupo_id, [], saldosDepois);
-        }
-      } catch (err) {
-        console.error('[DespesaService.create] Erro ao notificar mudanças de saldo:', err);
-        // Não falhar criação se notificação de saldo falhar
-      }
+      await this.notificarNovaDespesa(despesaCompleta, data.grupo_id, data.usuario_id);
     } catch (err) {
       console.error('[DespesaService.create] Erro ao adicionar notificações à fila:', err);
       // Não falhar a criação da despesa se a notificação falhar
@@ -258,9 +244,9 @@ export class DespesaService {
   }
 
   /**
-   * Notifica participantes sobre nova despesa
+   * Notifica participantes sobre nova despesa (inclui saldo atualizado)
    */
-  private static async notificarNovaDespesa(despesa: Despesa, grupoId: number): Promise<void> {
+  private static async notificarNovaDespesa(despesa: Despesa, grupoId: number, usuarioId: number): Promise<void> {
     // Buscar grupo e participantes
     const grupo = await this.grupoRepository.findOne({
       where: { id: grupoId },
@@ -283,26 +269,26 @@ export class DespesaService {
 
     // Buscar pagador
     const pagador = despesa.pagador;
-    const pagadorNome = pagador?.nome || 'Desconhecido';
-
-    // Calcular valor por pessoa
-    const valorPorPessoa = despesa.valorTotal / participacoes.length;
 
     // Obter link de compartilhamento
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const linkEvento = `${frontendUrl}/eventos/${grupoId}`;
 
-    // Formatar data
-    const formatDate = (date: Date | string): string => {
-      const d = typeof date === 'string' ? new Date(date) : date;
-      return new Intl.DateTimeFormat('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      }).format(d);
+    // Formatar valor
+    const formatCurrency = (valor: number): string => {
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
     };
 
-    // Adicionar jobs na fila para cada participante (exceto o pagador, se aplicável)
+    // Calcular saldos atuais para incluir na notificação
+    let saldosMap = new Map<number, number>();
+    try {
+      const saldos = await NotificationService.calcularSaldosAtuais(grupoId, usuarioId);
+      saldos.forEach(s => saldosMap.set(s.participanteId, s.saldo));
+    } catch (err) {
+      console.warn('[DespesaService.notificarNovaDespesa] Erro ao calcular saldos:', err);
+    }
+
+    // Adicionar notificações ao sistema de agregação para cada participante
     for (const participacao of participacoes) {
       const participante = participacao.participante;
       if (!participante) continue;
@@ -317,18 +303,30 @@ export class DespesaService {
         continue; // Pular se não tiver email
       }
 
+      // Obter saldo do participante
+      const saldo = saldosMap.get(participante.id);
+      const saldoAtual = saldo !== undefined ? formatCurrency(saldo) : undefined;
+      const direcao = saldo !== undefined ? (saldo > 0 ? 'aumentou' : saldo < 0 ? 'diminuiu' : undefined) : undefined;
+
       try {
-        await EmailQueueService.adicionarEmailNovaDespesa({
+        // Usar sistema de agregação - inclui despesa + saldo na mesma notificação
+        await EmailAggregationService.adicionarNotificacao({
           destinatario: email,
-          nomeDestinatario: participante.nome,
-          eventoNome: grupo.nome,
-          eventoId: grupo.id,
-          despesaDescricao: despesa.descricao,
-          despesaValorTotal: despesa.valorTotal,
-          despesaData: formatDate(despesa.data),
-          valorPorPessoa,
-          pagadorNome,
-          linkEvento,
+          usuarioId: participante.usuario_id,
+          eventoId: grupoId,
+          tipoNotificacao: 'resumo-evento',
+          dados: {
+            eventoNome: grupo.nome,
+            eventoId: grupoId,
+            nomeDestinatario: participante.nome,
+            despesaId: despesa.id,
+            despesaDescricao: despesa.descricao,
+            despesaValorTotal: formatCurrency(despesa.valorTotal),
+            linkEvento,
+            // Incluir saldo na mesma notificação
+            saldoAtual,
+            direcao,
+          },
         });
       } catch (err) {
         console.error(`Erro ao adicionar notificação para ${email}:`, err);
@@ -347,7 +345,10 @@ export class DespesaService {
     const despesa = await this.findById(id);
     if (!despesa) return null;
 
-    const valorTotalFoiAlterado = data.valorTotal !== undefined && data.valorTotal !== despesa.valorTotal;
+    // Converter valores para números para comparação correta (evita comparar string com number)
+    const novoValorTotal = data.valorTotal !== undefined ? Number(data.valorTotal) : undefined;
+    const valorTotalAtual = Number(despesa.valorTotal);
+    const valorTotalFoiAlterado = novoValorTotal !== undefined && novoValorTotal !== valorTotalAtual;
 
     // Preparar dados para atualização e histórico
     const updateData: any = {};
@@ -366,12 +367,12 @@ export class DespesaService {
       });
     }
 
-    if (data.valorTotal !== undefined && data.valorTotal !== despesa.valorTotal) {
-      updateData.valorTotal = data.valorTotal;
+    if (novoValorTotal !== undefined && novoValorTotal !== valorTotalAtual) {
+      updateData.valorTotal = novoValorTotal;
       historicoAlteracoes.push({
         campo_alterado: 'valorTotal',
-        valor_anterior: despesa.valorTotal.toString(),
-        valor_novo: data.valorTotal.toString(),
+        valor_anterior: valorTotalAtual.toString(),
+        valor_novo: novoValorTotal.toString(),
       });
     }
 
@@ -521,27 +522,12 @@ export class DespesaService {
       return null;
     }
 
-    // Notificar participantes sobre despesa editada (não bloquear se falhar)
+    // Notificar participantes sobre despesa editada (já inclui info de saldo)
+    // Não chama notificarMudancasSaldo separadamente pois o saldo é incluído na notificação da despesa
     try {
       if (historicoAlteracoes.length > 0) {
         console.log(`[DespesaService.update] Notificando ${historicoAlteracoes.length} mudança(s) na despesa ${id}`);
-        await this.notificarDespesaEditada(despesaAtualizada, historicoAlteracoes);
-        
-        // Notificar mudanças de saldo após edição de despesa
-        // Calcular saldos antes e depois para detectar mudanças significativas
-        try {
-          const grupoId = despesaAtualizada.grupo_id;
-          // Por enquanto, apenas calcular saldos depois (saldos antes seriam difíceis de obter sem cache)
-          // TODO: Implementar cache de saldos anteriores para comparação adequada
-          const saldosDepois = await NotificationService.calcularSaldosAtuais(grupoId, usuarioId);
-          if (saldosDepois.length > 0) {
-            // Notificar apenas participantes com saldo significativo (>=R$ 5)
-            await NotificationService.notificarMudancasSaldo(grupoId, [], saldosDepois);
-          }
-        } catch (err) {
-          console.error('[DespesaService.update] Erro ao notificar mudanças de saldo:', err);
-          // Não falhar atualização se notificação de saldo falhar
-        }
+        await this.notificarDespesaEditada(despesaAtualizada, historicoAlteracoes, usuarioId);
       }
     } catch (err) {
       console.error('[DespesaService.update] Erro ao adicionar notificações à fila:', err);
@@ -552,11 +538,12 @@ export class DespesaService {
   }
 
   /**
-   * Notifica participantes sobre despesa editada
+   * Notifica participantes sobre despesa editada (inclui saldo atualizado)
    */
   private static async notificarDespesaEditada(
     despesa: Despesa,
-    mudancas: Array<{ campo_alterado: string; valor_anterior?: string; valor_novo?: string }>
+    mudancas: Array<{ campo_alterado: string; valor_anterior?: string; valor_novo?: string }>,
+    usuarioId: number
   ): Promise<void> {
     if (!mudancas || mudancas.length === 0) {
       return; // Não notificar se não houver mudanças
@@ -602,17 +589,21 @@ export class DespesaService {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const linkEvento = `${frontendUrl}/eventos/${grupo.id}`;
 
-    // Formatar data
-    const formatDate = (date: Date | string): string => {
-      const d = typeof date === 'string' ? new Date(date) : date;
-      return new Intl.DateTimeFormat('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      }).format(d);
+    // Formatar valor
+    const formatCurrency = (valor: number): string => {
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
     };
 
-    // Adicionar jobs na fila para cada participante
+    // Calcular saldos atuais para incluir na notificação
+    let saldosMap = new Map<number, number>();
+    try {
+      const saldos = await NotificationService.calcularSaldosAtuais(grupo.id, usuarioId);
+      saldos.forEach(s => saldosMap.set(s.participanteId, s.saldo));
+    } catch (err) {
+      console.warn('[DespesaService.notificarDespesaEditada] Erro ao calcular saldos:', err);
+    }
+
+    // Usar sistema de agregação para cada participante
     let notificacoesEnviadas = 0;
     let notificacoesFalhadas = 0;
     
@@ -626,20 +617,34 @@ export class DespesaService {
         continue; // Pular se não tiver email
       }
 
+      // Obter saldo do participante
+      const saldo = saldosMap.get(participante.id);
+      const saldoAtual = saldo !== undefined ? formatCurrency(saldo) : undefined;
+      const direcao = saldo !== undefined ? (saldo > 0 ? 'aumentou' : saldo < 0 ? 'diminuiu' : undefined) : undefined;
+
       try {
-        await EmailQueueService.adicionarEmailDespesaEditada({
+        // Usar sistema de agregação - inclui despesa + saldo na mesma notificação
+        await EmailAggregationService.adicionarNotificacao({
           destinatario: email,
-          nomeDestinatario: participante.nome,
-          eventoNome: grupo.nome,
+          usuarioId: participante.usuario_id,
           eventoId: grupo.id,
-          despesaDescricao: despesa.descricao,
-          despesaValorTotal: despesa.valorTotal,
-          despesaData: formatDate(despesa.data),
-          mudancas: mudancasFormatadas,
-          linkEvento,
+          tipoNotificacao: 'resumo-evento',
+          dados: {
+            eventoNome: grupo.nome,
+            eventoId: grupo.id,
+            nomeDestinatario: participante.nome,
+            despesaId: despesa.id,
+            despesaDescricao: despesa.descricao,
+            despesaValorTotal: formatCurrency(despesa.valorTotal),
+            mudancas: mudancasFormatadas,
+            // Incluir saldo na mesma notificação
+            saldoAtual,
+            direcao,
+            linkEvento,
+          },
         });
         notificacoesEnviadas++;
-        console.log(`[DespesaService.notificarDespesaEditada] ✅ Notificação adicionada à fila para ${participante.nome} (${email})`);
+        console.log(`[DespesaService.notificarDespesaEditada] ✅ Notificação adicionada para agregação: ${participante.nome} (${email})`);
       } catch (err) {
         notificacoesFalhadas++;
         console.error(`[DespesaService.notificarDespesaEditada] ❌ Erro ao adicionar notificação para ${participante.nome} (${email}):`, err);
@@ -647,7 +652,7 @@ export class DespesaService {
       }
     }
     
-    console.log(`[DespesaService.notificarDespesaEditada] Resumo: ${notificacoesEnviadas} enviadas, ${notificacoesFalhadas} falhadas`);
+    console.log(`[DespesaService.notificarDespesaEditada] Resumo: ${notificacoesEnviadas} agregadas, ${notificacoesFalhadas} falhadas`);
   }
 
   /**

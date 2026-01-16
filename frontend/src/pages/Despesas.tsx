@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { usePageFocus } from '../hooks/usePageFocus';
 import { despesaApi, grupoApi, participanteApi, grupoParticipantesApi } from '../services/api';
-import { Despesa, Grupo, Participante } from '../types';
+import { Despesa, DespesaAnexo, Grupo, Participante } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from '../components/Modal';
-import { FaPlus, FaEdit, FaTrash, FaChartBar, FaUsers, FaShare, FaLock } from 'react-icons/fa';
+import FileUpload from '../components/FileUpload';
+import { FeatureGate } from '../components/FeatureGate';
+import { FaPlus, FaEdit, FaTrash, FaChartBar, FaUsers, FaShare, FaLock, FaPaperclip, FaDownload, FaImage, FaFilePdf, FaFile } from 'react-icons/fa';
 import ShareButtons from '../components/ShareButtons';
 import './Despesas.css';
 
@@ -37,6 +38,9 @@ const Despesas: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [loadingShareLink, setLoadingShareLink] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [anexos, setAnexos] = useState<DespesaAnexo[]>([]);
+  const [uploadingAnexos, setUploadingAnexos] = useState(false);
 
   // Função helper para verificar se usuário pode editar uma despesa
   const canEditDespesa = useCallback((despesa: Despesa): boolean => {
@@ -142,8 +146,6 @@ const Despesas: React.FC = () => {
     loadDespesas();
   }, [loadDespesas]);
 
-  // Recarregar dados quando a página voltar ao foco
-  usePageFocus(loadDespesas, [filtroGrupo]);
 
   const loadParticipantesDoEvento = async (eventoId: number, incluirPagadorAtual?: number, participantesAdicionais?: Participante[]): Promise<Participante[]> => {
     try {
@@ -229,13 +231,43 @@ const Despesas: React.FC = () => {
     }
   };
 
+  const formatValue = (value: string | number): string => {
+    if (!value && value !== 0) return '';
+    const numValue = typeof value === 'string' ? parseFloat(value.replace(',', '.')) : value;
+    if (isNaN(numValue)) return '';
+    return numValue.toFixed(2).replace('.', ',');
+  };
+
+  const parseValue = (value: string): string => {
+    // Remove tudo exceto números, vírgula e ponto
+    let cleaned = value.replace(/[^\d,.-]/g, '');
+    // Se tiver vírgula, assume que é o separador decimal brasileiro
+    if (cleaned.includes(',')) {
+      // Remove pontos (milhares) e mantém apenas a vírgula decimal
+      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+    }
+    // Se não tiver vírgula mas tiver ponto, mantém o ponto
+    // Se não tiver nenhum, retorna como está (será tratado como inteiro)
+    return cleaned;
+  };
+
+  const loadAnexos = async (despesaId: number) => {
+    try {
+      const anexosData = await despesaApi.listAnexos(despesaId);
+      setAnexos(anexosData);
+    } catch (error) {
+      console.error('Erro ao carregar anexos:', error);
+      setAnexos([]);
+    }
+  };
+
   const handleOpenModal = async (despesa?: Despesa) => {
     if (despesa) {
       setEditingDespesa(despesa);
       setFormData({
         grupo_id: despesa.grupo_id,
         descricao: despesa.descricao,
-        valorTotal: despesa.valorTotal.toString(),
+        valorTotal: formatValue(despesa.valorTotal),
         participante_pagador_id: despesa.participante_pagador_id || 0,
         data: despesa.data.split('T')[0],
       });
@@ -266,6 +298,9 @@ const Despesas: React.FC = () => {
       // E incluir participantes das participacoes da despesa
       await loadParticipantesDoEvento(despesa.grupo_id, despesa.participante_pagador_id, participantesDasParticipacoes);
       
+      // Carregar anexos da despesa
+      await loadAnexos(despesa.id);
+      
       setParticipantesExpandido(true); // Expandir ao editar
     } else {
       setEditingDespesa(null);
@@ -286,8 +321,10 @@ const Despesas: React.FC = () => {
         setParticipantesDoEvento([]);
         setParticipantesSelecionados([]);
       }
+      setAnexos([]);
       setParticipantesExpandido(false); // Colapsado por padrão ao criar
     }
+    setSelectedFiles([]);
     setIsModalOpen(true);
   };
 
@@ -298,6 +335,8 @@ const Despesas: React.FC = () => {
     setParticipantesSelecionados([]);
     setParticipantesExpandido(false);
     setParticipanteSubgrupoMap(new Map());
+    setSelectedFiles([]);
+    setAnexos([]);
     setFormData({
       grupo_id: 0,
       descricao: '',
@@ -305,6 +344,63 @@ const Despesas: React.FC = () => {
       participante_pagador_id: 0,
       data: new Date().toISOString().split('T')[0],
     });
+  };
+
+  const handleUploadAnexos = async (despesaId: number) => {
+    if (selectedFiles.length === 0) return;
+
+    try {
+      setUploadingAnexos(true);
+      setError(null);
+
+      for (const file of selectedFiles) {
+        await despesaApi.uploadAnexo(despesaId, file);
+      }
+
+      // Recarregar anexos
+      await loadAnexos(despesaId);
+      setSelectedFiles([]);
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.error || 'Erro ao fazer upload de anexos';
+      setError(errorMessage);
+      
+      if (err?.response?.status === 402) {
+        // Erro de plano PRO necessário
+        setError('Upload de anexos disponível apenas para plano PRO. Faça upgrade para continuar.');
+      }
+    } finally {
+      setUploadingAnexos(false);
+    }
+  };
+
+  const handleDeleteAnexo = async (despesaId: number, anexoId: number) => {
+    if (!window.confirm('Tem certeza que deseja excluir este anexo?')) {
+      return;
+    }
+
+    try {
+      await despesaApi.deleteAnexo(despesaId, anexoId);
+      await loadAnexos(despesaId);
+    } catch (error) {
+      console.error('Erro ao deletar anexo:', error);
+      setError('Erro ao deletar anexo');
+    }
+  };
+
+  const getFileIcon = (mimeType: string) => {
+    if (mimeType.startsWith('image/')) {
+      return <FaImage />;
+    }
+    if (mimeType === 'application/pdf') {
+      return <FaFilePdf />;
+    }
+    return <FaFile />;
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(1) + ' MB';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -674,11 +770,38 @@ const Despesas: React.FC = () => {
           <div className="form-group">
             <label>Valor Total *</label>
             <input
-              type="number"
-              step="0.01"
-              min="0"
+              type="text"
+              inputMode="decimal"
+              className="valor-despesa-input"
               value={formData.valorTotal}
-              onChange={(e) => setFormData({ ...formData, valorTotal: e.target.value })}
+              onChange={(e) => {
+                // Permite digitação livre, apenas remove caracteres inválidos
+                let value = e.target.value;
+                // Permite números, vírgula e ponto
+                value = value.replace(/[^\d,.-]/g, '');
+                // Limita a uma vírgula ou ponto decimal
+                const parts = value.split(/[,.]/);
+                if (parts.length > 2) {
+                  // Se tiver mais de um separador, manter apenas o primeiro
+                  value = parts[0] + (parts[1] ? ',' + parts.slice(1).join('') : '');
+                }
+                setFormData({ ...formData, valorTotal: value });
+              }}
+              onBlur={(e) => {
+                // Garantir formatação com 2 casas decimais ao sair do campo
+                const parsed = parseValue(e.target.value);
+                if (parsed && parsed !== '-' && parsed !== '') {
+                  const numValue = parseFloat(parsed);
+                  if (!isNaN(numValue) && numValue >= 0) {
+                    setFormData({ ...formData, valorTotal: formatValue(numValue) });
+                  } else {
+                    setFormData({ ...formData, valorTotal: '' });
+                  }
+                } else if (parsed === '' || parsed === '-') {
+                  setFormData({ ...formData, valorTotal: '' });
+                }
+              }}
+              placeholder="0,00"
               required
             />
           </div>
@@ -740,6 +863,166 @@ const Despesas: React.FC = () => {
               </p>
             )}
           </div>
+
+          {/* Seção de Anexos - Logo após "Quem Pagou" */}
+          <div className="form-group">
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FaPaperclip /> Anexos (Cupons, Recibos, etc.)
+            </label>
+            
+            <FeatureGate feature="receipt_upload_enabled">
+              
+              {/* Anexos existentes */}
+              {editingDespesa && anexos.length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '8px' }}>
+                    Anexos existentes ({anexos.length}):
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '12px' }}>
+                    {anexos.map((anexo) => (
+                      <div key={anexo.id} style={{ position: 'relative', border: '1px solid rgba(148, 163, 184, 0.20)', borderRadius: '8px', overflow: 'hidden' }}>
+                        {anexo.tipo_mime.startsWith('image/') ? (
+                          <div style={{ position: 'relative', width: '100%', aspectRatio: 1 }}>
+                            <img 
+                              src={anexo.url_cloudfront} 
+                              alt={anexo.nome_original}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              onError={(e) => {
+                                // Fallback para URL S3 se CloudFront falhar
+                                (e.target as HTMLImageElement).src = anexo.url_s3;
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAnexo(editingDespesa.id, anexo.id)}
+                              style={{
+                                position: 'absolute',
+                                top: '4px',
+                                right: '4px',
+                                background: 'rgba(239, 68, 68, 0.9)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '50%',
+                                width: '24px',
+                                height: '24px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '12px',
+                              }}
+                              title="Deletar anexo"
+                            >
+                              <FaTrash />
+                            </button>
+                            <a
+                              href={anexo.url_cloudfront}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                position: 'absolute',
+                                bottom: '4px',
+                                left: '4px',
+                                background: 'rgba(0, 0, 0, 0.6)',
+                                color: 'white',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                textDecoration: 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                              title="Abrir em nova aba"
+                            >
+                              <FaDownload />
+                            </a>
+                          </div>
+                        ) : (
+                          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ fontSize: '24px', color: '#6366f1' }}>
+                              {getFileIcon(anexo.tipo_mime)}
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'rgba(226, 232, 240, 0.9)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+                              {anexo.nome_original}
+                            </div>
+                            <div style={{ fontSize: '10px', color: 'rgba(226, 232, 240, 0.6)' }}>
+                              {formatFileSize(anexo.tamanho_otimizado || anexo.tamanho_original)}
+                            </div>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              <a
+                                href={anexo.url_cloudfront}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  background: '#6366f1',
+                                  color: 'white',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  textDecoration: 'none',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                }}
+                                title="Download"
+                              >
+                                <FaDownload />
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAnexo(editingDespesa.id, anexo.id)}
+                                style={{
+                                  background: '#ef4444',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '4px 8px',
+                                  cursor: 'pointer',
+                                  fontSize: '11px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                }}
+                                title="Deletar"
+                              >
+                                <FaTrash />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Upload de novos anexos */}
+              <FileUpload
+                files={selectedFiles}
+                onFilesChange={setSelectedFiles}
+                disabled={!editingDespesa || uploadingAnexos}
+              />
+
+              {editingDespesa && selectedFiles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleUploadAnexos(editingDespesa.id)}
+                  className="btn btn-secondary"
+                  disabled={uploadingAnexos}
+                  style={{ marginTop: '12px' }}
+                >
+                  {uploadingAnexos ? 'Enviando...' : `Enviar ${selectedFiles.length} arquivo(s)`}
+                </button>
+              )}
+
+              {!editingDespesa && (
+                <p style={{ fontSize: '12px', color: 'rgba(226, 232, 240, 0.6)', marginTop: '8px' }}>
+                  Salve a despesa primeiro para adicionar anexos
+                </p>
+              )}
+            </FeatureGate>
+          </div>
+
           <div className="form-group">
             <label>Data *</label>
             <input
@@ -872,6 +1155,7 @@ const Despesas: React.FC = () => {
               </div>
             )}
           </div>
+
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
             <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
               Cancelar

@@ -384,25 +384,54 @@ export class PublicEventoService {
 
     const participantesMap = new Map(participantes.map(p => [p.id, p]));
 
-    // Garantir que as relações estão preenchidas
-    return despesas.map(despesa => ({
-      id: despesa.id,
-      descricao: despesa.descricao,
-      valorTotal: Number(despesa.valorTotal),
-      data: despesa.data,
-      pagador: despesa.pagador ? {
-        id: despesa.pagador.id,
-        nome: despesa.pagador.nome,
-      } : null,
-      participacoes: (despesa.participacoes || []).map(participacao => ({
-        participante_id: participacao.participante_id,
-        participante: participantesMap.get(participacao.participante_id) ? {
-          id: participacao.participante_id,
-          nome: participantesMap.get(participacao.participante_id)!.nome,
-        } : null,
-        valorDevePagar: Number(participacao.valorDevePagar),
-      })),
-    }));
+    // Buscar anexos para cada despesa
+    const { DespesaAnexo } = await import('../entities/DespesaAnexo');
+    const anexoRepository = AppDataSource.getRepository(DespesaAnexo);
+
+    const despesasComAnexos = await Promise.all(
+      despesas.map(async (despesa) => {
+        const anexos = await anexoRepository.find({
+          where: { despesa_id: despesa.id },
+          order: { criadoEm: 'DESC' },
+        });
+
+        return {
+          id: despesa.id,
+          descricao: despesa.descricao,
+          valorTotal: Number(despesa.valorTotal),
+          data: despesa.data,
+          pagador: despesa.pagador ? {
+            id: despesa.pagador.id,
+            nome: despesa.pagador.nome,
+          } : null,
+          participacoes: (despesa.participacoes || []).map(participacao => ({
+            participante_id: participacao.participante_id,
+            participante: participantesMap.get(participacao.participante_id) ? {
+              id: participacao.participante_id,
+              nome: participantesMap.get(participacao.participante_id)!.nome,
+            } : null,
+            valorDevePagar: Number(participacao.valorDevePagar),
+          })),
+          anexos: anexos.map(anexo => ({
+            id: anexo.id,
+            despesa_id: anexo.despesa_id,
+            nome_original: anexo.nome_original,
+            nome_arquivo: anexo.nome_arquivo,
+            tipo_mime: anexo.tipo_mime,
+            tamanho_original: anexo.tamanho_original,
+            tamanho_otimizado: anexo.tamanho_otimizado,
+            largura: anexo.largura,
+            altura: anexo.altura,
+            otimizado: anexo.otimizado,
+            url_s3: anexo.url_s3,
+            url_cloudfront: anexo.url_cloudfront,
+            criado_em: anexo.criadoEm.toISOString(),
+          })),
+        };
+      })
+    );
+
+    return despesasComAnexos;
   }
 }
 

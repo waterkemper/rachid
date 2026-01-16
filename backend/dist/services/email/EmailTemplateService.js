@@ -369,6 +369,63 @@ class EmailTemplateService {
             linkDespesas: data.linkDespesas,
         });
     }
+    /**
+     * Renderiza template de resumo de atualizações (email consolidado)
+     */
+    static renderResumoAtualizacoes(data) {
+        // Construir lista de atualizações
+        const atualizacoes = [];
+        if (data.inclusaoEvento) {
+            atualizacoes.push('Você foi adicionado ao evento');
+        }
+        if (data.despesasCriadas.length > 0) {
+            if (data.despesasCriadas.length === 1) {
+                atualizacoes.push(`Nova despesa registrada: ${data.despesasCriadas[0].descricao} (${data.despesasCriadas[0].valor})`);
+            }
+            else {
+                const nomes = data.despesasCriadas.map(d => d.descricao).join(', ');
+                atualizacoes.push(`${data.despesasCriadas.length} novas despesas registradas (${nomes})`);
+            }
+        }
+        if (data.despesasEditadas.length > 0) {
+            if (data.despesasEditadas.length === 1) {
+                const mudancasTexto = data.despesasEditadas[0].mudancas.join('; ');
+                atualizacoes.push(`Despesa editada: ${data.despesasEditadas[0].descricao} (${mudancasTexto})`);
+            }
+            else {
+                const nomes = data.despesasEditadas.map(d => d.descricao).join(', ');
+                atualizacoes.push(`${data.despesasEditadas.length} despesas foram editadas (${nomes})`);
+            }
+        }
+        // Construir HTML das atualizações
+        const atualizacoesHtml = atualizacoes.length > 0
+            ? `<ul style="margin: 0; padding-left: 20px;">${atualizacoes.map(a => `<li style="margin-bottom: 8px;">${a}</li>`).join('')}</ul>`
+            : '<p>Houve atualizações no evento.</p>';
+        // Construir bloco de saldo
+        let saldoHtml = '';
+        if (data.saldoAtual) {
+            const corSaldo = data.direcaoSaldo === 'diminuiu' ? '#dc3545' : '#28a745';
+            const textoSaldo = data.direcaoSaldo === 'diminuiu' ? 'você deve' : 'você tem a receber';
+            saldoHtml = `
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid ${corSaldo};">
+          <p style="margin: 0; font-size: 16px;">
+            <strong>Seu saldo atual:</strong> 
+            <span style="color: ${corSaldo}; font-weight: bold;">${data.saldoAtual}</span>
+            <span style="color: #666;">(${textoSaldo})</span>
+          </p>
+        </div>
+      `;
+        }
+        return this.render('resumo-atualizacoes.html', {
+            titulo: `Atualizações - ${data.eventoNome} - Rachid`,
+            nomeDestinatario: data.nomeDestinatario,
+            eventoNome: data.eventoNome,
+            linkEvento: data.linkEvento,
+            atualizacoesHtml: atualizacoesHtml,
+            saldoHtml: saldoHtml,
+            inclusaoEvento: data.inclusaoEvento ? 'true' : '',
+        });
+    }
 }
 exports.EmailTemplateService = EmailTemplateService;
 EmailTemplateService.templatesPath = (() => {

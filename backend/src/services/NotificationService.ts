@@ -3,6 +3,7 @@ import { CalculadoraService, SaldoParticipante } from './CalculadoraService';
 import { Participante } from '../entities/Participante';
 import { Grupo } from '../entities/Grupo';
 import { EmailQueueService } from './EmailQueueService';
+import { EmailAggregationService } from './EmailAggregationService';
 
 /**
  * Serviço de notificações para mudanças de saldo
@@ -124,21 +125,24 @@ export class NotificationService {
             }).format(d);
           };
           
-          // Adicionar job de notificação à fila
-          await EmailQueueService.adicionarEmailMudancaSaldo({
+          // Usar sistema de agregação para evitar spam de emails
+          await EmailAggregationService.adicionarNotificacao({
             destinatario: email,
-            nomeDestinatario: participante.nome,
-            eventoNome: grupo.nome,
-            eventoId: grupo.id,
-            saldoAnterior: saldoAntes ? formatCurrency(saldoAntes.saldo) : undefined,
-            saldoAtual: formatCurrency(saldoDepois.saldo),
-            diferenca: formatCurrency(Math.abs(diferenca)),
-            direcao: diferenca > 0 ? 'aumentou' : diferenca < 0 ? 'diminuiu' : 'manteve',
-            eventoData: formatDate(grupo.data),
-            linkEventoPublico: linkEventoPublico || `${frontendUrl}/eventos/${grupoId}`,
+            usuarioId: participante.usuario_id,
+            eventoId: grupoId,
+            tipoNotificacao: 'resumo-evento',
+            dados: {
+              eventoNome: grupo.nome,
+              eventoId: grupoId,
+              nomeDestinatario: participante.nome,
+              saldoAtual: formatCurrency(saldoDepois.saldo),
+              direcao: diferenca > 0 ? 'aumentou' : diferenca < 0 ? 'diminuiu' : undefined,
+              diferenca: formatCurrency(Math.abs(diferenca)),
+              linkEventoPublico: linkEventoPublico || `${frontendUrl}/eventos/${grupoId}`,
+            },
           });
           
-          console.log(`[NotificationService] Notificação de mudança de saldo adicionada à fila para ${email}`);
+          console.log(`[NotificationService] Notificação de mudança de saldo adicionada para agregação: ${email}`);
         } catch (err) {
           console.error(`[NotificationService] Erro ao notificar participante ${participanteId}:`, err);
           // Continuar notificando outros participantes mesmo se um falhar

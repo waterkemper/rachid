@@ -25,6 +25,8 @@ const PlanLimit_1 = require("../entities/PlanLimit");
 const PromoCode_1 = require("../entities/PromoCode");
 const Plan_1 = require("../entities/Plan");
 const Email_1 = require("../entities/Email");
+const EmailPendente_1 = require("../entities/EmailPendente");
+const DespesaAnexo_1 = require("../entities/DespesaAnexo");
 // Suporta DATABASE_URL (formato URI) ou variáveis individuais
 function getDataSourceConfig() {
     // Se DATABASE_URL estiver definida, usa ela
@@ -60,6 +62,8 @@ function getDataSourceConfig() {
                 PromoCode_1.PromoCode,
                 Plan_1.Plan,
                 Email_1.Email,
+                EmailPendente_1.EmailPendente,
+                DespesaAnexo_1.DespesaAnexo,
             ],
             migrations: [],
             subscribers: [],
@@ -99,6 +103,8 @@ function getDataSourceConfig() {
             PromoCode_1.PromoCode,
             Plan_1.Plan,
             Email_1.Email,
+            EmailPendente_1.EmailPendente,
+            DespesaAnexo_1.DespesaAnexo,
         ],
         migrations: [],
         subscribers: [],

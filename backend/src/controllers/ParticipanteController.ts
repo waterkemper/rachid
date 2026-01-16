@@ -36,7 +36,11 @@ export class ParticipanteController {
       }
       const participante = await ParticipanteService.create({ nome, email, chavePix, telefone, usuario_id: usuarioId });
       res.status(201).json(participante);
-    } catch (error) {
+    } catch (error: any) {
+      // Se for erro de duplicata, retornar erro 409 (Conflict)
+      if (error.message && error.message.includes('já existe')) {
+        return res.status(409).json({ error: error.message });
+      }
       res.status(500).json({ error: 'Erro ao criar participante' });
     }
   }

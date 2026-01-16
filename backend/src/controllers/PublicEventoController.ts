@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { PublicEventoService } from '../services/PublicEventoService';
 import { AdminService } from '../services/AdminService';
+import { AppDataSource } from '../database/data-source';
+import { Despesa } from '../entities/Despesa';
 
 export class PublicEventoController {
   static async getByToken(req: Request, res: Response) {
@@ -131,6 +133,33 @@ export class PublicEventoController {
     } catch (error) {
       console.error('Erro ao buscar despesas públicas:', error);
       res.status(500).json({ error: 'Erro ao buscar despesas' });
+    }
+  }
+
+  /**
+   * Listar anexos de uma despesa (público, via token)
+   * GET /api/public/eventos/:token/despesas/:despesaId/anexos
+   */
+  static async getAnexosByToken(req: Request, res: Response) {
+    try {
+      const { token, despesaId } = req.params;
+      if (!token) {
+        return res.status(400).json({ error: 'Token é obrigatório' });
+      }
+
+      const evento = await PublicEventoService.findByToken(token);
+      if (!evento) {
+        return res.status(404).json({ error: 'Evento não encontrado' });
+      }
+
+      // Verificar se a despesa pertence ao evento
+      const { DespesaAnexoService } = await import('../services/DespesaAnexoService');
+      const anexos = await DespesaAnexoService.findByDespesa(parseInt(despesaId));
+      
+      res.json(anexos);
+    } catch (error) {
+      console.error('Erro ao buscar anexos públicos:', error);
+      res.status(500).json({ error: 'Erro ao buscar anexos' });
     }
   }
 

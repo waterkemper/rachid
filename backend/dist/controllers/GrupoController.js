@@ -233,8 +233,8 @@ class GrupoController {
             const id = parseInt(req.params.id);
             const { status } = req.body;
             const usuarioId = req.usuarioId;
-            if (!status || (status !== 'CONCLUIDO' && status !== 'CANCELADO')) {
-                return res.status(400).json({ error: 'Status inválido. Use "CONCLUIDO" ou "CANCELADO"' });
+            if (!status || (status !== 'CONCLUIDO' && status !== 'CANCELADO' && status !== 'EM_ABERTO')) {
+                return res.status(400).json({ error: 'Status inválido. Use "CONCLUIDO", "CANCELADO" ou "EM_ABERTO"' });
             }
             const grupo = await GrupoService_1.GrupoService.updateStatus(id, usuarioId, status);
             if (!grupo) {

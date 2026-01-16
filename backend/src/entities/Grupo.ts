@@ -34,6 +34,9 @@ export class Grupo {
   @Column({ type: 'varchar', length: 20, default: 'EM_ABERTO', name: 'status' })
   status!: 'EM_ABERTO' | 'CONCLUIDO' | 'CANCELADO';
 
+  @Column({ type: 'timestamp', nullable: true, name: 'data_conclusao' })
+  dataConclusao?: Date;
+
   @Column({ type: 'timestamp', nullable: true, name: 'ultimo_email_reativacao_sem_participantes' })
   ultimoEmailReativacaoSemParticipantes?: Date;
 

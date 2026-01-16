@@ -47,7 +47,7 @@ const ParticipacaoService_1 = require("./ParticipacaoService");
 const Usuario_1 = require("../entities/Usuario");
 const Participante_1 = require("../entities/Participante");
 const typeorm_1 = require("typeorm");
-const EmailQueueService_1 = require("./EmailQueueService");
+const EmailAggregationService_1 = require("./EmailAggregationService");
 class GrupoService {
     /**
      * Verifica se um usuário tem acesso a um grupo (é dono OU é participante via email)
@@ -84,7 +84,7 @@ class GrupoService {
             // Buscar grupos onde o usuário é dono
             const gruposComoDono = await this.grupoRepository.find({
                 where: { usuario_id: usuarioId },
-                relations: ['participantes', 'participantes.participante'],
+                relations: ['participantes', 'participantes.participante', 'usuario'],
                 order: { data: 'DESC', id: 'DESC' },
             });
             // Buscar grupos onde o usuário é participante (via email)
@@ -124,7 +124,7 @@ class GrupoService {
                         const gruposIdsArray = Array.from(gruposIdsAdicionais);
                         const gruposAdicionais = await this.grupoRepository.find({
                             where: { id: (0, typeorm_1.In)(gruposIdsArray) },
-                            relations: ['participantes', 'participantes.participante'],
+                            relations: ['participantes', 'participantes.participante', 'usuario'],
                             order: { data: 'DESC', id: 'DESC' },
                         });
                         gruposComoParticipante.push(...gruposAdicionais);
@@ -170,6 +170,7 @@ class GrupoService {
                     // Fallback: buscar apenas grupos do usuário (sem colaboração)
                     const gruposSemRelacoes = await this.grupoRepository.find({
                         where: { usuario_id: usuarioId },
+                        relations: ['usuario'],
                         order: { data: 'DESC', id: 'DESC' },
                     });
                     // Carregar participantes manualmente com tratamento de erro
@@ -311,30 +312,58 @@ class GrupoService {
             return null;
         }
         // Validar transições permitidas
-        if (grupo.status === 'CONCLUIDO' && status !== 'CONCLUIDO') {
-            throw new Error('Não é possível alterar o status de um evento concluído');
-        }
+        // Permitir reabrir eventos concluídos (CONCLUIDO -> EM_ABERTO)
         if (grupo.status === 'CANCELADO' && status !== 'CANCELADO') {
             throw new Error('Não é possível alterar o status de um evento cancelado');
         }
-        // Para CONCLUIDO, verificar condições (todos pagos OU saldos zerados)
+        // Para CONCLUIDO, confirmar automaticamente todos os pagamentos pendentes
         if (status === 'CONCLUIDO' && grupo.status === 'EM_ABERTO') {
-            // Buscar sugestões (individuais E entre grupos) para verificar se todas foram pagas OU se não há sugestões (saldos zerados)
-            const { CalculadoraService } = await Promise.resolve().then(() => __importStar(require('./CalculadoraService')));
-            const { EventoFinalizadoService } = await Promise.resolve().then(() => __importStar(require('./EventoFinalizadoService')));
-            // Verificar se todas sugestões (individuais E entre grupos) foram confirmadas
-            const todosPagosCompleto = await EventoFinalizadoService.verificarTodosPagosCompleto(id, usuarioId);
-            if (!todosPagosCompleto) {
-                // Verificar se pelo menos matematicamente está quitado
-                const saldos = await CalculadoraService.calcularSaldosGrupo(id, usuarioId);
-                const saldosGrupos = await CalculadoraService.calcularSaldosPorGrupo(id, usuarioId);
-                const todosQuitadosIndividuais = saldos.length === 0 || saldos.every(s => Math.abs(s.saldo) <= 0.01);
-                const todosQuitadosGrupos = saldosGrupos.length === 0 || saldosGrupos.every(s => Math.abs(s.saldo) <= 0.01);
-                if (!todosQuitadosIndividuais || !todosQuitadosGrupos) {
-                    throw new Error('Não é possível concluir o evento: ainda há pagamentos pendentes (individuais ou entre grupos). Marque todos os pagamentos como confirmados ou aguarde até que todos os saldos sejam quitados.');
+            const { Pagamento } = await Promise.resolve().then(() => __importStar(require('../entities/Pagamento')));
+            const { PagamentoService } = await Promise.resolve().then(() => __importStar(require('./PagamentoService')));
+            const pagamentoRepository = data_source_1.AppDataSource.getRepository(Pagamento);
+            // Buscar todos os pagamentos do grupo que ainda não foram confirmados
+            const pagamentosPendentes = await pagamentoRepository.find({
+                where: {
+                    grupoId: id,
+                    confirmadoEm: (0, typeorm_1.IsNull)(),
+                },
+                relations: ['paraParticipante', 'grupoCredor'],
+            });
+            // Confirmar automaticamente todos os pagamentos pendentes
+            for (const pagamento of pagamentosPendentes) {
+                try {
+                    if (pagamento.tipo === 'INDIVIDUAL' && pagamento.paraParticipanteId) {
+                        // Para pagamentos individuais, usar o participante que deve receber
+                        await PagamentoService.confirmarPagamento(pagamento.id, pagamento.paraParticipanteId);
+                    }
+                    else if (pagamento.tipo === 'ENTRE_GRUPOS' && pagamento.paraGrupoId) {
+                        // Para pagamentos entre grupos, buscar um participante do grupo credor
+                        const { GrupoParticipantesEvento } = await Promise.resolve().then(() => __importStar(require('../entities/GrupoParticipantesEvento')));
+                        const { ParticipanteGrupoEvento } = await Promise.resolve().then(() => __importStar(require('../entities/ParticipanteGrupoEvento')));
+                        const grupoParticipantesEventoRepository = data_source_1.AppDataSource.getRepository(GrupoParticipantesEvento);
+                        const participanteGrupoEventoRepository = data_source_1.AppDataSource.getRepository(ParticipanteGrupoEvento);
+                        // Buscar um participante do grupo credor
+                        const participanteGrupoCredor = await participanteGrupoEventoRepository.findOne({
+                            where: {
+                                grupoParticipantesEventoId: pagamento.paraGrupoId,
+                            },
+                        });
+                        if (participanteGrupoCredor && participanteGrupoCredor.participanteId) {
+                            await PagamentoService.confirmarPagamento(pagamento.id, participanteGrupoCredor.participanteId);
+                        }
+                    }
+                }
+                catch (error) {
+                    // Log do erro mas continua processando outros pagamentos
+                    console.warn(`Erro ao confirmar automaticamente pagamento ${pagamento.id}:`, error.message);
                 }
             }
-            // Se todos pagos ou todos quitados matematicamente, pode concluir
+            // Registrar data de conclusão
+            grupo.dataConclusao = new Date();
+        }
+        else if (status === 'EM_ABERTO' && grupo.status === 'CONCLUIDO') {
+            // Se está reabrindo um evento concluído, limpar data de conclusão
+            grupo.dataConclusao = undefined;
         }
         // Atualizar status
         grupo.status = status;
@@ -462,20 +491,22 @@ class GrupoService {
             }).format(value);
         };
         try {
-            await EmailQueueService_1.EmailQueueService.adicionarEmailInclusaoEvento({
+            // Usar sistema de agregação para evitar spam de emails
+            await EmailAggregationService_1.EmailAggregationService.adicionarNotificacao({
                 destinatario: email,
-                nomeDestinatario: participante.nome,
-                eventoNome: grupo.nome,
-                eventoId: grupo.id,
-                eventoDescricao: grupo.descricao || undefined,
-                eventoData: formatDate(grupo.data),
-                adicionadoPor,
-                linkEvento: linkEventoPublico || `${frontendUrl}/eventos/${grupoId}`,
-                linkEventoPublico,
-                totalDespesas: formatCurrency(totalDespesas),
-                numeroParticipantes: numeroParticipantes.toString(),
-                linkCadastro,
+                usuarioId: participante.usuario_id,
+                eventoId: grupoId,
+                tipoNotificacao: 'inclusao-evento',
+                dados: {
+                    eventoNome: grupo.nome,
+                    eventoId: grupoId,
+                    nomeDestinatario: participante.nome,
+                    linkEvento: linkEventoPublico || `${frontendUrl}/eventos/${grupoId}`,
+                    linkEventoPublico: linkEventoPublico || undefined,
+                    criadoPor: adicionadoPor,
+                },
             });
+            console.log(`[GrupoService] Notificação de inclusão adicionada para agregação: ${email}`);
         }
         catch (err) {
             console.error(`Erro ao adicionar notificação de inclusão em evento para ${email}:`, err);

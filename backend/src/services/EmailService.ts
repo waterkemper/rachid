@@ -162,7 +162,7 @@ export class EmailService {
    * Envia email usando SendGrid ou loga em modo desenvolvimento
    * Agora com verificação de opt-out e registro na tabela de log
    */
-  private static async sendEmail(
+  static async sendEmail(
     to: string,
     subject: string,
     html: string,

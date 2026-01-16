@@ -325,12 +325,23 @@ class EmailService {
             }).format(value);
         };
         const formatDate = (dateString) => {
-            const date = new Date(dateString);
-            return new Intl.DateTimeFormat('pt-BR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-            }).format(date);
+            // Se já está no formato dd/mm/yyyy, retornar diretamente
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+                return dateString;
+            }
+            try {
+                const date = new Date(dateString);
+                if (isNaN(date.getTime()))
+                    return dateString;
+                return new Intl.DateTimeFormat('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                }).format(date);
+            }
+            catch {
+                return dateString;
+            }
         };
         const html = EmailTemplateService_1.EmailTemplateService.renderNovaDespesa({
             nomeDestinatario: data.nomeDestinatario,
@@ -363,12 +374,23 @@ class EmailService {
             }).format(value);
         };
         const formatDate = (dateString) => {
-            const date = new Date(dateString);
-            return new Intl.DateTimeFormat('pt-BR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-            }).format(date);
+            // Se já está no formato dd/mm/yyyy, retornar diretamente
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+                return dateString;
+            }
+            try {
+                const date = new Date(dateString);
+                if (isNaN(date.getTime()))
+                    return dateString;
+                return new Intl.DateTimeFormat('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                }).format(date);
+            }
+            catch {
+                return dateString;
+            }
         };
         const html = EmailTemplateService_1.EmailTemplateService.renderDespesaEditada({
             nomeDestinatario: data.nomeDestinatario,
@@ -392,12 +414,23 @@ class EmailService {
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const linkEvento = data.linkEvento || data.linkEventoPublico || `${frontendUrl}/eventos/${data.eventoId}`;
         const formatDate = (dateString) => {
-            const date = new Date(dateString);
-            return new Intl.DateTimeFormat('pt-BR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-            }).format(date);
+            // Se já está no formato dd/mm/yyyy, retornar diretamente
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+                return dateString;
+            }
+            try {
+                const date = new Date(dateString);
+                if (isNaN(date.getTime()))
+                    return dateString;
+                return new Intl.DateTimeFormat('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                }).format(date);
+            }
+            catch {
+                return dateString;
+            }
         };
         const html = EmailTemplateService_1.EmailTemplateService.renderInclusaoEvento({
             nomeDestinatario: data.nomeDestinatario,

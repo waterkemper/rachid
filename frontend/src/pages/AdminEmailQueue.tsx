@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { adminApi } from '../services/api';
-import { FaEnvelope, FaSpinner, FaSync, FaEye, FaChevronDown, FaChevronUp, FaClock, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
+import { FaEnvelope, FaSpinner, FaSync, FaEye, FaChevronDown, FaChevronUp, FaClock, FaCheckCircle, FaExclamationCircle, FaTrash, FaLayerGroup } from 'react-icons/fa';
 import './AdminEmailQueue.css';
 
 interface QueueStatus {
@@ -23,6 +23,23 @@ interface QueueJob {
   retryCount?: number;
 }
 
+interface AggregationStats {
+  totalPendentes: number;
+  totalProcessados: number;
+  proximosAProcessar: number;
+  emailsEstimados: number;
+  porTipo: Record<string, number>;
+  pendentes: Array<{
+    id: number;
+    destinatario: string;
+    eventoId: number;
+    tipoNotificacao: string;
+    criadoEm: string;
+    processarApos: string;
+  }>;
+  warning?: string;
+}
+
 const AdminEmailQueue: React.FC = () => {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
@@ -34,17 +51,24 @@ const AdminEmailQueue: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [expandedQueues, setExpandedQueues] = useState<Set<string>>(new Set());
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [cancelingJob, setCancelingJob] = useState<string | null>(null);
+  const [cancelingQueue, setCancelingQueue] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [aggregationStats, setAggregationStats] = useState<AggregationStats | null>(null);
+  const [showAggregation, setShowAggregation] = useState(false);
+  const [deletingPendente, setDeletingPendente] = useState<number | null>(null);
+  const [deletingAllPendentes, setDeletingAllPendentes] = useState(false);
 
   const queueNames: Record<string, string> = {
-    'nova-despesa': 'Nova Despesa',
-    'despesa-editada': 'Despesa Editada',
     'inclusao-evento': 'Inclusão em Evento',
-    'participante-adicionado-despesa': 'Participante Adicionado',
-    'mudanca-saldo': 'Mudança de Saldo',
     'evento-finalizado': 'Evento Finalizado',
     'reativacao-sem-evento': 'Reativação (Sem Evento)',
     'reativacao-sem-participantes': 'Reativação (Sem Participantes)',
     'reativacao-sem-despesas': 'Reativação (Sem Despesas)',
+    'verificar-reativacao-daily': 'Verificação Diária (Cron)',
+    'processar-emails-pendentes': 'Agregação de Emails (Cron)',
+    // Tipo usado na tabela email_pendentes (sistema de agregação)
+    'resumo-evento': 'Resumo de Evento',
   };
 
   useEffect(() => {
@@ -54,6 +78,7 @@ const AdminEmailQueue: React.FC = () => {
     }
 
     loadQueueStatus();
+    loadAggregationStats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
@@ -62,6 +87,7 @@ const AdminEmailQueue: React.FC = () => {
     if (autoRefresh) {
       interval = setInterval(() => {
         loadQueueStatus();
+        loadAggregationStats();
         if (selectedQueue) {
           loadQueueJobs(selectedQueue);
         }
@@ -88,6 +114,46 @@ const AdminEmailQueue: React.FC = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAggregationStats = async () => {
+    try {
+      const data = await adminApi.getEmailAggregationStats();
+      setAggregationStats(data);
+    } catch (err: any) {
+      console.error('Erro ao carregar stats de agregação:', err);
+      // Não mostrar erro se a tabela não existir
+    }
+  };
+
+  const handleDeletePendente = async (id: number) => {
+    if (!confirm('Tem certeza que deseja excluir esta notificação pendente?')) return;
+    
+    try {
+      setDeletingPendente(id);
+      await adminApi.deleteEmailPendente(id);
+      setSuccessMessage('Notificação excluída com sucesso');
+      await loadAggregationStats();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erro ao excluir notificação');
+    } finally {
+      setDeletingPendente(null);
+    }
+  };
+
+  const handleDeleteAllPendentes = async () => {
+    if (!confirm('Tem certeza que deseja excluir TODAS as notificações pendentes?')) return;
+    
+    try {
+      setDeletingAllPendentes(true);
+      const result = await adminApi.deleteAllEmailPendentes();
+      setSuccessMessage(result.message);
+      await loadAggregationStats();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erro ao excluir notificações');
+    } finally {
+      setDeletingAllPendentes(false);
     }
   };
 
@@ -159,6 +225,57 @@ const AdminEmailQueue: React.FC = () => {
     return labels[state] || state;
   };
 
+  const cancelJob = async (jobId: string) => {
+    if (!window.confirm('Tem certeza que deseja cancelar este job?')) {
+      return;
+    }
+
+    try {
+      setCancelingJob(jobId);
+      setError(null);
+      await adminApi.cancelEmailQueueJob(jobId);
+      setSuccessMessage('Job cancelado com sucesso!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+      
+      // Recarregar lista de jobs
+      if (selectedQueue) {
+        await loadQueueJobs(selectedQueue);
+      }
+      await loadQueueStatus();
+    } catch (err: any) {
+      console.error('Erro ao cancelar job:', err);
+      setError('Erro ao cancelar job. Tente novamente.');
+    } finally {
+      setCancelingJob(null);
+    }
+  };
+
+  const cancelAllJobs = async (queue: string) => {
+    const queueName = queueNames[queue] || queue;
+    if (!window.confirm(`Tem certeza que deseja cancelar TODOS os jobs da fila "${queueName}"?`)) {
+      return;
+    }
+
+    try {
+      setCancelingQueue(queue);
+      setError(null);
+      const result = await adminApi.cancelAllEmailQueueJobs(queue);
+      setSuccessMessage(`${result.count} job(s) cancelado(s) com sucesso!`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+      
+      // Recarregar listas
+      if (selectedQueue === queue) {
+        await loadQueueJobs(queue);
+      }
+      await loadQueueStatus();
+    } catch (err: any) {
+      console.error('Erro ao cancelar jobs da fila:', err);
+      setError('Erro ao cancelar jobs da fila. Tente novamente.');
+    } finally {
+      setCancelingQueue(null);
+    }
+  };
+
   const totalPending = queues ? queues.reduce((sum, q) => sum + (q.size || 0), 0) : 0;
 
   if (loading) {
@@ -217,6 +334,12 @@ const AdminEmailQueue: React.FC = () => {
         </div>
       )}
 
+      {successMessage && (
+        <div className="alert alert-success">
+          <FaCheckCircle /> {successMessage}
+        </div>
+      )}
+
       <div className="queue-summary">
         <div className="summary-card">
           <div className="summary-icon">
@@ -236,7 +359,151 @@ const AdminEmailQueue: React.FC = () => {
             <div className="summary-value">{queues.filter(q => q.size > 0).length}</div>
           </div>
         </div>
+        {aggregationStats && (
+          <div className="summary-card">
+            <div className="summary-icon">
+              <FaLayerGroup />
+            </div>
+            <div className="summary-content">
+              <div className="summary-label">Emails Aguardando Agregação</div>
+              <div className="summary-value">{aggregationStats.totalPendentes}</div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Seção de Agregação de Emails */}
+      {aggregationStats && (
+        <div className="queues-list">
+          <div className="queue-item">
+            <div 
+              className="queue-header"
+              onClick={() => setShowAggregation(!showAggregation)}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="queue-info">
+                <div className="queue-name">
+                  {showAggregation ? <FaChevronUp /> : <FaChevronDown />}
+                  <FaLayerGroup style={{ marginLeft: '8px' }} />
+                  <span style={{ marginLeft: '8px' }}>Sistema de Agregação de Emails</span>
+                </div>
+                <div className="queue-meta">
+                  <span className="queue-size">{aggregationStats.totalPendentes} notificação(ões) pendente(s)</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {aggregationStats.totalPendentes > 0 && (
+                  <button
+                    className="btn btn-danger btn-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteAllPendentes();
+                    }}
+                    disabled={deletingAllPendentes}
+                    title="Excluir todas as notificações pendentes"
+                  >
+                    {deletingAllPendentes ? <FaSpinner className="spin" /> : <FaTrash />}
+                    <span style={{ marginLeft: '5px' }}>Limpar Tudo</span>
+                  </button>
+                )}
+                <div className={`queue-badge ${aggregationStats.totalPendentes > 0 ? 'has-jobs' : 'empty'}`}>
+                  {aggregationStats.totalPendentes}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {showAggregation && (
+            <div className="queue-details" style={{ marginTop: '-10px', marginBottom: '20px' }}>
+              {aggregationStats.warning && (
+                <div className="alert alert-warning">
+                  <FaExclamationCircle /> {aggregationStats.warning}
+                </div>
+              )}
+              
+              <div className="queue-summary" style={{ marginBottom: '15px' }}>
+                <div className="summary-card">
+                  <div className="summary-content">
+                    <div className="summary-label">Pendentes</div>
+                    <div className="summary-value">{aggregationStats.totalPendentes}</div>
+                  </div>
+                </div>
+                <div className="summary-card">
+                  <div className="summary-content">
+                    <div className="summary-label">Processados</div>
+                    <div className="summary-value">{aggregationStats.totalProcessados}</div>
+                  </div>
+                </div>
+                <div className="summary-card">
+                  <div className="summary-content">
+                    <div className="summary-label">Próximo Ciclo</div>
+                    <div className="summary-value">{aggregationStats.proximosAProcessar}</div>
+                  </div>
+                </div>
+                <div className="summary-card" style={{ borderColor: '#667eea' }}>
+                  <div className="summary-content">
+                    <div className="summary-label">Emails Estimados</div>
+                    <div className="summary-value" style={{ color: '#667eea' }}>
+                      {aggregationStats.emailsEstimados}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {Object.keys(aggregationStats.porTipo).length > 0 && (
+                <div style={{ marginBottom: '15px' }}>
+                  <h4>Por Tipo de Notificação</h4>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '10px' }}>
+                    {Object.entries(aggregationStats.porTipo).map(([tipo, count]) => (
+                      <span key={tipo} className="queue-badge has-jobs" style={{ padding: '5px 12px' }}>
+                        {queueNames[tipo] || tipo}: {count}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {aggregationStats.pendentes.length > 0 && (
+                <div className="jobs-list">
+                  <h3>Próximas Notificações ({aggregationStats.pendentes.length})</h3>
+                  {aggregationStats.pendentes.map((p) => (
+                    <div key={p.id} className="job-item">
+                      <div className="job-header">
+                        <div className="job-id">
+                          <FaClock className="state-icon created" />
+                          <span className="job-id-text">ID: {p.id}</span>
+                          <span className="job-state job-state-created">
+                            {queueNames[p.tipoNotificacao] || p.tipoNotificacao}
+                          </span>
+                        </div>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleDeletePendente(p.id)}
+                          disabled={deletingPendente === p.id}
+                          title="Excluir esta notificação"
+                        >
+                          {deletingPendente === p.id ? <FaSpinner className="spin" /> : <FaTrash />}
+                        </button>
+                      </div>
+                      <div className="job-details">
+                        <div className="job-detail-item">
+                          <strong>Destinatário:</strong> {p.destinatario}
+                        </div>
+                        <div className="job-detail-item">
+                          <strong>Evento ID:</strong> {p.eventoId}
+                        </div>
+                        <div className="job-detail-item">
+                          <strong>Processar após:</strong> {formatDate(p.processarApos)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="queues-list">
         <h2>Status das Filas</h2>
@@ -258,8 +525,24 @@ const AdminEmailQueue: React.FC = () => {
                     <span className="queue-size">{queue.size} job(s) pendente(s)</span>
                   </div>
                 </div>
-                <div className={`queue-badge ${queue.size > 0 ? 'has-jobs' : 'empty'}`}>
-                  {queue.size}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {queue.size > 0 && (
+                    <button
+                      className="btn btn-small btn-danger"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        cancelAllJobs(queue.queue);
+                      }}
+                      disabled={cancelingQueue === queue.queue}
+                      title="Cancelar todos os jobs desta fila"
+                    >
+                      {cancelingQueue === queue.queue ? <FaSpinner className="spinning" /> : <FaTrash />}
+                      {cancelingQueue === queue.queue ? ' Cancelando...' : ' Limpar Fila'}
+                    </button>
+                  )}
+                  <div className={`queue-badge ${queue.size > 0 ? 'has-jobs' : 'empty'}`}>
+                    {queue.size}
+                  </div>
                 </div>
               </div>
 
@@ -299,6 +582,15 @@ const AdminEmailQueue: React.FC = () => {
                                 }}
                               >
                                 <FaEye /> Ver Dados
+                              </button>
+                              <button
+                                className="btn btn-small btn-danger"
+                                onClick={() => cancelJob(job.id)}
+                                disabled={cancelingJob === job.id}
+                                title="Cancelar este job"
+                              >
+                                {cancelingJob === job.id ? <FaSpinner className="spinning" /> : <FaTrash />}
+                                {cancelingJob === job.id ? ' Cancelando...' : ' Cancelar'}
                               </button>
                             </div>
                           </div>

@@ -5,7 +5,7 @@ const data_source_1 = require("../database/data-source");
 const CalculadoraService_1 = require("./CalculadoraService");
 const Participante_1 = require("../entities/Participante");
 const Grupo_1 = require("../entities/Grupo");
-const EmailQueueService_1 = require("./EmailQueueService");
+const EmailAggregationService_1 = require("./EmailAggregationService");
 /**
  * Serviço de notificações para mudanças de saldo
  */
@@ -104,20 +104,23 @@ class NotificationService {
                             year: 'numeric',
                         }).format(d);
                     };
-                    // Adicionar job de notificação à fila
-                    await EmailQueueService_1.EmailQueueService.adicionarEmailMudancaSaldo({
+                    // Usar sistema de agregação para evitar spam de emails
+                    await EmailAggregationService_1.EmailAggregationService.adicionarNotificacao({
                         destinatario: email,
-                        nomeDestinatario: participante.nome,
-                        eventoNome: grupo.nome,
-                        eventoId: grupo.id,
-                        saldoAnterior: saldoAntes ? formatCurrency(saldoAntes.saldo) : undefined,
-                        saldoAtual: formatCurrency(saldoDepois.saldo),
-                        diferenca: formatCurrency(Math.abs(diferenca)),
-                        direcao: diferenca > 0 ? 'aumentou' : diferenca < 0 ? 'diminuiu' : 'manteve',
-                        eventoData: formatDate(grupo.data),
-                        linkEventoPublico: linkEventoPublico || `${frontendUrl}/eventos/${grupoId}`,
+                        usuarioId: participante.usuario_id,
+                        eventoId: grupoId,
+                        tipoNotificacao: 'resumo-evento',
+                        dados: {
+                            eventoNome: grupo.nome,
+                            eventoId: grupoId,
+                            nomeDestinatario: participante.nome,
+                            saldoAtual: formatCurrency(saldoDepois.saldo),
+                            direcao: diferenca > 0 ? 'aumentou' : diferenca < 0 ? 'diminuiu' : undefined,
+                            diferenca: formatCurrency(Math.abs(diferenca)),
+                            linkEventoPublico: linkEventoPublico || `${frontendUrl}/eventos/${grupoId}`,
+                        },
                     });
-                    console.log(`[NotificationService] Notificação de mudança de saldo adicionada à fila para ${email}`);
+                    console.log(`[NotificationService] Notificação de mudança de saldo adicionada para agregação: ${email}`);
                 }
                 catch (err) {
                     console.error(`[NotificationService] Erro ao notificar participante ${participanteId}:`, err);

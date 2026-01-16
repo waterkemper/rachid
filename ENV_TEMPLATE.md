@@ -49,6 +49,19 @@ PAYPAL_PLAN_ID_YEARLY=your-yearly-plan-id
 PAYPAL_LIFETIME_AMOUNT=499.00
 PAYPAL_PRODUCT_ID=your-product-id
 
+# AWS S3 Configuration (File Upload)
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your-aws-access-key-id
+AWS_SECRET_ACCESS_KEY=your-aws-secret-access-key
+AWS_S3_BUCKET_NAME=orachid-despesas
+AWS_CLOUDFRONT_DOMAIN=d1234567890.cloudfront.net
+
+# Image Optimization Settings
+IMAGE_MAX_WIDTH=1920
+IMAGE_JPEG_QUALITY=85
+IMAGE_PNG_QUALITY=80
+IMAGE_ENABLE_WEBP=true
+
 # Frontend Build Variables
 VITE_API_URL=https://api.orachid.com.br
 VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
@@ -207,6 +220,68 @@ These variables are baked into the frontend build at build time (not runtime).
   1. Go to [Google Cloud Console](https://console.cloud.google.com)
   2. Create OAuth 2.0 credentials
   3. Copy Client ID
+
+### AWS S3 Variables (File Upload)
+
+#### AWS_REGION
+- **Required**: Yes (for file upload functionality)
+- **Example**: `us-east-1`
+- **Description**: AWS region where S3 bucket is located
+- **Common values**: `us-east-1`, `us-west-2`, `sa-east-1` (São Paulo)
+
+#### AWS_ACCESS_KEY_ID
+- **Required**: Yes (for file upload functionality)
+- **Description**: AWS IAM user access key ID
+- **How to get**:
+  1. Go to AWS Console → IAM → Users
+  2. Create user with S3 permissions (or use existing)
+  3. Create access key in Security Credentials tab
+  4. Copy Access Key ID
+- **Security**: Keep this secret! Never commit to version control.
+
+#### AWS_SECRET_ACCESS_KEY
+- **Required**: Yes (for file upload functionality)
+- **Description**: AWS IAM user secret access key
+- **How to get**: Same as AWS_ACCESS_KEY_ID, copy Secret Access Key
+- **Security**: Keep this secret! Never commit to version control. Only shown once when created.
+
+#### AWS_S3_BUCKET_NAME
+- **Required**: Yes (for file upload functionality)
+- **Example**: `orachid-despesas`
+- **Description**: Name of S3 bucket for storing expense attachments
+- **Note**: Bucket must exist and be accessible with provided credentials
+
+#### AWS_CLOUDFRONT_DOMAIN
+- **Required**: No (recommended for production)
+- **Example**: `d1234567890.cloudfront.net`
+- **Description**: CloudFront distribution domain for CDN
+- **How to get**:
+  1. Create CloudFront distribution pointing to S3 bucket
+  2. Copy distribution domain name
+- **Note**: If not set, files will be served directly from S3 (slower, no CDN)
+
+### Image Optimization Variables
+
+#### IMAGE_MAX_WIDTH
+- **Required**: No (default: `1920`)
+- **Description**: Maximum width in pixels for image resizing
+- **Note**: Images larger than this will be resized maintaining aspect ratio
+
+#### IMAGE_JPEG_QUALITY
+- **Required**: No (default: `85`)
+- **Description**: JPEG compression quality (1-100)
+- **Note**: Higher values = better quality but larger files
+
+#### IMAGE_PNG_QUALITY
+- **Required**: No (default: `80`)
+- **Description**: PNG compression quality (1-100)
+- **Note**: Higher values = better quality but larger files
+
+#### IMAGE_ENABLE_WEBP
+- **Required**: No (default: `true`)
+- **Description**: Enable WebP conversion for better compression
+- **Values**: `true` or `false`
+- **Note**: WebP provides ~30% better compression than JPEG/PNG
 
 ## Setting Up Environment Variables
 

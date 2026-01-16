@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { usePageFocus } from '../hooks/usePageFocus';
 import { grupoApi, participanteApi, despesaApi } from '../services/api';
 import { Grupo, Participante } from '../types';
 import Modal from '../components/Modal';
@@ -74,16 +73,21 @@ const Grupos: React.FC = () => {
     return grupo.status === filtroStatus || (!grupo.status && filtroStatus === 'EM_ABERTO');
   });
 
+  // Ordenar grupos: em aberto primeiro, depois por data descendente
+  const gruposOrdenados = [...gruposFiltrados].sort((a, b) => {
+    // Em aberto primeiro
+    const aAberto = !a.status || a.status === 'EM_ABERTO';
+    const bAberto = !b.status || b.status === 'EM_ABERTO';
+    if (aAberto !== bAberto) {
+      return aAberto ? -1 : 1;
+    }
+    // Depois ordenar por data descendente
+    return new Date(b.data).getTime() - new Date(a.data).getTime();
+  });
+
   useEffect(() => {
     loadData();
   }, []);
-
-  const reloadData = useCallback(() => {
-    loadData();
-  }, []);
-
-  // Recarregar dados quando a página voltar ao foco
-  usePageFocus(reloadData, []);
 
   const loadData = async () => {
     try {
@@ -288,6 +292,22 @@ const Grupos: React.FC = () => {
     navigate(`/participacoes?evento=${eventoId}`);
   };
 
+  const handleUpdateStatus = async (id: number, status: 'CONCLUIDO' | 'CANCELADO' | 'EM_ABERTO') => {
+    if (status === 'CONCLUIDO' && !window.confirm('Tem certeza que deseja marcar este evento como concluído?')) {
+      return;
+    }
+    if (status === 'EM_ABERTO' && !window.confirm('Tem certeza que deseja reabrir este evento?')) {
+      return;
+    }
+    try {
+      await grupoApi.updateStatus(id, status);
+      loadData();
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || 'Erro ao alterar status do evento';
+      setError(errorMessage);
+    }
+  };
+
   const toggleParticipante = (participanteId: number) => {
     setFormData({
       ...formData,
@@ -311,15 +331,7 @@ const Grupos: React.FC = () => {
             <select
               value={filtroStatus}
               onChange={(e) => setFiltroStatus(e.target.value as 'TODOS' | 'EM_ABERTO' | 'CONCLUIDO' | 'CANCELADO')}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '6px',
-                border: '1px solid rgba(148, 163, 184, 0.3)',
-                backgroundColor: 'rgba(226, 232, 240, 0.1)',
-                color: 'rgba(226, 232, 240, 0.9)',
-                fontSize: '14px',
-                cursor: 'pointer'
-              }}
+              className="grupos-filter-select"
             >
               <option value="TODOS">Todos</option>
               <option value="EM_ABERTO">Em Aberto</option>
@@ -347,111 +359,16 @@ const Grupos: React.FC = () => {
       )}
 
       <div className="card">
-        {/* Desktop Table View */}
-        <div className="grupos-table-wrapper">
-          <table className="grupos-table">
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Status</th>
-                <th>Descrição</th>
-                <th>Data</th>
-                <th>Participantes</th>
-                <th>Total Despesas</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {gruposFiltrados.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '20px' }}>
-                    {grupos.length === 0 ? 'Nenhum evento cadastrado' : `Nenhum evento com status "${filtroStatus === 'TODOS' ? 'Todos' : filtroStatus === 'EM_ABERTO' ? 'Em Aberto' : filtroStatus === 'CONCLUIDO' ? 'Concluído' : 'Cancelado'}"`}
-                  </td>
-                </tr>
-              ) : (
-                gruposFiltrados.map((grupo) => {
-                  const isConcluidoOuCancelado = grupo.status === 'CONCLUIDO' || grupo.status === 'CANCELADO';
-                  return (
-                    <tr key={grupo.id}>
-                      <td>{grupo.nome}</td>
-                      <td>{renderStatusBadge(grupo.status)}</td>
-                      <td>{grupo.descricao || '-'}</td>
-                      <td>{formatarData(grupo.data)}</td>
-                      <td>{grupo.participantes?.length || 0}</td>
-                      <td>{formatCurrency(totaisDespesas.get(grupo.id) || 0)}</td>
-                      <td>
-                        <div className="grupos-actions">
-                          <button
-                            className="btn btn-secondary"
-                            onClick={() => handleOpenModal(grupo)}
-                            title="Editar evento"
-                            disabled={isConcluidoOuCancelado}
-                          >
-                            <FaEdit />
-                          </button>
-                          <button
-                            className="btn btn-secondary"
-                            onClick={() => handleGerenciarParticipantes(grupo.id)}
-                            title="Adicionar/remover participantes"
-                            disabled={isConcluidoOuCancelado}
-                          >
-                            <FaUsers />
-                          </button>
-                          <button
-                            className="btn btn-secondary"
-                            onClick={() => handleAbrirDespesas(grupo.id)}
-                            title="Adicionar despesas deste evento"
-                            disabled={isConcluidoOuCancelado}
-                          >
-                            <FaMoneyBillWave />
-                          </button>
-                          <button
-                            className="btn btn-secondary"
-                            onClick={() => handleVerResultado(grupo.id)}
-                            title="Ver resultado deste evento"
-                          >
-                            <FaChartBar />
-                          </button>
-                          <button
-                            className="btn btn-secondary"
-                            onClick={() => handleDuplicar(grupo.id)}
-                            title="Duplicar evento"
-                          >
-                            <FaCopy />
-                          </button>
-                          <button
-                            className="btn btn-secondary"
-                            onClick={() => navigate(`/convidar-amigos/${grupo.id}`)}
-                            title="Convidar amigos"
-                          >
-                            <FaUserPlus />
-                          </button>
-                          <button
-                            className="btn btn-danger"
-                            onClick={() => handleDelete(grupo.id)}
-                            title="Excluir evento"
-                          >
-                            <FaTrash />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile Card View */}
+        {/* Card View - Desktop and Mobile */}
         <div className="grupos-cards">
-          {gruposFiltrados.length === 0 ? (
+          {gruposOrdenados.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '20px' }}>
               {grupos.length === 0 ? 'Nenhum evento cadastrado' : `Nenhum evento com status "${filtroStatus === 'TODOS' ? 'Todos' : filtroStatus === 'EM_ABERTO' ? 'Em Aberto' : filtroStatus === 'CONCLUIDO' ? 'Concluído' : 'Cancelado'}"`}
             </div>
           ) : (
-            gruposFiltrados.map((grupo) => {
+            gruposOrdenados.map((grupo) => {
               const isConcluidoOuCancelado = grupo.status === 'CONCLUIDO' || grupo.status === 'CANCELADO';
+              const isEmAberto = !grupo.status || grupo.status === 'EM_ABERTO';
               return (
                 <div key={grupo.id} className="grupos-card">
                   <div className="grupos-card-header">
@@ -459,73 +376,12 @@ const Grupos: React.FC = () => {
                       <h3 className="grupos-card-title">{grupo.nome}</h3>
                       {renderStatusBadge(grupo.status)}
                     </div>
-                    <div className="grupos-actions">
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => handleOpenModal(grupo)}
-                        title="Editar evento"
-                        disabled={isConcluidoOuCancelado}
-                      >
-                        <FaEdit />
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => handleGerenciarParticipantes(grupo.id)}
-                        title="Adicionar/remover participantes"
-                        disabled={isConcluidoOuCancelado}
-                      >
-                        <FaUsers />
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => handleAbrirDespesas(grupo.id)}
-                        title="Adicionar despesas deste evento"
-                        disabled={isConcluidoOuCancelado}
-                      >
-                        <FaMoneyBillWave />
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => handleVerResultado(grupo.id)}
-                        title="Ver resultado deste evento"
-                      >
-                        <FaChartBar />
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => handleDuplicar(grupo.id)}
-                        title="Duplicar evento"
-                      >
-                        <FaCopy />
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => navigate(`/convidar-amigos/${grupo.id}`)}
-                        title="Convidar amigos"
-                      >
-                        <FaUserPlus />
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => handleCompartilhar(grupo.id)}
-                        title="Compartilhar evento"
-                      >
-                        <FaShare />
-                      </button>
-                      <button
-                        className="btn btn-danger"
-                        onClick={() => handleDelete(grupo.id)}
-                        title="Excluir evento"
-                      >
-                        <FaTrash />
-                      </button>
-                    </div>
                   </div>
                   <div className="grupos-card-info">
-                    {grupo.descricao && (
+                    {grupo.usuario?.nome && (
                       <div className="grupos-card-info-item">
-                        <span className="grupos-card-info-label">Descrição:</span>
-                        <span>{grupo.descricao}</span>
+                        <span className="grupos-card-info-label">Organizador:</span>
+                        <span>{grupo.usuario.nome}</span>
                       </div>
                     )}
                     <div className="grupos-card-info-item">
@@ -540,6 +396,89 @@ const Grupos: React.FC = () => {
                       <span className="grupos-card-info-label">Total de despesas:</span>
                       <span className="grupos-card-total-value">{formatCurrency(totaisDespesas.get(grupo.id) || 0)}</span>
                     </div>
+                  </div>
+                  {isEmAberto && (
+                    <div className="grupos-card-status-action">
+                      <button
+                        className="btn btn-status-complete"
+                        onClick={() => handleUpdateStatus(grupo.id, 'CONCLUIDO')}
+                        title="Marcar evento como concluído"
+                      >
+                        ✅ Marcar como Concluído
+                      </button>
+                    </div>
+                  )}
+                  {grupo.status === 'CONCLUIDO' && (
+                    <div className="grupos-card-status-action">
+                      <button
+                        className="btn btn-status-reopen"
+                        onClick={() => handleUpdateStatus(grupo.id, 'EM_ABERTO')}
+                        title="Reabrir evento"
+                      >
+                        🔄 Reabrir Evento
+                      </button>
+                    </div>
+                  )}
+                  <div className="grupos-card-actions">
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleOpenModal(grupo)}
+                      title="Editar evento"
+                      disabled={isConcluidoOuCancelado}
+                    >
+                      <FaEdit />
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleGerenciarParticipantes(grupo.id)}
+                      title="Adicionar/remover participantes"
+                      disabled={isConcluidoOuCancelado}
+                    >
+                      <FaUsers />
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleAbrirDespesas(grupo.id)}
+                      title="Adicionar despesas deste evento"
+                      disabled={isConcluidoOuCancelado}
+                    >
+                      <FaMoneyBillWave />
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleVerResultado(grupo.id)}
+                      title="Ver resultado deste evento"
+                    >
+                      <FaChartBar />
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleDuplicar(grupo.id)}
+                      title="Duplicar evento"
+                    >
+                      <FaCopy />
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => navigate(`/convidar-amigos/${grupo.id}`)}
+                      title="Convidar amigos"
+                    >
+                      <FaUserPlus />
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleCompartilhar(grupo.id)}
+                      title="Compartilhar evento"
+                    >
+                      <FaShare />
+                    </button>
+                    <button
+                      className="btn btn-danger"
+                      onClick={() => handleDelete(grupo.id)}
+                      title="Excluir evento"
+                    >
+                      <FaTrash />
+                    </button>
                   </div>
                 </div>
               );

@@ -1,8 +1,10 @@
 import { Request, Response } from 'express';
 import { AdminService } from '../services/AdminService';
 import { EmailQueueService } from '../services/EmailQueueService';
+import { EmailAggregationService } from '../services/EmailAggregationService';
 import { AppDataSource } from '../database/data-source';
 import { Email } from '../entities/Email';
+import { EmailPendente } from '../entities/EmailPendente';
 import { Like, MoreThanOrEqual, LessThanOrEqual, Between } from 'typeorm';
 
 export class AdminController {
@@ -189,11 +191,7 @@ export class AdminController {
       const limit = parseInt(req.query.limit as string) || 50;
 
       const validQueues = [
-        'nova-despesa',
-        'despesa-editada',
         'inclusao-evento',
-        'participante-adicionado-despesa',
-        'mudanca-saldo',
         'evento-finalizado',
         'reativacao-sem-evento',
         'reativacao-sem-participantes',
@@ -212,6 +210,62 @@ export class AdminController {
     } catch (error: any) {
       console.error('Erro ao obter jobs da fila:', error);
       res.status(500).json({ error: 'Erro ao obter jobs da fila', details: error.message });
+    }
+  }
+
+  /**
+   * Cancela um job específico da fila
+   * DELETE /api/admin/email-queue/jobs/:jobId
+   */
+  static async cancelEmailQueueJob(req: Request, res: Response) {
+    try {
+      const { jobId } = req.params;
+
+      if (!jobId) {
+        return res.status(400).json({ error: 'ID do job é obrigatório' });
+      }
+
+      const success = await EmailQueueService.cancelarJob(jobId);
+      
+      if (success) {
+        res.json({ message: 'Job cancelado com sucesso', jobId });
+      } else {
+        res.status(404).json({ error: 'Job não encontrado ou não pôde ser cancelado', jobId });
+      }
+    } catch (error: any) {
+      console.error('Erro ao cancelar job:', error);
+      res.status(500).json({ error: 'Erro ao cancelar job', details: error.message });
+    }
+  }
+
+  /**
+   * Cancela todos os jobs pendentes de uma fila específica
+   * DELETE /api/admin/email-queue/:queue/jobs
+   */
+  static async cancelAllEmailQueueJobs(req: Request, res: Response) {
+    try {
+      const { queue } = req.params;
+
+      const validQueues = [
+        'inclusao-evento',
+        'evento-finalizado',
+        'reativacao-sem-evento',
+        'reativacao-sem-participantes',
+        'reativacao-sem-despesas'
+      ];
+
+      if (!validQueues.includes(queue)) {
+        return res.status(400).json({ 
+          error: 'Fila inválida', 
+          validQueues 
+        });
+      }
+
+      const count = await EmailQueueService.cancelarTodosJobsFila(queue);
+      res.json({ message: `${count} job(s) cancelado(s)`, queue, count });
+    } catch (error: any) {
+      console.error('Erro ao cancelar jobs da fila:', error);
+      res.status(500).json({ error: 'Erro ao cancelar jobs da fila', details: error.message });
     }
   }
 
@@ -369,6 +423,179 @@ export class AdminController {
     } catch (error: any) {
       console.error('Erro ao obter estatísticas de emails:', error);
       res.status(500).json({ error: 'Erro ao obter estatísticas', details: error.message });
+    }
+  }
+
+  /**
+   * Obtém estatísticas da agregação de emails
+   * GET /admin/email-aggregation/stats
+   */
+  static async getEmailAggregationStats(req: Request, res: Response) {
+    try {
+      const emailPendenteRepository = AppDataSource.getRepository(EmailPendente);
+
+      // Estatísticas básicas
+      const totalPendentes = await emailPendenteRepository.count({
+        where: { processado: false },
+      });
+
+      const totalProcessados = await emailPendenteRepository.count({
+        where: { processado: true },
+      });
+
+      // Por tipo de notificação (pendentes)
+      const porTipo = await emailPendenteRepository
+        .createQueryBuilder('ep')
+        .select('ep.tipoNotificacao', 'tipo')
+        .addSelect('COUNT(*)', 'count')
+        .where('ep.processado = false')
+        .groupBy('ep.tipoNotificacao')
+        .getRawMany();
+
+      // Próximos a serem processados (dentro de 1 minuto)
+      const agora = new Date();
+      const em1Minuto = new Date(agora.getTime() + 60000);
+      const proximosAProcessar = await emailPendenteRepository.count({
+        where: {
+          processado: false,
+          processarApos: LessThanOrEqual(em1Minuto),
+        },
+      });
+
+      // Contar grupos únicos (destinatário + evento) = número de emails que serão enviados
+      const gruposUnicos = await emailPendenteRepository
+        .createQueryBuilder('ep')
+        .select('ep.destinatario', 'destinatario')
+        .addSelect('ep.evento_id', 'eventoId')
+        .where('ep.processado = false')
+        .groupBy('ep.destinatario')
+        .addGroupBy('ep.evento_id')
+        .getRawMany();
+
+      const emailsEstimados = gruposUnicos.length;
+
+      // Listar pendentes com detalhes
+      const pendentes = await emailPendenteRepository.find({
+        where: { processado: false },
+        order: { processarApos: 'ASC' },
+        take: 50,
+      });
+
+      res.json({
+        totalPendentes,
+        totalProcessados,
+        proximosAProcessar,
+        emailsEstimados,
+        porTipo: porTipo.reduce((acc: any, item: any) => {
+          acc[item.tipo] = parseInt(item.count);
+          return acc;
+        }, {}),
+        pendentes: pendentes.map(p => ({
+          id: p.id,
+          destinatario: p.destinatario,
+          eventoId: p.eventoId,
+          tipoNotificacao: p.tipoNotificacao,
+          criadoEm: p.criadoEm,
+          processarApos: p.processarApos,
+        })),
+      });
+    } catch (error: any) {
+      console.error('Erro ao obter estatísticas de agregação:', error);
+      // Se a tabela não existir ainda, retornar vazio
+      if (error.message?.includes('does not exist') || error.message?.includes('não existe')) {
+        res.json({
+          totalPendentes: 0,
+          totalProcessados: 0,
+          proximosAProcessar: 0,
+          porTipo: {},
+          pendentes: [],
+          warning: 'Tabela email_pendentes ainda não foi criada. Execute a migration.',
+        });
+      } else {
+        res.status(500).json({ error: 'Erro ao obter estatísticas', details: error.message });
+      }
+    }
+  }
+
+  /**
+   * Exclui uma notificação pendente específica
+   * DELETE /api/admin/email-aggregation/pending/:id
+   */
+  static async deleteEmailPendente(req: Request, res: Response) {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'ID inválido' });
+      }
+
+      const emailPendenteRepository = AppDataSource.getRepository(EmailPendente);
+      const pendente = await emailPendenteRepository.findOne({ where: { id } });
+
+      if (!pendente) {
+        return res.status(404).json({ error: 'Notificação pendente não encontrada' });
+      }
+
+      if (pendente.processado) {
+        return res.status(400).json({ error: 'Esta notificação já foi processada' });
+      }
+
+      await emailPendenteRepository.remove(pendente);
+      console.log(`[Admin] 🗑️  Notificação pendente ${id} excluída`);
+
+      res.json({ message: 'Notificação excluída com sucesso', id });
+    } catch (error: any) {
+      console.error('Erro ao excluir notificação pendente:', error);
+      res.status(500).json({ error: 'Erro ao excluir notificação', details: error.message });
+    }
+  }
+
+  /**
+   * Exclui todas as notificações pendentes (não processadas)
+   * DELETE /api/admin/email-aggregation/pending
+   */
+  static async deleteAllEmailPendentes(req: Request, res: Response) {
+    try {
+      const emailPendenteRepository = AppDataSource.getRepository(EmailPendente);
+      
+      const result = await emailPendenteRepository.delete({ processado: false });
+      const count = result.affected || 0;
+
+      console.log(`[Admin] 🗑️  ${count} notificação(ões) pendente(s) excluída(s)`);
+
+      res.json({ message: `${count} notificação(ões) excluída(s)`, count });
+    } catch (error: any) {
+      console.error('Erro ao excluir notificações pendentes:', error);
+      res.status(500).json({ error: 'Erro ao excluir notificações', details: error.message });
+    }
+  }
+
+  /**
+   * Exclui notificações pendentes por tipo
+   * DELETE /api/admin/email-aggregation/pending/tipo/:tipo
+   */
+  static async deleteEmailPendentesByTipo(req: Request, res: Response) {
+    try {
+      const { tipo } = req.params;
+      const validTipos = ['inclusao-evento', 'resumo-evento', 'evento-finalizado'];
+
+      if (!validTipos.includes(tipo)) {
+        return res.status(400).json({ error: 'Tipo inválido', validTipos });
+      }
+
+      const emailPendenteRepository = AppDataSource.getRepository(EmailPendente);
+      
+      const result = await emailPendenteRepository.delete({ 
+        tipoNotificacao: tipo as any,
+        processado: false 
+      });
+      const count = result.affected || 0;
+
+      console.log(`[Admin] 🗑️  ${count} notificação(ões) do tipo '${tipo}' excluída(s)`);
+
+      res.json({ message: `${count} notificação(ões) do tipo '${tipo}' excluída(s)`, tipo, count });
+    } catch (error: any) {
+      console.error('Erro ao excluir notificações por tipo:', error);
+      res.status(500).json({ error: 'Erro ao excluir notificações', details: error.message });
     }
   }
 }

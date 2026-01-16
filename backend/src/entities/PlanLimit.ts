@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, Unique } from 'typeorm';
 
 export type PlanLimitType = 'FREE' | 'PRO' | 'LIFETIME';
-export type FeatureLimitKey = 'max_events' | 'max_participants_per_event' | 'pdf_export_enabled' | 'public_sharing_enabled' | 'templates_enabled' | 'email_notifications_enabled' | 'analytics_enabled';
+export type FeatureLimitKey = 'max_events' | 'max_participants_per_event' | 'pdf_export_enabled' | 'public_sharing_enabled' | 'templates_enabled' | 'email_notifications_enabled' | 'analytics_enabled' | 'receipt_upload_enabled';
 
 @Entity('plan_limits')
 @Unique(['planType', 'featureKey'])

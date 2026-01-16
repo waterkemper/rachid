@@ -56,6 +56,10 @@ __decorate([
     __metadata("design:type", String)
 ], Grupo.prototype, "status", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'timestamp', nullable: true, name: 'data_conclusao' }),
+    __metadata("design:type", Date)
+], Grupo.prototype, "dataConclusao", void 0);
+__decorate([
     (0, typeorm_1.Column)({ type: 'timestamp', nullable: true, name: 'ultimo_email_reativacao_sem_participantes' }),
     __metadata("design:type", Date)
 ], Grupo.prototype, "ultimoEmailReativacaoSemParticipantes", void 0);

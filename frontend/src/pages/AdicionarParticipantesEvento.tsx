@@ -188,23 +188,53 @@ const AdicionarParticipantesEvento: React.FC = () => {
         await loadData();
       }
 
+      // Pequeno delay para garantir que o participante foi adicionado ao evento antes de adicionar às despesas
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Adicionar participante a todas as despesas existentes do evento (se solicitado)
       if (incluirEmDespesas) {
         try {
+          // Aguardar um pouco mais para garantir que o participante foi adicionado ao evento no backend
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
           const despesas = await despesaApi.getAll(Number(eventoId));
+          let adicionadas = 0;
+          let erros = 0;
+          
           for (const despesa of despesas) {
             // Verificar se o participante já está na despesa
-            const jaTemParticipacao = despesa.participacoes?.some(p => p.participante_id === participanteId);
+            // Verificar tanto participante_id quanto participante?.id (caso a relação esteja carregada)
+            const jaTemParticipacao = despesa.participacoes?.some(p => 
+              p.participante_id === participanteId || p.participante?.id === participanteId
+            );
+            
             if (!jaTemParticipacao) {
               try {
+                // Usar toggle que adiciona se não existir, remove se existir
                 await participacaoApi.toggle(despesa.id, participanteId);
-              } catch (err) {
+                adicionadas++;
+                console.log(`✓ Participante ${participanteId} adicionado à despesa ${despesa.id} (${despesa.descricao})`);
+              } catch (err: any) {
+                erros++;
                 console.error(`Erro ao adicionar participante à despesa ${despesa.id}:`, err);
+                // Se o erro for porque o participante não está no evento, logar mas continuar
+                if (err?.response?.status === 400 || err?.response?.status === 404) {
+                  console.warn(`Participante ${participanteId} pode não estar no evento ainda para a despesa ${despesa.id}`);
+                }
               }
+            } else {
+              console.log(`Participante ${participanteId} já está na despesa ${despesa.id} (${despesa.descricao})`);
             }
           }
+          
+          if (adicionadas > 0) {
+            console.log(`✓ Participante adicionado a ${adicionadas} despesa(s)`);
+          }
+          if (erros > 0) {
+            console.warn(`⚠ Houve ${erros} erro(s) ao adicionar participante às despesas`);
+          }
         } catch (err) {
-          console.error('Erro ao adicionar participante às despesas:', err);
+          console.error('Erro ao buscar despesas para adicionar participante:', err);
           // Não bloquear o fluxo se houver erro ao adicionar às despesas
         }
       } else {
@@ -220,7 +250,11 @@ const AdicionarParticipantesEvento: React.FC = () => {
     if (!participantePendente) return;
     
     const participanteId = participantePendente.id;
+    
+    // Fechar modal imediatamente para evitar cliques múltiplos
     setModalIncluirDespesasVisible(false);
+    setParticipantePendente(null);
+    setDespesasComPagador(0);
     
     try {
       setAdicionandoParticipantes(prev => new Set(prev).add(participanteId));
@@ -235,8 +269,6 @@ const AdicionarParticipantesEvento: React.FC = () => {
         novo.delete(participanteId);
         return novo;
       });
-      setParticipantePendente(null);
-      setDespesasComPagador(0);
     }
   };
 
@@ -364,6 +396,52 @@ const AdicionarParticipantesEvento: React.FC = () => {
     setSucessoModalParticipante('');
   };
 
+  const verificarDuplicata = (data: { nome: string; email?: string; chavePix?: string; telefone?: string }): { participante: Participante; camposIguais: string[] } | null => {
+    // Normalizar valores para comparação (trim e lowercase)
+    const nomeNormalizado = data.nome.trim().toLowerCase();
+    const emailNormalizado = data.email?.trim().toLowerCase() || null;
+    const telefoneNormalizado = data.telefone?.trim() || null;
+    const chavePixNormalizada = data.chavePix?.trim() || null;
+
+    // Verificar duplicatas: nome igual + qualquer outro campo igual
+    for (const p of participantesDisponiveis) {
+      const pNomeNormalizado = p.nome.trim().toLowerCase();
+      const pEmailNormalizado = p.email?.trim().toLowerCase() || null;
+      const pTelefoneNormalizado = p.telefone?.trim() || null;
+      const pChavePixNormalizada = p.chavePix?.trim() || null;
+
+      // Verificar se o nome é igual (obrigatório)
+      if (pNomeNormalizado !== nomeNormalizado) {
+        continue;
+      }
+
+      // Se o nome é igual, verificar se algum outro campo também é igual
+      const camposIguais: string[] = ['nome'];
+      
+      // Verificar email (ambos não null e iguais)
+      if (emailNormalizado && pEmailNormalizado && emailNormalizado === pEmailNormalizado) {
+        camposIguais.push('email');
+      }
+      
+      // Verificar telefone (ambos não null e iguais)
+      if (telefoneNormalizado && pTelefoneNormalizado && telefoneNormalizado === pTelefoneNormalizado) {
+        camposIguais.push('telefone');
+      }
+      
+      // Verificar chavePix (ambos não null e iguais)
+      if (chavePixNormalizada && pChavePixNormalizada && chavePixNormalizada === pChavePixNormalizada) {
+        camposIguais.push('chave PIX');
+      }
+
+      // Se encontrou nome igual + pelo menos um outro campo igual, é duplicata
+      if (camposIguais.length > 1) {
+        return { participante: p, camposIguais };
+      }
+    }
+
+    return null;
+  };
+
   const salvarParticipante = async (data: { nome: string; email?: string; chavePix?: string; telefone?: string }) => {
     if (criandoParticipante) {
       return; // Evitar múltiplas requisições simultâneas
@@ -394,19 +472,37 @@ const AdicionarParticipantesEvento: React.FC = () => {
           fecharModalParticipante();
         }, 1000);
       } else {
+        // Verificar duplicatas antes de criar
+        const duplicata = verificarDuplicata(data);
+        if (duplicata) {
+          const camposTexto = duplicata.camposIguais.join(', ');
+          setErroModalParticipante(`Já existe um participante com os mesmos dados: ${camposTexto}. Por favor, altere pelo menos um desses campos.`);
+          return;
+        }
+
         // Criar novo participante
         const participante = await participanteApi.create(data);
 
         setParticipantesDisponiveis((prev) =>
           prev.some((p) => p.id === participante.id) ? prev : [...prev, participante]
         );
+        
+        // Adicionar ao evento (pode abrir modal de despesas)
         await adicionarParticipanteAoEvento(participante.id, participante);
 
         // Limpar busca e mostrar mensagem de sucesso
         setBusca('');
         setSucessoModalParticipante('Participante adicionado');
         
-        // Não fechar modal para permitir adicionar mais participantes rapidamente
+        // Fechar modal após adicionar para evitar cliques múltiplos
+        // Se houver modal de despesas aberto, ele será fechado quando o usuário escolher
+        // Usar um pequeno delay para garantir que o estado foi atualizado
+        setTimeout(() => {
+          // Só fechar se o modal de despesas não estiver aberto
+          if (!modalIncluirDespesasVisible) {
+            fecharModalParticipante();
+          }
+        }, 100);
       }
       
       // Limpar mensagem após 3 segundos
@@ -414,7 +510,16 @@ const AdicionarParticipantesEvento: React.FC = () => {
         setSucessoModalParticipante('');
       }, 3000);
     } catch (error: any) {
-      setErroModalParticipante(error.response?.data?.error || (editandoParticipante ? 'Erro ao atualizar participante' : 'Erro ao criar participante'));
+      const errorMessage = error.response?.data?.error || (editandoParticipante ? 'Erro ao atualizar participante' : 'Erro ao criar participante');
+      
+      // Se o erro já contém a mensagem detalhada do backend, usar ela diretamente
+      if (errorMessage.includes('já existe') || errorMessage.includes('mesmos dados')) {
+        setErroModalParticipante(errorMessage);
+      } else if (errorMessage.includes('duplicat') || errorMessage.includes('already exists')) {
+        setErroModalParticipante('Já existe um participante com dados duplicados. Por favor, altere pelo menos um campo.');
+      } else {
+        setErroModalParticipante(errorMessage);
+      }
       setSucessoModalParticipante('');
     } finally {
       setCriandoParticipante(false);
@@ -899,6 +1004,10 @@ const AdicionarParticipantesEvento: React.FC = () => {
           setModalIncluirDespesasVisible(false);
           setParticipantePendente(null);
           setDespesasComPagador(0);
+          // Fechar também o modal de novo participante se estiver aberto
+          if (isModalNovoParticipanteOpen && !editandoParticipante) {
+            fecharModalParticipante();
+          }
         }}
         title="Incluir participante nas despesas?"
       >

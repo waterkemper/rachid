@@ -80,6 +80,54 @@ export class ParticipanteService {
   }
 
   static async create(data: { nome: string; email?: string; chavePix?: string; telefone?: string; usuario_id: number }): Promise<Participante> {
+    // Normalizar valores para comparação
+    const nomeNormalizado = data.nome.trim().toLowerCase();
+    const emailNormalizado = data.email?.trim().toLowerCase() || null;
+    const telefoneNormalizado = data.telefone?.trim() || null;
+    const chavePixNormalizada = data.chavePix?.trim() || null;
+
+    // Buscar todos os participantes do usuário
+    const participantesDoUsuario = await this.repository.find({
+      where: { usuario_id: data.usuario_id },
+    });
+
+    // Verificar duplicatas: nome igual + qualquer outro campo igual
+    for (const p of participantesDoUsuario) {
+      const pNomeNormalizado = p.nome.trim().toLowerCase();
+      const pEmailNormalizado = p.email?.trim().toLowerCase() || null;
+      const pTelefoneNormalizado = p.telefone?.trim() || null;
+      const pChavePixNormalizada = p.chavePix?.trim() || null;
+
+      // Verificar se o nome é igual (obrigatório)
+      if (pNomeNormalizado !== nomeNormalizado) {
+        continue;
+      }
+
+      // Se o nome é igual, verificar se algum outro campo também é igual
+      const camposIguais: string[] = [];
+      
+      // Verificar email (ambos não null e iguais)
+      if (emailNormalizado && pEmailNormalizado && emailNormalizado === pEmailNormalizado) {
+        camposIguais.push('email');
+      }
+      
+      // Verificar telefone (ambos não null e iguais)
+      if (telefoneNormalizado && pTelefoneNormalizado && telefoneNormalizado === pTelefoneNormalizado) {
+        camposIguais.push('telefone');
+      }
+      
+      // Verificar chavePix (ambos não null e iguais)
+      if (chavePixNormalizada && pChavePixNormalizada && chavePixNormalizada === pChavePixNormalizada) {
+        camposIguais.push('chave PIX');
+      }
+
+      // Se encontrou nome igual + pelo menos um outro campo igual, é duplicata
+      if (camposIguais.length > 0) {
+        const camposTexto = ['nome', ...camposIguais].join(', ');
+        throw new Error(`Já existe um participante com os mesmos dados: ${camposTexto}. Por favor, altere pelo menos um desses campos.`);
+      }
+    }
+
     const participante = this.repository.create(data);
     return await this.repository.save(participante);
   }

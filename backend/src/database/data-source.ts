@@ -22,6 +22,8 @@ import { PlanLimit } from '../entities/PlanLimit';
 import { PromoCode } from '../entities/PromoCode';
 import { Plan } from '../entities/Plan';
 import { Email } from '../entities/Email';
+import { EmailPendente } from '../entities/EmailPendente';
+import { DespesaAnexo } from '../entities/DespesaAnexo';
 
 // Suporta DATABASE_URL (formato URI) ou variáveis individuais
 function getDataSourceConfig() {
@@ -59,6 +61,8 @@ function getDataSourceConfig() {
         PromoCode,
         Plan,
         Email,
+        EmailPendente,
+        DespesaAnexo,
       ],
       migrations: [],
       subscribers: [],
@@ -100,6 +104,8 @@ function getDataSourceConfig() {
         PromoCode,
         Plan,
         Email,
+        EmailPendente,
+        DespesaAnexo,
     ],
     migrations: [],
     subscribers: [],

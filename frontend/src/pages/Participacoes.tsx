@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { usePageFocus } from '../hooks/usePageFocus';
 import { useAuth } from '../contexts/AuthContext';
 import { grupoApi, despesaApi, grupoParticipantesApi, relatorioApi, participanteApi, pagamentoApi } from '../services/api';
-import { Grupo, Despesa, Participante, GrupoParticipantesEvento, SugestaoPagamento, SaldoParticipante, SaldoGrupo } from '../types';
+import { Grupo, Despesa, DespesaAnexo, Participante, GrupoParticipantesEvento, SugestaoPagamento, SaldoParticipante, SaldoGrupo } from '../types';
 import Modal from '../components/Modal';
 import { formatarSugestoesPagamento, filtrarDespesasPlaceholder } from '../utils/whatsappFormatter';
-import { FaUsers, FaMoneyBillWave, FaShareAlt, FaUserPlus, FaCopy, FaCheckCircle } from 'react-icons/fa';
+import { FaUsers, FaMoneyBillWave, FaShareAlt, FaUserPlus, FaCopy, FaCheckCircle, FaPaperclip, FaDownload, FaImage, FaFilePdf, FaFile } from 'react-icons/fa';
 import { FaWhatsapp } from 'react-icons/fa6';
 import './Participacoes.css';
 
@@ -98,16 +97,6 @@ const Participacoes: React.FC = () => {
       loadRelatorio();
     }
   }, [grupoSelecionado]);
-
-  const reloadRelatorio = useCallback(() => {
-    if (grupoSelecionado) {
-      loadRelatorio();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grupoSelecionado]);
-
-  // Recarregar dados quando a página voltar ao foco
-  usePageFocus(reloadRelatorio, [grupoSelecionado]);
 
   const loadGrupos = async () => {
     try {
@@ -339,7 +328,19 @@ const Participacoes: React.FC = () => {
         return false;
       });
       
-      setDespesasDetalhes(despesasRelacionadas);
+      // Carregar anexos para cada despesa
+      const despesasComAnexos = await Promise.all(
+        despesasRelacionadas.map(async (despesa) => {
+          try {
+            const anexos = await despesaApi.listAnexos(despesa.id);
+            return { ...despesa, anexos };
+          } catch (error) {
+            return { ...despesa, anexos: [] };
+          }
+        })
+      );
+      
+      setDespesasDetalhes(despesasComAnexos);
     } catch (err) {
       setError('Erro ao carregar detalhes do participante');
     } finally {
@@ -620,7 +621,19 @@ const Participacoes: React.FC = () => {
         return false;
       });
       
-      setDespesasGrupoDetalhes(despesasRelacionadas);
+      // Carregar anexos para cada despesa
+      const despesasComAnexos = await Promise.all(
+        despesasRelacionadas.map(async (despesa) => {
+          try {
+            const anexos = await despesaApi.listAnexos(despesa.id);
+            return { ...despesa, anexos };
+          } catch (error) {
+            return { ...despesa, anexos: [] };
+          }
+        })
+      );
+      
+      setDespesasGrupoDetalhes(despesasComAnexos);
     } catch (err) {
       setError('Erro ao carregar detalhes do grupo');
     } finally {
@@ -2061,6 +2074,83 @@ const Participacoes: React.FC = () => {
                           </div>
                         </div>
                       )}
+
+                      {/* Anexos da despesa */}
+                      {despesa.anexos && despesa.anexos.length > 0 && (
+                        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(148, 163, 184, 0.20)' }}>
+                          <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <FaPaperclip /> Anexos ({despesa.anexos.length})
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '8px' }}>
+                            {despesa.anexos.map((anexo) => (
+                              <div key={anexo.id} style={{ position: 'relative', border: '1px solid rgba(148, 163, 184, 0.20)', borderRadius: '6px', overflow: 'hidden' }}>
+                                {anexo.tipo_mime.startsWith('image/') ? (
+                                  <div style={{ position: 'relative', width: '100%', aspectRatio: 1 }}>
+                                    <img 
+                                      src={anexo.url_cloudfront} 
+                                      alt={anexo.nome_original}
+                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src = anexo.url_s3;
+                                      }}
+                                    />
+                                    <a
+                                      href={anexo.url_cloudfront}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{
+                                        position: 'absolute',
+                                        bottom: '4px',
+                                        left: '4px',
+                                        background: 'rgba(0, 0, 0, 0.7)',
+                                        color: 'white',
+                                        padding: '4px 6px',
+                                        borderRadius: '4px',
+                                        fontSize: '10px',
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                      }}
+                                      title="Abrir em nova aba"
+                                    >
+                                      <FaDownload />
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                                    <div style={{ fontSize: '20px', color: '#6366f1' }}>
+                                      {anexo.tipo_mime === 'application/pdf' ? <FaFilePdf /> : <FaFile />}
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: 'rgba(226, 232, 240, 0.8)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+                                      {anexo.nome_original}
+                                    </div>
+                                    <a
+                                      href={anexo.url_cloudfront}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{
+                                        background: '#6366f1',
+                                        color: 'white',
+                                        padding: '4px 8px',
+                                        borderRadius: '4px',
+                                        fontSize: '10px',
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                      }}
+                                      title="Download"
+                                    >
+                                      <FaDownload />
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -2216,6 +2306,83 @@ const Participacoes: React.FC = () => {
                               </div>
                             );
                           })}
+                        </div>
+                      )}
+
+                      {/* Anexos da despesa */}
+                      {despesa.anexos && despesa.anexos.length > 0 && (
+                        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(148, 163, 184, 0.20)' }}>
+                          <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <FaPaperclip /> Anexos ({despesa.anexos.length})
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '8px' }}>
+                            {despesa.anexos.map((anexo) => (
+                              <div key={anexo.id} style={{ position: 'relative', border: '1px solid rgba(148, 163, 184, 0.20)', borderRadius: '6px', overflow: 'hidden' }}>
+                                {anexo.tipo_mime.startsWith('image/') ? (
+                                  <div style={{ position: 'relative', width: '100%', aspectRatio: 1 }}>
+                                    <img 
+                                      src={anexo.url_cloudfront} 
+                                      alt={anexo.nome_original}
+                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src = anexo.url_s3;
+                                      }}
+                                    />
+                                    <a
+                                      href={anexo.url_cloudfront}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{
+                                        position: 'absolute',
+                                        bottom: '4px',
+                                        left: '4px',
+                                        background: 'rgba(0, 0, 0, 0.7)',
+                                        color: 'white',
+                                        padding: '4px 6px',
+                                        borderRadius: '4px',
+                                        fontSize: '10px',
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                      }}
+                                      title="Abrir em nova aba"
+                                    >
+                                      <FaDownload />
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                                    <div style={{ fontSize: '20px', color: '#6366f1' }}>
+                                      {anexo.tipo_mime === 'application/pdf' ? <FaFilePdf /> : <FaFile />}
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: 'rgba(226, 232, 240, 0.8)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+                                      {anexo.nome_original}
+                                    </div>
+                                    <a
+                                      href={anexo.url_cloudfront}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{
+                                        background: '#6366f1',
+                                        color: 'white',
+                                        padding: '4px 8px',
+                                        borderRadius: '4px',
+                                        fontSize: '10px',
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                      }}
+                                      title="Download"
+                                    >
+                                      <FaDownload />
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>

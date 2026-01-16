@@ -119,19 +119,29 @@ const AdminFeatureLimits: React.FC = () => {
     return names[key] || key;
   };
 
+  const isBooleanFeature = (featureKey: string): boolean => {
+    // Features numéricas (sempre usam limitValue)
+    const numericFeatures = ['max_events', 'max_participants_per_event'];
+    if (numericFeatures.includes(featureKey)) {
+      return false;
+    }
+    // Features booleanas (sempre usam enabled)
+    return featureKey.includes('enabled') || featureKey.endsWith('_enabled');
+  };
+
   const renderLimitValue = (planType: string, featureKey: string, limit: PlanLimit) => {
     const key = `${planType}-${featureKey}`;
     const isEditing = editing[key] !== undefined;
 
     if (isEditing) {
-      // Determine input type based on feature
-      if (limit.enabled !== undefined || featureKey.includes('enabled')) {
-        // Boolean feature
+      // Determine input type based on feature key, not the current value
+      if (isBooleanFeature(featureKey)) {
+        // Boolean feature - show enabled/disabled selector
         return (
           <div className="edit-controls">
             <select
-              value={editing[key].enabled === null ? '' : editing[key].enabled ? 'true' : 'false'}
-              onChange={(e) => updateEditValue(planType, featureKey, 'enabled', e.target.value === 'true')}
+              value={editing[key].enabled === null || editing[key].enabled === undefined ? '' : editing[key].enabled ? 'true' : 'false'}
+              onChange={(e) => updateEditValue(planType, featureKey, 'enabled', e.target.value === '' ? null : e.target.value === 'true')}
             >
               <option value="">Não definido</option>
               <option value="true">Habilitado</option>
@@ -153,13 +163,13 @@ const AdminFeatureLimits: React.FC = () => {
           </div>
         );
       } else {
-        // Numeric limit
+        // Numeric limit - show number input for limitValue
         return (
           <div className="edit-controls">
             <input
               type="number"
-              value={editing[key].limitValue === null ? '' : editing[key].limitValue || ''}
-              onChange={(e) => updateEditValue(planType, featureKey, 'limitValue', e.target.value ? parseInt(e.target.value) : null)}
+              value={editing[key].limitValue === null || editing[key].limitValue === undefined ? '' : editing[key].limitValue || ''}
+              onChange={(e) => updateEditValue(planType, featureKey, 'limitValue', e.target.value === '' ? null : parseInt(e.target.value))}
               placeholder="Ilimitado (deixe vazio)"
               min="0"
             />
@@ -181,17 +191,28 @@ const AdminFeatureLimits: React.FC = () => {
       }
     }
 
-    // Display mode
-    const displayValue = limit.enabled !== undefined
-      ? (limit.enabled ? '✓ Habilitado' : '✗ Desabilitado')
-      : (limit.limitValue === null ? 'Ilimitado' : limit.limitValue);
-
-    // Determine status class for styling
+    // Display mode - determine based on feature type, not current values
+    let displayValue: string | number;
     let statusClass = '';
-    if (limit.enabled !== undefined) {
-      statusClass = limit.enabled ? 'status-enabled' : 'status-disabled';
-    } else if (limit.limitValue === null) {
-      statusClass = 'status-unlimited';
+    
+    if (isBooleanFeature(featureKey)) {
+      // Boolean feature - show enabled/disabled
+      if (limit.enabled === null || limit.enabled === undefined) {
+        displayValue = 'Não definido';
+        statusClass = '';
+      } else {
+        displayValue = limit.enabled ? '✓ Habilitado' : '✗ Desabilitado';
+        statusClass = limit.enabled ? 'status-enabled' : 'status-disabled';
+      }
+    } else {
+      // Numeric feature - show limit value
+      if (limit.limitValue === null || limit.limitValue === undefined) {
+        displayValue = 'Ilimitado';
+        statusClass = 'status-unlimited';
+      } else {
+        displayValue = limit.limitValue;
+        statusClass = '';
+      }
     }
 
     return (

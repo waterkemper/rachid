@@ -21,6 +21,7 @@ import { FeatureController } from '../controllers/FeatureController';
 import { AdminSubscriptionController } from '../controllers/AdminSubscriptionController';
 import { AdminFeatureLimitsController } from '../controllers/AdminFeatureLimitsController';
 import { AdminPlansController } from '../controllers/AdminPlansController';
+import { DespesaAnexoController } from '../controllers/DespesaAnexoController';
 
 const router = Router();
 
@@ -39,6 +40,7 @@ router.get('/public/eventos/:token/saldos', PublicEventoController.getSaldosByTo
 router.get('/public/eventos/:token/saldos-por-grupo', PublicEventoController.getSaldosPorGrupoByToken);
 router.get('/public/eventos/:token/sugestoes', PublicEventoController.getSugestoesByToken);
 router.get('/public/eventos/:token/despesas', PublicEventoController.getDespesasByToken);
+router.get('/public/eventos/:token/despesas/:despesaId/anexos', PublicEventoController.getAnexosByToken);
 router.get('/public/estatisticas', PublicEventoController.getEstatisticasPublicas);
 
 // Rotas de templates (públicas, não requerem autenticação)
@@ -68,6 +70,7 @@ router.post('/subscriptions/webhook', SubscriptionController.webhook); // Public
 // Feature routes
 router.get('/features/check', authMiddleware, FeatureController.check);
 router.get('/features/limits', authMiddleware, FeatureController.getLimits);
+router.get('/features/plan-limits', FeatureController.getPublicPlanLimits); // Public route for pricing page
 
 router.get('/participantes', authMiddleware, ParticipanteController.getAll);
 router.get('/participantes/:id', authMiddleware, ParticipanteController.getById);
@@ -99,6 +102,12 @@ router.get('/despesas/:id', authMiddleware, DespesaController.getById);
 router.post('/despesas', authMiddleware, requireGroupMember, DespesaController.create);
 router.put('/despesas/:id', authMiddleware, requireGroupMember, DespesaController.update);
 router.delete('/despesas/:id', authMiddleware, requireGroupMember, DespesaController.delete);
+
+// Rotas de anexos de despesas
+router.post('/despesas/:id/anexos', authMiddleware, DespesaAnexoController.upload);
+router.get('/despesas/:id/anexos', authMiddleware, DespesaAnexoController.list);
+router.delete('/despesas/:id/anexos/:anexoId', authMiddleware, DespesaAnexoController.delete);
+router.get('/despesas/:id/anexos/:anexoId/download', authMiddleware, DespesaAnexoController.download);
 
 router.get('/grupos/:id/saldos', authMiddleware, RelatorioController.getSaldosGrupo);
 router.get('/grupos/:id/saldos-por-grupo', authMiddleware, RelatorioController.getSaldosPorGrupo);
@@ -148,6 +157,14 @@ router.get('/admin/eventos/:id/despesas', authMiddleware, requireAdmin, AdminCon
 // Admin email queue management routes
 router.get('/admin/email-queue/status', authMiddleware, requireAdmin, AdminController.getEmailQueueStatus);
 router.get('/admin/email-queue/:queue/jobs', authMiddleware, requireAdmin, AdminController.getEmailQueueJobs);
+router.delete('/admin/email-queue/jobs/:jobId', authMiddleware, requireAdmin, AdminController.cancelEmailQueueJob);
+router.delete('/admin/email-queue/:queue/jobs', authMiddleware, requireAdmin, AdminController.cancelAllEmailQueueJobs);
+
+// Admin email aggregation routes
+router.get('/admin/email-aggregation/stats', authMiddleware, requireAdmin, AdminController.getEmailAggregationStats);
+router.delete('/admin/email-aggregation/pending/:id', authMiddleware, requireAdmin, AdminController.deleteEmailPendente);
+router.delete('/admin/email-aggregation/pending', authMiddleware, requireAdmin, AdminController.deleteAllEmailPendentes);
+router.delete('/admin/email-aggregation/pending/tipo/:tipo', authMiddleware, requireAdmin, AdminController.deleteEmailPendentesByTipo);
 
 // Admin emails management routes
 router.get('/admin/emails', authMiddleware, requireAdmin, AdminController.getEmails);

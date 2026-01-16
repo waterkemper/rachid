@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { usePageFocus } from '../hooks/usePageFocus';
 import { relatorioApi, grupoApi, grupoParticipantesApi, participanteApi, despesaApi, participacaoApi } from '../services/api';
 import { Grupo, SaldoGrupo, GrupoParticipantesEvento, Participante, Despesa } from '../types';
 import Modal from '../components/Modal';
@@ -47,15 +46,6 @@ const TotaisGrupos: React.FC = () => {
       loadDadosGrupo(Number(grupoSelecionado));
     }
   }, [grupoSelecionado]);
-
-  const reloadDados = useCallback(() => {
-    if (grupoSelecionado) {
-      loadDadosGrupo(Number(grupoSelecionado));
-    }
-  }, [grupoSelecionado]);
-
-  // Recarregar dados quando a página voltar ao foco
-  usePageFocus(reloadDados, [grupoSelecionado]);
 
   const loadGrupos = async () => {
     try {

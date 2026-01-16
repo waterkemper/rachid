@@ -4,47 +4,12 @@ import { EmailService } from './EmailService';
 /**
  * Tipos de jobs de email
  */
-export type EmailJobType = 
-  | 'nova-despesa' 
-  | 'despesa-editada' 
-  | 'inclusao-evento' 
-  | 'participante-adicionado-despesa'
-  | 'mudanca-saldo'
+export type EmailJobType =
+  | 'inclusao-evento'
   | 'evento-finalizado'
   | 'reativacao-sem-evento'
   | 'reativacao-sem-participantes'
   | 'reativacao-sem-despesas';
-
-/**
- * Dados do job para nova despesa
- */
-export interface NovaDespesaJobData {
-  destinatario: string;
-  nomeDestinatario: string;
-  eventoNome: string;
-  eventoId: number;
-  despesaDescricao: string;
-  despesaValorTotal: number;
-  despesaData: string;
-  valorPorPessoa: number;
-  pagadorNome: string;
-  linkEvento?: string;
-}
-
-/**
- * Dados do job para despesa editada
- */
-export interface DespesaEditadaJobData {
-  destinatario: string;
-  nomeDestinatario: string;
-  eventoNome: string;
-  eventoId: number;
-  despesaDescricao: string;
-  despesaValorTotal: number;
-  despesaData: string;
-  mudancas: string[];
-  linkEvento?: string;
-}
 
 /**
  * Dados do job para inclusão em evento
@@ -62,36 +27,6 @@ export interface InclusaoEventoJobData {
   totalDespesas?: string;
   numeroParticipantes?: string;
   linkCadastro?: string;
-}
-
-/**
- * Dados do job para participante adicionado a despesa
- */
-export interface ParticipanteAdicionadoDespesaJobData {
-  destinatario: string;
-  nomeDestinatario: string;
-  eventoNome: string;
-  eventoId: number;
-  despesaDescricao: string;
-  despesaValorTotal: number;
-  valorDevePagar: number;
-  linkEvento?: string;
-}
-
-/**
- * Dados do job para mudança de saldo
- */
-export interface MudancaSaldoJobData {
-  destinatario: string;
-  nomeDestinatario: string;
-  eventoNome: string;
-  eventoId: number;
-  saldoAnterior?: string;
-  saldoAtual: string;
-  diferenca: string;
-  direcao: 'aumentou' | 'diminuiu' | 'manteve';
-  eventoData?: string;
-  linkEventoPublico?: string;
 }
 
 /**
@@ -155,17 +90,16 @@ export class EmailQueueService {
   private static workersStarted = false;
 
   // Lista de todas as filas de email
+  // Simplificado: removidas nova-despesa, despesa-editada, mudanca-saldo, participante-adicionado-despesa
+  // Agora usamos resumo-evento via EmailAggregationService
   private static readonly QUEUES = [
-    'nova-despesa',
-    'despesa-editada',
     'inclusao-evento',
-    'participante-adicionado-despesa',
-    'mudanca-saldo',
     'evento-finalizado',
     'reativacao-sem-evento',
     'reativacao-sem-participantes',
     'reativacao-sem-despesas',
-    'verificar-reativacao-daily'
+    'verificar-reativacao-daily',
+    'processar-emails-pendentes'
   ];
 
   /**
@@ -284,58 +218,6 @@ export class EmailQueueService {
       throw new Error('pg-boss não foi inicializado');
     }
 
-    // Worker para nova-despesa
-    await this.boss.work('nova-despesa', async (job: any) => {
-      const data = job.data as NovaDespesaJobData;
-      try {
-        await EmailService.enviarEmailNovaDespesa(data);
-        console.log(`✅ Email de nova despesa enviado para: ${data.destinatario}`);
-      } catch (error: any) {
-        console.error(`❌ Erro ao enviar email de nova despesa para ${data.destinatario}:`, error);
-        throw error; // Re-throw para pg-boss fazer retry
-      }
-    });
-
-    // Worker para despesa-editada
-    console.log('[EmailQueueService] 🔄 Registrando worker para despesa-editada...');
-    const workerDespesaEditada = await this.boss.work('despesa-editada', {
-      newJobCheckIntervalSeconds: 2,
-    }, async (jobs: any) => {
-      // Em pg-boss v10, o handler recebe um array de jobs
-      const jobArray = Array.isArray(jobs) ? jobs : [jobs];
-      
-      for (const job of jobArray) {
-        if (!job) {
-          console.error('[EmailQueueService] ⚠️  Job é null/undefined no worker de despesa-editada');
-          continue;
-        }
-        
-        const data = job.data as DespesaEditadaJobData;
-        
-        if (!data?.destinatario) {
-          console.error('[EmailQueueService] ⚠️  Job sem destinatario - id:', job.id);
-          continue;
-        }
-        
-        console.log(`[EmailQueueService] 🔄 Processando job despesa-editada (ID: ${job.id}) para: ${data.destinatario}`);
-        
-        try {
-          await EmailService.enviarEmailDespesaEditada(data);
-          console.log(`✅ Email de despesa editada enviado para: ${data.destinatario} (Job ID: ${job.id})`);
-        } catch (error: any) {
-          console.error(`❌ Erro ao enviar email de despesa editada para ${data.destinatario} (Job ID: ${job.id}):`, error);
-          console.error(`[EmailQueueService] Stack trace:`, error.stack);
-          throw error;
-        }
-      }
-    });
-    
-    if (workerDespesaEditada) {
-      console.log(`[EmailQueueService] ✅ Worker registrado para 'despesa-editada' (worker object: ${typeof workerDespesaEditada})`);
-    } else {
-      console.warn(`[EmailQueueService] ⚠️  Worker de 'despesa-editada' retornou null/undefined`);
-    }
-
     // Worker para inclusao-evento
     await this.boss.work('inclusao-evento', async (job: any) => {
       const data = job.data as InclusaoEventoJobData;
@@ -347,53 +229,6 @@ export class EmailQueueService {
         throw error;
       }
     });
-
-    // Worker para participante-adicionado-despesa
-    await this.boss.work('participante-adicionado-despesa', async (job: any) => {
-      const data = job.data as ParticipanteAdicionadoDespesaJobData;
-      try {
-        await EmailService.enviarEmailParticipanteAdicionadoDespesa(data);
-        console.log(`✅ Email de participante adicionado a despesa enviado para: ${data.destinatario}`);
-      } catch (error: any) {
-        console.error(`❌ Erro ao enviar email de participante adicionado a despesa para ${data.destinatario}:`, error);
-        throw error;
-      }
-    });
-
-    // Worker para mudanca-saldo
-    console.log('[EmailQueueService] 🔄 Registrando worker para mudanca-saldo...');
-    await this.boss.work('mudanca-saldo', {
-      newJobCheckIntervalSeconds: 2,
-    }, async (jobs: any) => {
-      // Em pg-boss v10, o handler recebe um array de jobs
-      const jobArray = Array.isArray(jobs) ? jobs : [jobs];
-      
-      for (const job of jobArray) {
-        if (!job) {
-          console.error('[EmailQueueService] ⚠️  Job é null/undefined no worker de mudanca-saldo');
-          continue;
-        }
-        
-        const data = job.data as MudancaSaldoJobData;
-        
-        if (!data?.destinatario) {
-          console.error('[EmailQueueService] ⚠️  Job sem destinatario - id:', job.id);
-          continue;
-        }
-        
-        console.log(`[EmailQueueService] 🔄 Processando job mudanca-saldo (ID: ${job.id}) para: ${data.destinatario}`);
-        
-        try {
-          await EmailService.enviarEmailMudancaSaldo(data);
-          console.log(`✅ Email de mudança de saldo enviado para: ${data.destinatario} (Job ID: ${job.id})`);
-        } catch (error: any) {
-          console.error(`❌ Erro ao enviar email de mudança de saldo para ${data.destinatario} (Job ID: ${job.id}):`, error);
-          console.error(`[EmailQueueService] Stack trace:`, error.stack);
-          throw error;
-        }
-      }
-    });
-    console.log(`[EmailQueueService] ✅ Worker registrado para 'mudanca-saldo'`);
 
     // Worker para evento-finalizado
     await this.boss.work('evento-finalizado', async (job: any) => {
@@ -445,11 +280,11 @@ export class EmailQueueService {
 
     this.workersStarted = true;
     console.log('✅ Workers de email iniciados e prontos para processar jobs');
-    console.log('📋 Workers registrados: nova-despesa, despesa-editada, inclusao-evento, participante-adicionado-despesa, mudanca-saldo, evento-finalizado, reativacao-sem-evento, reativacao-sem-participantes, reativacao-sem-despesas');
-    
+    console.log('📋 Workers registrados: inclusao-evento, evento-finalizado, reativacao-sem-evento, reativacao-sem-participantes, reativacao-sem-despesas');
+
     // Verificar se há jobs pendentes na fila
     try {
-      const queues = ['nova-despesa', 'despesa-editada', 'inclusao-evento', 'participante-adicionado-despesa', 'mudanca-saldo', 'evento-finalizado', 'reativacao-sem-evento', 'reativacao-sem-participantes', 'reativacao-sem-despesas'];
+      const queues = ['inclusao-evento', 'evento-finalizado', 'reativacao-sem-evento', 'reativacao-sem-participantes', 'reativacao-sem-despesas'];
       let totalPendentes = 0;
       for (const queue of queues) {
         const count = await this.boss.getQueueSize(queue);
@@ -492,11 +327,7 @@ export class EmailQueueService {
     }
 
     const queues = [
-      'nova-despesa',
-      'despesa-editada',
       'inclusao-evento',
-      'participante-adicionado-despesa',
-      'mudanca-saldo',
       'evento-finalizado',
       'reativacao-sem-evento',
       'reativacao-sem-participantes',
@@ -581,6 +412,54 @@ export class EmailQueueService {
   }
 
   /**
+   * Cancela/exclui um job específico da fila
+   */
+  static async cancelarJob(jobId: string): Promise<boolean> {
+    if (!this.boss || !this.initialized) {
+      await this.initialize();
+    }
+
+    try {
+      // pg-boss tem método cancel para cancelar jobs
+      await this.boss.cancel(jobId);
+      console.log(`[EmailQueueService] ✅ Job ${jobId} cancelado com sucesso`);
+      return true;
+    } catch (error: any) {
+      console.error(`[EmailQueueService] ❌ Erro ao cancelar job ${jobId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Cancela todos os jobs de uma fila específica
+   */
+  static async cancelarTodosJobsFila(queue: string): Promise<number> {
+    try {
+      const queryRunner = AppDataSource.createQueryRunner();
+      await queryRunner.connect();
+
+      try {
+        const result = await queryRunner.query(
+          `UPDATE pgboss.job 
+           SET state = 'cancelled', completed_on = NOW()
+           WHERE name = $1 AND state IN ('created', 'retry')
+           RETURNING id`,
+          [queue]
+        );
+
+        const count = result?.length || 0;
+        console.log(`[EmailQueueService] ✅ ${count} job(s) cancelados na fila ${queue}`);
+        return count;
+      } finally {
+        await queryRunner.release();
+      }
+    } catch (error: any) {
+      console.error(`[EmailQueueService] ❌ Erro ao cancelar jobs da fila ${queue}:`, error);
+      return 0;
+    }
+  }
+
+  /**
    * Reseta jobs presos em estado 'retry' para serem processados imediatamente
    */
   static async resetarJobsRetry(): Promise<number> {
@@ -617,80 +496,6 @@ export class EmailQueueService {
   }
 
   /**
-   * Adiciona job de nova despesa à fila
-   */
-  static async adicionarEmailNovaDespesa(data: NovaDespesaJobData): Promise<void> {
-    if (!this.boss || !this.initialized) {
-      await this.initialize();
-    }
-
-    if (!this.boss) {
-      throw new Error('pg-boss não foi inicializado');
-    }
-
-    // Garantir que os workers foram iniciados
-    if (!this.workersStarted) {
-      console.warn('[EmailQueueService] ⚠️  Workers ainda não foram iniciados. Iniciando agora...');
-      await this.iniciarWorker();
-    }
-
-    try {
-      const jobId = await this.boss.send('nova-despesa', data, {
-        priority: 1, // Alta prioridade
-      });
-      
-      if (jobId) {
-        console.log(`📧 Job de nova despesa adicionado à fila (Job ID: ${jobId}) para: ${data.destinatario}`);
-      } else {
-        console.error(`[EmailQueueService] ❌ Erro: Job ID é null para 'nova-despesa'`);
-        throw new Error('Falha ao criar job na fila - Job ID retornou null');
-      }
-    } catch (error: any) {
-      console.error('❌ Erro ao adicionar job de nova despesa à fila:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Adiciona job de despesa editada à fila
-   */
-  static async adicionarEmailDespesaEditada(data: DespesaEditadaJobData): Promise<void> {
-    if (!this.boss || !this.initialized) {
-      await this.initialize();
-    }
-
-    if (!this.boss) {
-      throw new Error('pg-boss não foi inicializado');
-    }
-
-    // Garantir que os workers foram iniciados
-    if (!this.workersStarted) {
-      console.warn('[EmailQueueService] ⚠️  Workers ainda não foram iniciados. Iniciando agora...');
-      await this.iniciarWorker();
-    }
-
-    try {
-      const jobId = await this.boss.send('despesa-editada', data, {
-        priority: 2, // Média prioridade
-      });
-      
-      if (jobId) {
-        console.log(`📧 Job de despesa editada adicionado à fila (Job ID: ${jobId}) para: ${data.destinatario}`);
-        console.log(`[EmailQueueService] Job será processado pelo worker em breve...`);
-      } else {
-        console.error(`[EmailQueueService] ❌ Erro: Job ID é null após tentar adicionar à fila 'despesa-editada'`);
-        const queueSize = await this.boss.getQueueSize('despesa-editada');
-        console.error(`[EmailQueueService] Tamanho atual da fila: ${queueSize}`);
-        throw new Error('Falha ao criar job na fila - Job ID retornou null');
-      }
-    } catch (error: any) {
-      console.error('❌ Erro ao adicionar job de despesa editada à fila:', error);
-      console.error('[EmailQueueService] Stack trace:', error.stack);
-      throw error;
-    }
-  }
-
-  /**
    * Adiciona job de inclusão em evento à fila
    */
   static async adicionarEmailInclusaoEvento(data: InclusaoEventoJobData): Promise<void> {
@@ -709,69 +514,6 @@ export class EmailQueueService {
       console.log(`📧 Job de inclusão em evento adicionado à fila para: ${data.destinatario}`);
     } catch (error: any) {
       console.error('❌ Erro ao adicionar job de inclusão em evento à fila:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Adiciona job de participante adicionado a despesa à fila
-   */
-  static async adicionarEmailParticipanteAdicionadoDespesa(
-    data: ParticipanteAdicionadoDespesaJobData
-  ): Promise<void> {
-    if (!this.boss || !this.initialized) {
-      await this.initialize();
-    }
-
-    if (!this.boss) {
-      throw new Error('pg-boss não foi inicializado');
-    }
-
-    try {
-      await this.boss.send('participante-adicionado-despesa', data, {
-        priority: 2, // Média prioridade
-      });
-      console.log(`📧 Job de participante adicionado a despesa adicionado à fila para: ${data.destinatario}`);
-    } catch (error: any) {
-      console.error('❌ Erro ao adicionar job de participante adicionado a despesa à fila:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Adiciona job de mudança de saldo à fila
-   */
-  static async adicionarEmailMudancaSaldo(data: MudancaSaldoJobData): Promise<void> {
-    if (!this.boss || !this.initialized) {
-      await this.initialize();
-    }
-
-    if (!this.boss) {
-      throw new Error('pg-boss não foi inicializado');
-    }
-
-    // Garantir que os workers foram iniciados
-    if (!this.workersStarted) {
-      console.warn('[EmailQueueService] ⚠️  Workers ainda não foram iniciados. Iniciando agora...');
-      await this.iniciarWorker();
-    }
-
-    try {
-      const jobId = await this.boss.send('mudanca-saldo', data, {
-        priority: 2, // Média prioridade
-      });
-      
-      if (jobId) {
-        console.log(`📧 Job de mudança de saldo adicionado à fila (Job ID: ${jobId}) para: ${data.destinatario}`);
-        console.log(`[EmailQueueService] Job será processado pelo worker em breve...`);
-      } else {
-        console.error(`[EmailQueueService] ❌ Erro: Job ID é null após tentar adicionar à fila 'mudanca-saldo'`);
-        const queueSize = await this.boss.getQueueSize('mudanca-saldo');
-        console.error(`[EmailQueueService] Tamanho atual da fila: ${queueSize}`);
-        throw new Error('Falha ao criar job na fila - Job ID retornou null');
-      }
-    } catch (error: any) {
-      console.error('❌ Erro ao adicionar job de mudança de saldo à fila:', error);
       throw error;
     }
   }
@@ -1009,6 +751,67 @@ export class EmailQueueService {
       if (process.env.NODE_ENV === 'production') {
         console.warn('⚠️  Job de reativação não foi agendado, mas servidor continuará funcionando');
       }
+    }
+  }
+
+  /**
+   * Agenda job para processar emails pendentes (agregação)
+   * Executa a cada minuto para consolidar e enviar emails
+   */
+  static async agendarJobAgregacaoEmails(): Promise<void> {
+    if (!this.boss || !this.initialized) {
+      await this.initialize();
+    }
+
+    if (!this.boss) {
+      throw new Error('pg-boss não foi inicializado');
+    }
+
+    const jobName = 'processar-emails-pendentes';
+
+    try {
+      // Garantir que a queue existe
+      try {
+        await this.boss.createQueue(jobName);
+        console.log(`✅ Queue "${jobName}" criada/verificada`);
+      } catch (e: any) {
+        if (!e.message?.includes('already exists')) {
+          console.warn(`⚠️  Aviso ao criar queue ${jobName}:`, e.message);
+        }
+      }
+
+      // Registrar worker
+      await this.boss.work(jobName, async () => {
+        try {
+          const { EmailAggregationService } = await import('./EmailAggregationService');
+          const processados = await EmailAggregationService.processarPendentes();
+          
+          if (processados > 0) {
+            console.log(`📧 [Agregação] ${processados} email(s) consolidado(s) enviado(s)`);
+          }
+        } catch (error: any) {
+          console.error('❌ Erro ao processar emails pendentes:', error.message);
+          throw error;
+        }
+      });
+      console.log(`✅ Worker registrado para "${jobName}"`);
+
+      // Agendar execução a cada minuto
+      const cronExpression = '* * * * *'; // A cada minuto
+      try {
+        await this.boss.schedule(jobName, cronExpression, {});
+        console.log(`✅ Job de agregação de emails agendado: ${cronExpression} (a cada minuto)`);
+      } catch (scheduleError: any) {
+        if (scheduleError.message?.includes('already exists') || scheduleError.message?.includes('duplicate')) {
+          console.log('📅 Job de agregação de emails já está agendado');
+        } else {
+          throw scheduleError;
+        }
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao agendar job de agregação de emails:', error);
+      // Não falhar inicialização se agendamento falhar
+      console.warn('⚠️  Job de agregação não foi agendado, mas servidor continuará funcionando');
     }
   }
 }
