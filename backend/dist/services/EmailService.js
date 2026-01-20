@@ -574,6 +574,123 @@ class EmailService {
         await this.sendEmail(data.destinatario, `Registre as despesas do evento "${data.eventoNome}" 💸`, html, 'reativacao-sem-despesas', undefined, // text (opcional)
         usuario?.id, data.eventoId);
     }
+    /**
+     * Envia email de pagamento falho (chamado quando pagamento é negado)
+     */
+    static async enviarEmailPagamentoFalho(usuarioId, planType, periodEnd, nextBillingTime) {
+        const usuarioRepository = data_source_1.AppDataSource.getRepository(Usuario_1.Usuario);
+        const usuario = await usuarioRepository.findOne({ where: { id: usuarioId } });
+        if (!usuario) {
+            console.error(`Usuário ${usuarioId} não encontrado para enviar email de pagamento falho`);
+            return;
+        }
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const linkPrecos = `${frontendUrl}/precos`;
+        const formatDate = (date) => {
+            if (!date)
+                return undefined;
+            return new Intl.DateTimeFormat('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+            }).format(date);
+        };
+        const html = EmailTemplateService_1.EmailTemplateService.renderPagamentoFalho({
+            nome: usuario.nome,
+            planType: planType,
+            periodEnd: formatDate(periodEnd),
+            nextBillingTime: formatDate(nextBillingTime),
+            linkPrecos: linkPrecos,
+        });
+        await this.sendEmail(usuario.email, '⚠️ Pagamento Não Processado - Rachid', html, 'pagamento-falho', undefined, usuarioId);
+    }
+    /**
+     * Envia email de assinatura suspensa (chamado quando assinatura é suspensa)
+     */
+    static async enviarEmailAssinaturaSuspensa(usuarioId, planType, periodEnd) {
+        const usuarioRepository = data_source_1.AppDataSource.getRepository(Usuario_1.Usuario);
+        const usuario = await usuarioRepository.findOne({ where: { id: usuarioId } });
+        if (!usuario) {
+            console.error(`Usuário ${usuarioId} não encontrado para enviar email de assinatura suspensa`);
+            return;
+        }
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const linkPrecos = `${frontendUrl}/precos`;
+        const formatDate = (date) => {
+            if (!date)
+                return undefined;
+            return new Intl.DateTimeFormat('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+            }).format(date);
+        };
+        const html = EmailTemplateService_1.EmailTemplateService.renderAssinaturaSuspensa({
+            nome: usuario.nome,
+            planType: planType,
+            periodEnd: formatDate(periodEnd),
+            linkPrecos: linkPrecos,
+        });
+        await this.sendEmail(usuario.email, '🚫 Assinatura Suspensa - Rachid', html, 'assinatura-suspensa', undefined, usuarioId);
+    }
+    /**
+     * Envia email de assinatura expirada (chamado quando assinatura expira)
+     */
+    static async enviarEmailAssinaturaExpirada(usuarioId, planType, expirationDate) {
+        const usuarioRepository = data_source_1.AppDataSource.getRepository(Usuario_1.Usuario);
+        const usuario = await usuarioRepository.findOne({ where: { id: usuarioId } });
+        if (!usuario) {
+            console.error(`Usuário ${usuarioId} não encontrado para enviar email de assinatura expirada`);
+            return;
+        }
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const linkPrecos = `${frontendUrl}/precos`;
+        const formatDate = (date) => {
+            return new Intl.DateTimeFormat('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+            }).format(date);
+        };
+        const html = EmailTemplateService_1.EmailTemplateService.renderAssinaturaExpirada({
+            nome: usuario.nome,
+            planType: planType,
+            expirationDate: formatDate(expirationDate),
+            linkPrecos: linkPrecos,
+        });
+        await this.sendEmail(usuario.email, '⏰ Assinatura Expirada - Rachid', html, 'assinatura-expirada', undefined, usuarioId);
+    }
+    /**
+     * Envia email de vencimento próximo (chamado por job/cron)
+     */
+    static async enviarEmailVencimentoProximo(usuarioId, planType, expirationDate, diasRestantes) {
+        const usuarioRepository = data_source_1.AppDataSource.getRepository(Usuario_1.Usuario);
+        const usuario = await usuarioRepository.findOne({ where: { id: usuarioId } });
+        if (!usuario) {
+            console.error(`Usuário ${usuarioId} não encontrado para enviar email de vencimento próximo`);
+            return;
+        }
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const linkPrecos = `${frontendUrl}/precos`;
+        const formatDate = (date) => {
+            return new Intl.DateTimeFormat('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+            }).format(date);
+        };
+        const diasTexto = diasRestantes === 1 ? '1 dia' : `${diasRestantes} dias`;
+        const html = EmailTemplateService_1.EmailTemplateService.renderVencimentoProximo({
+            nome: usuario.nome,
+            planType: planType,
+            expirationDate: formatDate(expirationDate),
+            diasRestantes: diasTexto,
+            linkPrecos: linkPrecos,
+        });
+        await this.sendEmail(usuario.email, `⏰ Assinatura Expirando em ${diasTexto} - Rachid`, html, 'vencimento-proximo', undefined, usuarioId);
+    }
 }
 exports.EmailService = EmailService;
 EmailService.initialized = false;

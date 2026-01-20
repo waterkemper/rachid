@@ -1,15 +1,24 @@
 - Como fechar um evento (concluido) (ok);
+- upload de cupons fiscais; (ok)
 - testes completos emails;
-- upload de cupons fiscais;
+     
+     - Logotipo;
+     - rever links e textos;
+       
 - revisar confirmação de pagamentos;
-- upload de comprovantes de deposito;
 - Gráficos;
-- Dentro do sistema .. verificar onde exibir alertas de features pagas;
-
 - docker para o projeto e hospedar ec2;
-- planos pagos e quais features, qual metodo de recebimento;
 
+- moedas;
+- planos pagos e quais features, qual metodo de recebimento;
+- testes de stress.. muitos acessos, ddos, etc..;
 - mobile app;
+
+
+- Criar evento, despesas , participantes por comando de voz.
+- Dentro do sistema .. verificar onde exibir alertas de features pagas;
+- upload de comprovantes de deposito;
+
 - testar sms;
 - faqs;
 
@@ -20,7 +29,6 @@
 - Help, pagina de contato;
 
 - backups;
-- testes de stress.. muitos acessos, ddos, etc..;
 - internacionalização; (espanhol e ingles)
 - Atualizacao Node.js;
 - Comprar outros domínios;

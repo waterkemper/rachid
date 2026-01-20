@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
-import { authApi } from '../services/api';
+import { authApi, subscriptionApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import './Login.css';
 
@@ -31,6 +31,20 @@ function Login() {
     try {
       const usuario = await authApi.login(email, senha);
       login(usuario);
+      
+      // Verificar se há assinatura pendente
+      try {
+        const subscriptionData = await subscriptionApi.getMe();
+        if (subscriptionData.subscription && subscriptionData.subscription.status === 'APPROVAL_PENDING') {
+          // Redirecionar para página de assinatura para completar aprovação
+          navigate('/assinatura?pending=true');
+          return;
+        }
+      } catch (error) {
+        // Se não conseguir verificar assinatura, continua normalmente
+        console.log('Não foi possível verificar assinatura:', error);
+      }
+      
       navigate('/eventos');
     } catch (error: any) {
       setErro(error.response?.data?.error || 'Erro ao fazer login');
@@ -90,6 +104,20 @@ function Login() {
                   try {
                     const usuario = await authApi.loginWithGoogle(credentialResponse.credential);
                     login(usuario);
+                    
+                    // Verificar se há assinatura pendente
+                    try {
+                      const subscriptionData = await subscriptionApi.getMe();
+                      if (subscriptionData.subscription && subscriptionData.subscription.status === 'APPROVAL_PENDING') {
+                        // Redirecionar para página de assinatura para completar aprovação
+                        navigate('/assinatura?pending=true');
+                        return;
+                      }
+                    } catch (error) {
+                      // Se não conseguir verificar assinatura, continua normalmente
+                      console.log('Não foi possível verificar assinatura:', error);
+                    }
+                    
                     navigate('/eventos');
                   } catch (error: any) {
                     setErro(error.response?.data?.error || 'Erro ao fazer login com Google');

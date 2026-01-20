@@ -21,7 +21,7 @@ export class Subscription {
   @Column('varchar', { nullable: true, unique: true, name: 'paypal_subscription_id' })
   paypalSubscriptionId?: string;
 
-  @Column('varchar', { nullable: true, unique: true, name: 'paypal_payer_id' })
+  @Column('varchar', { nullable: true, name: 'paypal_payer_id' })
   paypalPayerId?: string;
 
   @Column({ type: 'varchar', length: 20, name: 'plan_type' })

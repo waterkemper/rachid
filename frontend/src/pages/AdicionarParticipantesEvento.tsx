@@ -33,12 +33,28 @@ const AdicionarParticipantesEvento: React.FC = () => {
   const [editandoParticipante, setEditandoParticipante] = useState<Participante | null>(null);
   const [erroModalParticipante, setErroModalParticipante] = useState('');
   const [sucessoModalParticipante, setSucessoModalParticipante] = useState('');
+  const [salvandoFamilia, setSalvandoFamilia] = useState(false);
+  const [carregandoFamilias, setCarregandoFamilias] = useState(false);
 
   useEffect(() => {
     if (eventoId) {
       loadData();
     }
   }, [eventoId]);
+
+  // Recarregar familias quando o modal de subgrupo abrir para garantir dados atualizados
+  useEffect(() => {
+    if (isModalFamiliaOpen && eventoId) {
+      const carregar = async () => {
+        setCarregandoFamilias(true);
+        await reloadFamilias();
+        // Pequeno delay para garantir que o estado foi atualizado
+        await new Promise(resolve => setTimeout(resolve, 100));
+        setCarregandoFamilias(false);
+      };
+      carregar();
+    }
+  }, [isModalFamiliaOpen, eventoId]);
 
   const loadData = async () => {
     if (!eventoId) return;
@@ -528,18 +544,49 @@ const AdicionarParticipantesEvento: React.FC = () => {
 
   // Função para verificar se um participante já está em outro subgrupo
   const participanteJaEmOutroSubgrupo = (participanteId: number, subgrupoAtualId?: number): boolean => {
-    return familiasEvento.some(familia => {
+    // Se não há familias carregadas, não pode estar em outro subgrupo
+    if (!familiasEvento || familiasEvento.length === 0) {
+      return false;
+    }
+
+    // Verificar em todas as familias/subgrupos
+    for (const familia of familiasEvento) {
       // Ignorar o subgrupo atual se estiver editando
       if (subgrupoAtualId && familia.id === subgrupoAtualId) {
-        return false;
+        continue;
       }
+      
       // Verificar se o participante está neste subgrupo
-      return (familia.participantes || []).some(p => p.participante_id === participanteId);
-    });
+      if (familia.participantes && Array.isArray(familia.participantes) && familia.participantes.length > 0) {
+        // Verificar tanto participante_id quanto participante?.id (caso a relação esteja populada)
+        const encontrado = familia.participantes.some(p => 
+          p.participante_id === participanteId || 
+          (p.participante && p.participante.id === participanteId)
+        );
+        if (encontrado) {
+          return true;
+        }
+      }
+    }
+    return false;
   };
 
-  const abrirModalFamilia = (familia?: GrupoParticipantesEvento) => {
+  const abrirModalFamilia = async (familia?: GrupoParticipantesEvento) => {
     setErro('');
+    setCarregandoFamilias(true);
+    
+    // Recarregar familias para garantir que temos os dados mais atualizados
+    if (eventoId) {
+      try {
+        const data = await grupoParticipantesApi.getAll(Number(eventoId));
+        setFamiliasEvento(data || []);
+      } catch (error) {
+        console.error('Erro ao recarregar familias:', error);
+      }
+    }
+    
+    setCarregandoFamilias(false);
+    
     if (familia) {
       setFamiliaEditando(familia);
       setFamiliaNome(familia.nome || '');
@@ -555,14 +602,34 @@ const AdicionarParticipantesEvento: React.FC = () => {
 
   const salvarFamilia = async () => {
     if (!eventoId) return;
-    if (!familiaNome.trim()) {
-      setErro('Nome da sub grupo é obrigatório');
-      return;
-    }
+    if (salvandoFamilia) return; // Prevenir múltiplos cliques
+    
     if (familiaSelecionados.length === 0) {
       setErro('Selecione pelo menos uma pessoa para a sub grupo');
       return;
     }
+
+    // Se não tiver nome, sugerir baseado nos participantes selecionados
+    let nomeFinal = familiaNome.trim();
+    if (!nomeFinal) {
+      const nomesParticipantes = familiaSelecionados
+        .map(id => {
+          const participante = participantesNoEvento.find(p => p.id === id);
+          return participante?.nome || '';
+        })
+        .filter(nome => nome.length > 0);
+      
+      if (nomesParticipantes.length > 0) {
+        nomeFinal = nomesParticipantes.join(' e ');
+        setFamiliaNome(nomeFinal);
+      } else {
+        setErro('Nome da sub grupo é obrigatório');
+        return;
+      }
+    }
+
+    // Recarregar familias antes de validar para garantir dados atualizados
+    await reloadFamilias();
 
     // Validar se algum participante selecionado já está em outro subgrupo
     const participantesEmConflito: string[] = [];
@@ -581,11 +648,12 @@ const AdicionarParticipantesEvento: React.FC = () => {
     }
 
     try {
+      setSalvandoFamilia(true);
       setErro('');
       const evId = Number(eventoId);
 
       if (familiaEditando) {
-        await grupoParticipantesApi.update(evId, familiaEditando.id, { nome: familiaNome.trim() });
+        await grupoParticipantesApi.update(evId, familiaEditando.id, { nome: nomeFinal });
 
         const atuais = new Set<number>((familiaEditando.participantes || []).map((p) => p.participante_id));
         const desejados = new Set<number>(familiaSelecionados);
@@ -606,12 +674,43 @@ const AdicionarParticipantesEvento: React.FC = () => {
           }
         }
       } else {
-        const familia = await grupoParticipantesApi.create(evId, { nome: familiaNome.trim() });
+        const familia = await grupoParticipantesApi.create(evId, { nome: nomeFinal });
+        let participantesAdicionados = 0;
         for (const id of familiaSelecionados) {
           // Verificar novamente antes de adicionar (caso tenha mudado enquanto criava)
           if (!participanteJaEmOutroSubgrupo(id, familia.id)) {
-            await grupoParticipantesApi.adicionarParticipante(evId, familia.id, id);
+            try {
+              await grupoParticipantesApi.adicionarParticipante(evId, familia.id, id);
+              participantesAdicionados++;
+            } catch (err: any) {
+              // Se o erro for porque o participante já está em outro subgrupo, logar mas continuar
+              if (err?.response?.status === 400) {
+                const participante = participantesNoEvento.find(p => p.id === id);
+                if (participante) {
+                  participantesEmConflito.push(participante.nome);
+                }
+              } else {
+                throw err; // Re-throw se for outro tipo de erro
+              }
+            }
           }
+        }
+        
+        // Se nenhum participante foi adicionado, mostrar erro
+        if (participantesAdicionados === 0 && familiaSelecionados.length > 0) {
+          if (participantesEmConflito.length > 0) {
+            setErro(`Não foi possível adicionar os participantes ao subgrupo. Os seguintes participantes já estão em outro subgrupo: ${participantesEmConflito.join(', ')}`);
+          } else {
+            setErro('Não foi possível adicionar os participantes ao subgrupo. Verifique se os participantes selecionados ainda estão disponíveis.');
+          }
+          // Deletar o subgrupo vazio que foi criado
+          try {
+            await grupoParticipantesApi.delete(evId, familia.id);
+          } catch (deleteErr) {
+            // Ignorar erro ao deletar
+          }
+          setSalvandoFamilia(false);
+          return;
         }
       }
 
@@ -621,7 +720,10 @@ const AdicionarParticipantesEvento: React.FC = () => {
       setFamiliaSelecionados([]);
       await reloadFamilias();
     } catch (error: any) {
-      setErro(error?.response?.data?.error || 'Erro ao salvar sub grupo');
+      const errorMessage = error?.response?.data?.error || error?.message || 'Erro ao salvar sub grupo';
+      setErro(errorMessage);
+    } finally {
+      setSalvandoFamilia(false);
     }
   };
 
@@ -928,53 +1030,65 @@ const AdicionarParticipantesEvento: React.FC = () => {
               background: 'rgba(2, 6, 23, 0.18)',
             }}
           >
-            {participantesNoEvento.map((p) => {
-              const jaEmOutroSubgrupo = participanteJaEmOutroSubgrupo(p.id, familiaEditando?.id);
-              const estaSelecionado = familiaSelecionados.includes(p.id);
-              const podeSelecionar = !jaEmOutroSubgrupo || estaSelecionado;
-              
-              return (
-                <label 
-                  key={p.id} 
-                  style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: 10, 
-                    padding: '8px 6px',
-                    opacity: podeSelecionar ? 1 : 0.5,
-                    cursor: podeSelecionar ? 'pointer' : 'not-allowed'
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={estaSelecionado}
-                    disabled={!podeSelecionar}
-                    onChange={() => {
-                      if (podeSelecionar) {
-                        setFamiliaSelecionados((prev) =>
-                          prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]
-                        );
-                      }
+            {carregandoFamilias ? (
+              <div style={{ padding: '10px', textAlign: 'center', color: 'rgba(226, 232, 240, 0.6)' }}>
+                Carregando...
+              </div>
+            ) : (
+              participantesNoEvento.map((p) => {
+                // Verificar se o participante já está em outro subgrupo
+                const jaEmOutroSubgrupo = participanteJaEmOutroSubgrupo(p.id, familiaEditando?.id);
+                const estaSelecionado = familiaSelecionados.includes(p.id);
+                
+                // Se está editando: permitir apenas se o participante já está selecionado neste subgrupo OU se não está em outro subgrupo
+                // Se está criando: permitir apenas se NÃO está em outro subgrupo
+                const podeSelecionar = familiaEditando 
+                  ? (estaSelecionado || !jaEmOutroSubgrupo)
+                  : !jaEmOutroSubgrupo;
+                
+                return (
+                  <label 
+                    key={p.id} 
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 10, 
+                      padding: '8px 6px',
+                      opacity: podeSelecionar ? 1 : 0.5,
+                      cursor: podeSelecionar ? 'pointer' : 'not-allowed'
                     }}
-                  />
-                  <span style={{ 
-                    color: podeSelecionar ? 'rgba(226, 232, 240, 0.92)' : 'rgba(148, 163, 184, 0.6)'
-                  }}>
-                    {p.nome}
-                    {jaEmOutroSubgrupo && !estaSelecionado && (
-                      <span style={{ 
-                        marginLeft: '8px', 
-                        fontSize: '12px', 
-                        color: 'rgba(239, 68, 68, 0.8)',
-                        fontStyle: 'italic'
-                      }}>
-                        (já em outro subgrupo)
-                      </span>
-                    )}
-                  </span>
-                </label>
-              );
-            })}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={estaSelecionado}
+                      disabled={!podeSelecionar}
+                      onChange={() => {
+                        if (podeSelecionar) {
+                          setFamiliaSelecionados((prev) =>
+                            prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]
+                          );
+                        }
+                      }}
+                    />
+                    <span style={{ 
+                      color: podeSelecionar ? 'rgba(226, 232, 240, 0.92)' : 'rgba(148, 163, 184, 0.6)'
+                    }}>
+                      {p.nome}
+                      {jaEmOutroSubgrupo && !estaSelecionado && (
+                        <span style={{ 
+                          marginLeft: '8px', 
+                          fontSize: '12px', 
+                          color: 'rgba(239, 68, 68, 0.8)',
+                          fontStyle: 'italic'
+                        }}>
+                          (já em outro subgrupo)
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })
+            )}
           </div>
           <p className="help-text">Dica: você pode editar isso depois. Cada participante só pode estar em um subgrupo.</p>
         </div>
@@ -992,8 +1106,13 @@ const AdicionarParticipantesEvento: React.FC = () => {
           >
             <FaArrowLeft /> <span>Cancelar</span>
           </button>
-          <button type="button" className="btn btn-primary btn-with-icon" onClick={salvarFamilia}>
-            <FaUsers /> <span>Salvar sub grupo</span>
+          <button 
+            type="button" 
+            className="btn btn-primary btn-with-icon" 
+            onClick={salvarFamilia}
+            disabled={salvandoFamilia}
+          >
+            <FaUsers /> <span>{salvandoFamilia ? 'Salvando...' : 'Salvar sub grupo'}</span>
           </button>
         </div>
       </Modal>

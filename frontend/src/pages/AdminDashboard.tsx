@@ -104,6 +104,9 @@ const AdminDashboard: React.FC = () => {
           <button className="btn btn-primary" onClick={() => navigate('/admin/emails')}>
             Emails Enviados
           </button>
+          <button className="btn btn-primary" onClick={() => navigate('/admin/subscriptions')}>
+            Gerenciar Assinaturas
+          </button>
           <button className="btn btn-primary" onClick={() => navigate('/admin/plans')}>
             Gerenciar Planos
           </button>

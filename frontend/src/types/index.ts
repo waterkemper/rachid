@@ -191,3 +191,66 @@ export interface DespesaHistorico {
   usuario?: Usuario;
 }
 
+// Tipos para gráficos
+export interface GraficoPizzaPagador {
+  label: string;
+  value: number;
+  percentage: number;
+}
+
+export interface PontoTemporal {
+  data: string; // YYYY-MM-DD
+  valor: number;
+  quantidade: number;
+}
+
+export interface GraficoGastosParticipante {
+  participanteId: number;
+  participanteNome: string;
+  totalPagou: number;
+  totalDeve: number;
+  saldo: number;
+}
+
+export interface TopDespesa {
+  id: number;
+  descricao: string;
+  valor: number;
+  data: string;
+  pagadorNome: string;
+}
+
+export interface GastosMensais {
+  mes: string; // YYYY-MM
+  ano: number;
+  mesNumero: number;
+  valor: number;
+  quantidade: number;
+}
+
+export interface GastosPorEvento {
+  eventoId: number;
+  eventoNome: string;
+  valor: number;
+  quantidadeDespesas: number;
+  dataEvento: string;
+}
+
+export interface DistribuicaoMensalPorEvento {
+  mes: string; // YYYY-MM
+  eventos: Array<{
+    eventoId: number;
+    eventoNome: string;
+    valor: number;
+  }>;
+}
+
+export interface SaldosEvolucao {
+  data: string;
+  participantes: Array<{
+    participanteId: number;
+    participanteNome: string;
+    saldo: number;
+  }>;
+}
+

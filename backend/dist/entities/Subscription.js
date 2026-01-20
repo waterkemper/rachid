@@ -35,7 +35,7 @@ __decorate([
     __metadata("design:type", String)
 ], Subscription.prototype, "paypalSubscriptionId", void 0);
 __decorate([
-    (0, typeorm_1.Column)('varchar', { nullable: true, unique: true, name: 'paypal_payer_id' }),
+    (0, typeorm_1.Column)('varchar', { nullable: true, name: 'paypal_payer_id' }),
     __metadata("design:type", String)
 ], Subscription.prototype, "paypalPayerId", void 0);
 __decorate([

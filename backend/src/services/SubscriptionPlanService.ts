@@ -83,10 +83,12 @@ export class SubscriptionPlanService {
       currency?: string;
       intervalUnit?: 'month' | 'year';
       intervalCount?: number;
+      trialDays?: number;
       isOneTime?: boolean;
       paypalPlanId?: string;
       enabled?: boolean;
       displayOrder?: number;
+      createInPayPal?: boolean; // If true, creates plan in PayPal and updates paypalPlanId
     }
   ): Promise<Plan> {
     const plan = await this.planRepository.findOne({
@@ -96,6 +98,11 @@ export class SubscriptionPlanService {
     if (!plan) {
       throw new Error(`Plan ${planType} not found`);
     }
+
+    // Detect if price changed BEFORE updating (to preserve old price for comparison)
+    const oldPrice = parseFloat(plan.price.toString());
+    const newPrice = updates.price !== undefined ? parseFloat(String(updates.price)) : oldPrice;
+    const priceChanged = updates.price !== undefined && Math.abs(newPrice - oldPrice) > 0.01; // Allow for floating point precision
 
     if (updates.name !== undefined) {
       plan.name = updates.name;
@@ -121,6 +128,14 @@ export class SubscriptionPlanService {
         plan.intervalCount = undefined;
       }
     }
+    if (updates.trialDays !== undefined) {
+      // Trial days: 0 = no trial, positive number = trial days
+      if (updates.trialDays !== null && updates.trialDays !== undefined && !isNaN(Number(updates.trialDays))) {
+        plan.trialDays = Math.max(0, Number(updates.trialDays)); // Ensure non-negative
+      } else {
+        plan.trialDays = 0;
+      }
+    }
     if (updates.isOneTime !== undefined) {
       plan.isOneTime = updates.isOneTime;
     }
@@ -134,6 +149,47 @@ export class SubscriptionPlanService {
       // Only set if it's a valid number
       if (updates.displayOrder !== null && !isNaN(updates.displayOrder)) {
         plan.displayOrder = updates.displayOrder;
+      }
+    }
+
+    // Create plan in PayPal if requested OR if price changed (only for recurring plans)
+    const shouldCreateInPayPal = updates.createInPayPal || (priceChanged && plan.paypalPlanId && !plan.isOneTime);
+    
+    if (shouldCreateInPayPal && !plan.isOneTime) {
+      try {
+        if (priceChanged) {
+          console.log(`[SubscriptionPlanService] 💰 Preço alterado de R$ ${oldPrice.toFixed(2)} para R$ ${newPrice.toFixed(2)}. Criando novo plano no PayPal automaticamente...`);
+        } else {
+          console.log(`[SubscriptionPlanService] Criando plano ${planType} no PayPal...`);
+        }
+        // PayPal requires description with at least 1 character
+        const description = (plan.description && plan.description.trim().length > 0) 
+          ? plan.description.trim() 
+          : plan.name; // Fallback to name if description is empty
+        const paypalPlan = await PayPalService.createSubscriptionPlan({
+          name: plan.name,
+          description: description,
+          billingCycle: {
+            frequency: {
+              interval_unit: plan.intervalUnit || 'month',
+              interval_count: plan.intervalCount || 1,
+            },
+            pricing: {
+              value: parseFloat(plan.price.toString()).toFixed(2),
+              currency_code: plan.currency || 'BRL',
+            },
+          },
+          trialDays: plan.trialDays || 0,
+        });
+        
+        plan.paypalPlanId = paypalPlan.id;
+        console.log(`[SubscriptionPlanService] ✅ Plano criado no PayPal! Plan ID: ${paypalPlan.id}`);
+        if (priceChanged) {
+          console.log(`[SubscriptionPlanService] 💡 Novo plano PayPal criado automaticamente devido à mudança de preço`);
+        }
+      } catch (error: any) {
+        console.error('Erro ao criar plano no PayPal:', error);
+        throw new Error(`Erro ao criar plano no PayPal: ${error.message}`);
       }
     }
 
@@ -152,6 +208,7 @@ export class SubscriptionPlanService {
     currency?: string;
     intervalUnit?: 'month' | 'year';
     intervalCount?: number;
+    trialDays?: number;
     isOneTime?: boolean;
     enabled?: boolean;
     displayOrder?: number;
@@ -171,9 +228,13 @@ export class SubscriptionPlanService {
     // Create plan in PayPal if requested (only for recurring plans)
     if (data.createInPayPal && !data.isOneTime) {
       try {
+        // PayPal requires description with at least 1 character
+        const description = (data.description && data.description.trim().length > 0) 
+          ? data.description.trim() 
+          : data.name; // Fallback to name if description is empty
         const paypalPlan = await PayPalService.createSubscriptionPlan({
           name: data.name,
-          description: data.description,
+          description: description,
           billingCycle: {
             frequency: {
               interval_unit: data.intervalUnit || 'month',
@@ -202,6 +263,7 @@ export class SubscriptionPlanService {
       currency: data.currency || 'BRL',
       intervalUnit: data.intervalUnit,
       intervalCount: data.intervalCount || 1,
+      trialDays: data.trialDays || 0,
       isOneTime: data.isOneTime || false,
       paypalPlanId: paypalPlanId,
       enabled: data.enabled !== undefined ? data.enabled : true,

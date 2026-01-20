@@ -18,30 +18,29 @@ export async function requireGroupMember(req: AuthRequest, res: Response, next: 
       return res.status(401).json({ error: 'Usuário não autenticado' });
     }
 
-    // Obter grupoId do body (POST) ou params (PUT/DELETE)
+    // Obter grupoId do body (POST) ou params (GET/PUT/DELETE)
     let grupoId: number | undefined;
     
-    if (req.method === 'POST' && req.body.grupo_id) {
+    // Para rotas GET (como /grupos/:id/graficos/...), o id do grupo está em req.params.id
+    if (req.method === 'GET' && req.params.id) {
+      grupoId = Number(req.params.id);
+    } else if (req.method === 'POST' && req.body.grupo_id) {
       grupoId = Number(req.body.grupo_id);
     } else if (req.params.id) {
-      // Para PUT/DELETE, precisamos buscar a despesa primeiro para obter o grupo_id
-      // Isso será feito no controller ou podemos passar grupoId no body
-      // Por enquanto, vamos buscar do body se existir
+      // Para PUT/DELETE, tentar buscar do body primeiro
       if (req.body.grupo_id) {
         grupoId = Number(req.body.grupo_id);
-      }
-    }
-
-    // Se não temos grupoId ainda, tentar buscar da despesa (para PUT/DELETE)
-    if (!grupoId && req.params.id) {
-      const { Despesa } = await import('../entities/Despesa');
-      const despesaRepository = AppDataSource.getRepository(Despesa);
-      const despesa = await despesaRepository.findOne({
-        where: { id: Number(req.params.id) },
-        select: ['grupo_id'],
-      });
-      if (despesa) {
-        grupoId = despesa.grupo_id;
+      } else {
+        // Se não tem no body, tentar buscar da despesa (para PUT/DELETE de despesas)
+        const { Despesa } = await import('../entities/Despesa');
+        const despesaRepository = AppDataSource.getRepository(Despesa);
+        const despesa = await despesaRepository.findOne({
+          where: { id: Number(req.params.id) },
+          select: ['grupo_id'],
+        });
+        if (despesa) {
+          grupoId = despesa.grupo_id;
+        }
       }
     }
 

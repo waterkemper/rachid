@@ -144,28 +144,107 @@ export class PayPalService {
   }
 
   /**
+   * Create or get a PayPal product
+   * If product_id is provided and valid, returns it. Otherwise creates a new product.
+   */
+  static async createOrGetProduct(productName: string = 'Rachid PRO', productDescription: string = 'Assinatura PRO'): Promise<string> {
+    const existingProductId = process.env.PAYPAL_PRODUCT_ID;
+    
+    // If product_id is configured, verify it exists
+    if (existingProductId && existingProductId !== 'PROD_DEFAULT') {
+      try {
+        const product = await this.makeRequest(`/v1/catalogs/products/${existingProductId}`);
+        if (product && product.id) {
+          console.log(`[PayPalService] Using existing product: ${existingProductId}`);
+          return existingProductId;
+        }
+      } catch (error: any) {
+        console.warn(`[PayPalService] Product ${existingProductId} not found, creating new one...`);
+      }
+    }
+
+    // Create new product
+    try {
+      console.log(`[PayPalService] Creating new product: ${productName}`);
+      const product = await this.makeRequest('/v1/catalogs/products', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: productName,
+          description: productDescription,
+          type: 'SERVICE',
+          category: 'SOFTWARE',
+        }),
+      });
+
+      if (product && product.id) {
+        console.log(`[PayPalService] ✅ Product created: ${product.id}`);
+        console.log(`[PayPalService] 💡 Add to .env: PAYPAL_PRODUCT_ID=${product.id}`);
+        return product.id;
+      }
+    } catch (error: any) {
+      console.error('[PayPalService] Error creating product:', error);
+      throw new Error(`Failed to create PayPal product: ${error.message}`);
+    }
+
+    throw new Error('Failed to create or get PayPal product');
+  }
+
+  /**
    * Create a subscription plan
    */
   static async createSubscriptionPlan(data: {
     name: string;
     description?: string;
     billingCycle: { frequency: { interval_unit: string; interval_count: number }; pricing: { value: string; currency_code: string } };
+    trialDays?: number; // Trial period in days (0 = no trial)
   }): Promise<PayPalSubscriptionPlan> {
-    const plan = {
-      product_id: process.env.PAYPAL_PRODUCT_ID || 'PROD_DEFAULT',
-      name: data.name,
-      description: data.description || '',
-      billing_cycles: [{
-        frequency: data.billingCycle.frequency,
-        tenure_type: 'REGULAR',
+    // PayPal requires description to have at least 1 character
+    const description = data.description && data.description.trim().length > 0 
+      ? data.description.trim() 
+      : data.name; // Fallback to name if description is empty
+
+    // Create or get product
+    const productId = await this.createOrGetProduct(data.name, description);
+
+    const billingCycles: any[] = [];
+
+    // Add trial period if specified
+    if (data.trialDays && data.trialDays > 0) {
+      billingCycles.push({
+        frequency: {
+          interval_unit: 'DAY',
+          interval_count: data.trialDays,
+        },
+        tenure_type: 'TRIAL',
         sequence: 1,
         pricing_scheme: {
           fixed_price: {
-            value: data.billingCycle.pricing.value,
+            value: '0.00',
             currency_code: data.billingCycle.pricing.currency_code || 'BRL',
           },
         },
-      }],
+        total_cycles: 1, // Trial runs only once
+      });
+    }
+
+    // Add regular billing cycle
+    billingCycles.push({
+      frequency: data.billingCycle.frequency,
+      tenure_type: 'REGULAR',
+      sequence: data.trialDays && data.trialDays > 0 ? 2 : 1, // Sequence 2 if trial exists, otherwise 1
+      pricing_scheme: {
+        fixed_price: {
+          value: data.billingCycle.pricing.value,
+          currency_code: data.billingCycle.pricing.currency_code || 'BRL',
+        },
+      },
+    });
+
+    const plan = {
+      product_id: productId,
+      name: data.name,
+      description: description,
+      billing_cycles: billingCycles,
       payment_preferences: {
         auto_bill_outstanding: true,
         setup_fee_failure_action: 'CONTINUE',
@@ -186,13 +265,33 @@ export class PayPalService {
     planId: string;
     returnUrl: string;
     cancelUrl: string;
+    subscriberEmail?: string;
   }): Promise<{ id: string; approvalUrl: string }> {
-    const subscription = {
+    // Remove placeholders from return URL (PayPal doesn't support them)
+    // PayPal will automatically add subscription_id and ba_token as query parameters
+    let cleanReturnUrl = data.returnUrl;
+    if (cleanReturnUrl.includes('{id}') || cleanReturnUrl.includes('{token}')) {
+      // Remove query parameters with placeholders, PayPal will add them automatically
+      const url = new URL(cleanReturnUrl);
+      const newParams = new URLSearchParams();
+      // Keep only valid query parameters (without placeholders)
+      url.searchParams.forEach((value, key) => {
+        if (!value.includes('{') && !value.includes('}')) {
+          newParams.set(key, value);
+        }
+      });
+      cleanReturnUrl = `${url.origin}${url.pathname}${newParams.toString() ? '?' + newParams.toString() : ''}`;
+    }
+
+    // Build subscription payload
+    // Use a start_time that gives user enough time to approve (24 hours from now)
+    // PayPal subscriptions expire if not approved before start_time, so we give plenty of time
+    // This prevents subscription from expiring before user can complete approval
+    const startTime = new Date(Date.now() + (24 * 60 * 60 * 1000)); // 24 hours from now
+    
+    const subscription: any = {
       plan_id: data.planId,
-      start_time: new Date(Date.now() + 60000).toISOString(), // Start 1 minute from now
-      subscriber: {
-        email_address: '', // Will be set by PayPal during approval
-      },
+      start_time: startTime.toISOString(),
       application_context: {
         brand_name: 'Rachid',
         locale: 'pt-BR',
@@ -202,11 +301,20 @@ export class PayPalService {
           payer_selected: 'PAYPAL',
           payee_preferred: 'IMMEDIATE_PAYMENT_REQUIRED',
         },
-        // PayPal will replace {id} with subscription_id and {token} with ba_token
-        return_url: data.returnUrl,
+        return_url: cleanReturnUrl,
         cancel_url: data.cancelUrl,
       },
     };
+    
+    console.log(`[PayPalService] Creating subscription with start_time: ${startTime.toISOString()} (${startTime.toLocaleString('pt-BR')})`);
+    console.log(`[PayPalService] ⏰ User has ${((startTime.getTime() - Date.now()) / (1000 * 60 * 60)).toFixed(1)} hours to approve before subscription expires`);
+
+    // Add subscriber email if provided (required for sandbox, optional for live)
+    if (data.subscriberEmail) {
+      subscription.subscriber = {
+        email_address: data.subscriberEmail,
+      };
+    }
 
     const result = await this.makeRequest('/v1/billing/subscriptions', {
       method: 'POST',
@@ -251,6 +359,24 @@ export class PayPalService {
    */
   static async getSubscription(subscriptionId: string): Promise<PayPalSubscription> {
     return await this.makeRequest(`/v1/billing/subscriptions/${subscriptionId}`);
+  }
+
+  /**
+   * List transactions for a subscription
+   * Useful to check if payment was processed even if subscription is EXPIRED
+   */
+  static async getSubscriptionTransactions(
+    subscriptionId: string,
+    startTime?: string,
+    endTime?: string
+  ): Promise<any> {
+    let url = `/v1/billing/subscriptions/${subscriptionId}/transactions`;
+    const params = new URLSearchParams();
+    if (startTime) params.append('start_time', startTime);
+    if (endTime) params.append('end_time', endTime);
+    if (params.toString()) url += `?${params.toString()}`;
+    
+    return await this.makeRequest(url);
   }
 
   /**

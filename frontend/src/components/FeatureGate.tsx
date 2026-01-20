@@ -32,7 +32,15 @@ export const FeatureGate: React.FC<FeatureGateProps> = ({
 
       // For simple PRO checks
       if (feature === 'PRO' || feature === 'pro') {
-        setHasAccess(isPro(usuario));
+        // Always check with API to get latest status (not just cached usuario.plano)
+        try {
+          const result = await featureApi.check('PRO');
+          setHasAccess(result.hasAccess);
+        } catch (error) {
+          // Fallback to local check if API fails
+          console.warn('Feature API check failed, using local check:', error);
+          setHasAccess(isPro(usuario));
+        }
         setLoading(false);
         return;
       }
@@ -50,10 +58,16 @@ export const FeatureGate: React.FC<FeatureGateProps> = ({
     };
 
     checkAccess();
+    
+    // Re-check access periodically (every 5 seconds) to catch subscription status changes
+    const interval = setInterval(checkAccess, 5000);
+    return () => clearInterval(interval);
   }, [usuario, feature]);
 
   if (loading) {
-    return null; // Or a loading spinner
+    // Return children while loading to avoid blank page
+    // The actual access check will happen and update hasAccess
+    return <>{children}</>;
   }
 
   if (!hasAccess) {

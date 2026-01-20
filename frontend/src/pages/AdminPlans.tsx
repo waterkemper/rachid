@@ -13,6 +13,7 @@ interface Plan {
   currency: string;
   intervalUnit?: 'month' | 'year';
   intervalCount?: number;
+  trialDays?: number;
   isOneTime: boolean;
   paypalPlanId?: string;
   enabled: boolean;
@@ -31,14 +32,28 @@ const AdminPlans: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [newPlan, setNewPlan] = useState({
-    planType: 'MONTHLY' as 'MONTHLY' | 'YEARLY' | 'LIFETIME',
+  const [newPlan, setNewPlan] = useState<{
+    planType: 'MONTHLY' | 'YEARLY' | 'LIFETIME';
+    name: string;
+    description: string;
+    price: string;
+    currency: string;
+    intervalUnit?: 'month' | 'year';
+    intervalCount: number;
+    trialDays: number;
+    isOneTime: boolean;
+    enabled: boolean;
+    displayOrder: number;
+    createInPayPal: boolean;
+  }>({
+    planType: 'MONTHLY',
     name: '',
     description: '',
     price: '',
     currency: 'BRL',
-    intervalUnit: 'month' as 'month' | 'year',
+    intervalUnit: 'month',
     intervalCount: 1,
+    trialDays: 7,
     isOneTime: false,
     enabled: true,
     displayOrder: 0,
@@ -78,6 +93,7 @@ const AdminPlans: React.FC = () => {
         currency: plan.currency,
         intervalUnit: plan.intervalUnit,
         intervalCount: plan.intervalCount,
+        trialDays: plan.trialDays || 0,
         isOneTime: plan.isOneTime,
         paypalPlanId: plan.paypalPlanId || '',
         enabled: plan.enabled,
@@ -183,6 +199,7 @@ const AdminPlans: React.FC = () => {
         currency: 'BRL',
         intervalUnit: 'month',
         intervalCount: 1,
+        trialDays: 7,
         isOneTime: false,
         enabled: true,
         displayOrder: 0,
@@ -314,7 +331,7 @@ const AdminPlans: React.FC = () => {
                       <label>Intervalo</label>
                       <select
                         value={newPlan.intervalUnit || 'month'}
-                        onChange={(e) => setNewPlan({ ...newPlan, intervalUnit: e.target.value as any })}
+                        onChange={(e) => setNewPlan({ ...newPlan, intervalUnit: (e.target.value as 'month' | 'year') || 'month' })}
                         className="edit-select"
                       >
                         <option value="month">Mês</option>
@@ -330,6 +347,21 @@ const AdminPlans: React.FC = () => {
                         onChange={(e) => setNewPlan({ ...newPlan, intervalCount: parseInt(e.target.value) || 1 })}
                         className="edit-input"
                       />
+                    </div>
+                    <div>
+                      <label>Período de Trial (dias)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="365"
+                        value={newPlan.trialDays}
+                        onChange={(e) => setNewPlan({ ...newPlan, trialDays: parseInt(e.target.value) || 0 })}
+                        className="edit-input"
+                        placeholder="7"
+                      />
+                      <small style={{ display: 'block', marginTop: '4px', color: '#666' }}>
+                        {newPlan.trialDays > 0 ? `${newPlan.trialDays} dias grátis` : 'Sem trial'}
+                      </small>
                     </div>
                   </>
                 )}
@@ -489,6 +521,27 @@ const AdminPlans: React.FC = () => {
                                 }}
                                 className="edit-input-small"
                               />
+                              <div style={{ marginTop: '8px' }}>
+                                <label style={{ fontSize: '12px', display: 'block', marginBottom: '4px' }}>
+                                  Trial (dias):
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="365"
+                                  value={isEditing.trialDays ?? 0}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    const parsed = parseInt(value);
+                                    updateEditValue(plan.planType, 'trialDays', isNaN(parsed) ? 0 : parsed);
+                                  }}
+                                  className="edit-input-small"
+                                  style={{ width: '80px' }}
+                                />
+                                <small style={{ marginLeft: '4px', color: '#666' }}>
+                                  {isEditing.trialDays && isEditing.trialDays > 0 ? `${isEditing.trialDays} dias grátis` : 'Sem trial'}
+                                </small>
+                              </div>
                             </>
                           )}
                           <label>

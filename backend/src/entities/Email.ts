@@ -18,7 +18,11 @@ export type EmailTipo =
   | 'reativacao-sem-evento'
   | 'reativacao-sem-participantes'
   | 'reativacao-sem-despesas'
-  | 'resumo-atualizacoes';
+  | 'resumo-atualizacoes'
+  | 'pagamento-falho'
+  | 'assinatura-suspensa'
+  | 'assinatura-expirada'
+  | 'vencimento-proximo';
 
 @Entity('emails')
 @Index(['destinatario'])

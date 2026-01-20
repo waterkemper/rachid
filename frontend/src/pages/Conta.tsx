@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { isPro } from '../utils/plan';
-import { authApi } from '../services/api';
+import { authApi, subscriptionApi } from '../services/api';
+import { Plan, Subscription } from '../types';
 
 const Conta: React.FC = () => {
   const { usuario, login } = useAuth();
@@ -19,6 +20,9 @@ const Conta: React.FC = () => {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
+  const [plans, setPlans] = useState<Record<string, Plan>>({});
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [loadingPlans, setLoadingPlans] = useState(false);
 
   // Função para determinar o tipo de PIX
   const determinarTipoPix = (chavePix: string, email: string) => {
@@ -41,6 +45,35 @@ const Conta: React.FC = () => {
       setTipoPix(determinarTipoPix(usuario.chavePix || '', usuario.email || ''));
     }
   }, [usuario]);
+
+  // Carregar planos e assinatura atual
+  useEffect(() => {
+    loadPlansAndSubscription();
+  }, []);
+
+  const loadPlansAndSubscription = async () => {
+    setLoadingPlans(true);
+    try {
+      // Carregar planos disponíveis
+      const plansData = await subscriptionApi.getPlans();
+      setPlans(plansData.plans);
+
+      // Carregar assinatura atual do usuário
+      if (usuario) {
+        try {
+          const subscriptionData = await subscriptionApi.getMe();
+          setSubscription(subscriptionData.subscription);
+        } catch (error) {
+          // Se não houver assinatura, subscription será null
+          console.log('Usuário não possui assinatura ativa');
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar planos:', error);
+    } finally {
+      setLoadingPlans(false);
+    }
+  };
 
   // Função para atualizar PIX baseado no tipo selecionado
   const handleTipoPixChange = (tipo: 'email' | 'telefone' | 'outro') => {
@@ -145,6 +178,37 @@ const Conta: React.FC = () => {
     setEditando(false);
     setErro('');
     setSucesso('');
+  };
+
+  // Função para formatar preço
+  const formatPrice = (price: number | undefined): string => {
+    if (price === undefined || price === null) return 'R$ 0,00';
+    return `R$ ${price.toFixed(2).replace('.', ',')}`;
+  };
+
+  // Função para determinar o plano atual do usuário (usando useMemo para recalcular quando necessário)
+  const currentPlanType = useMemo((): 'FREE' | 'MONTHLY' | 'YEARLY' | 'LIFETIME' => {
+    // Verificar se há assinatura ativa
+    if (subscription && subscription.status === 'ACTIVE') {
+      return subscription.planType;
+    }
+    
+    // Verificar plano legacy
+    if (usuario?.plano === 'LIFETIME') {
+      return 'LIFETIME';
+    }
+    
+    if (usuario?.plano === 'PRO' && usuarioPro) {
+      // Se tem PRO mas não tem subscription, é legado (assumir MONTHLY para exibição)
+      return 'MONTHLY';
+    }
+    
+    return 'FREE';
+  }, [subscription, usuario, usuarioPro]);
+
+  // Função para verificar se um plano é o atual
+  const isCurrentPlan = (planType: string): boolean => {
+    return currentPlanType === planType;
   };
 
   return (
@@ -332,17 +396,33 @@ const Conta: React.FC = () => {
         <h3 style={{ marginBottom: '10px' }}>Seu plano</h3>
         <p style={{ margin: 0, color: 'rgba(226, 232, 240, 0.92)' }}>
           Plano atual: <strong style={{ color: 'rgba(255, 255, 255, 0.96)' }}>
-            {usuario?.plano === 'LIFETIME' ? 'PRO Vitalício' : usuarioPro ? 'Pro' : 'Grátis'}
+            {currentPlanType === 'LIFETIME' 
+              ? 'PRO Vitalício' 
+              : currentPlanType === 'YEARLY' 
+              ? 'PRO Anual' 
+              : currentPlanType === 'MONTHLY' 
+              ? 'PRO Mensal' 
+              : 'Grátis'}
           </strong>
         </p>
-        {usuario?.planoValidoAte && (
+        {subscription && subscription.status === 'ACTIVE' && subscription.currentPeriodEnd && (
+          <p style={{ marginTop: '8px', color: 'rgba(226, 232, 240, 0.75)', fontSize: '14px' }}>
+            Válido até: {new Date(subscription.currentPeriodEnd).toLocaleDateString('pt-BR')}
+          </p>
+        )}
+        {!subscription && usuario?.planoValidoAte && (
           <p style={{ marginTop: '8px', color: 'rgba(226, 232, 240, 0.75)', fontSize: '14px' }}>
             Válido até: {new Date(usuario.planoValidoAte).toLocaleDateString('pt-BR')}
           </p>
         )}
-        {usuario?.plano === 'LIFETIME' && (
+        {currentPlanType === 'LIFETIME' && (
           <p style={{ marginTop: '8px', color: '#28a745', fontSize: '14px', fontWeight: 'bold' }}>
             ✓ Assinatura vitalícia - Sem renovação necessária
+          </p>
+        )}
+        {subscription?.cancelAtPeriodEnd && (
+          <p style={{ marginTop: '8px', color: '#ff9800', fontSize: '14px', fontWeight: 'bold' }}>
+            ⚠ Esta assinatura será cancelada em {subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString('pt-BR') : 'fim do período'}
           </p>
         )}
         <div style={{ marginTop: '15px' }}>
@@ -353,7 +433,7 @@ const Conta: React.FC = () => {
           >
             Gerenciar Assinatura
           </button>
-          {!usuarioPro && (
+          {currentPlanType === 'FREE' && (
             <button
               onClick={() => navigate('/precos')}
               className="btn btn-secondary"
@@ -378,19 +458,113 @@ const Conta: React.FC = () => {
         </ul>
 
         <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-          <div style={{ border: '1px solid rgba(148, 163, 184, 0.20)', borderRadius: '10px', padding: '12px' }}>
+          {/* Plano Mensal */}
+          <div 
+            style={{ 
+              border: isCurrentPlan('MONTHLY') 
+                ? '2px solid rgba(99, 102, 241, 0.80)' 
+                : '1px solid rgba(148, 163, 184, 0.20)', 
+              borderRadius: '10px', 
+              padding: '12px',
+              position: 'relative',
+              backgroundColor: isCurrentPlan('MONTHLY') 
+                ? 'rgba(99, 102, 241, 0.10)' 
+                : 'transparent'
+            }}
+          >
+            {isCurrentPlan('MONTHLY') && (
+              <div style={{ 
+                position: 'absolute', 
+                top: '8px', 
+                right: '8px', 
+                fontSize: '10px', 
+                fontWeight: 700, 
+                color: 'rgba(99, 102, 241, 0.90)',
+                backgroundColor: 'rgba(99, 102, 241, 0.20)',
+                padding: '2px 6px',
+                borderRadius: '4px'
+              }}>
+                ATUAL
+              </div>
+            )}
             <div style={{ fontWeight: 700, color: 'rgba(255, 255, 255, 0.94)' }}>Mensal</div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>R$ 19,90</div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>
+              {loadingPlans ? 'Carregando...' : formatPrice(plans.MONTHLY?.price)}
+            </div>
             <div style={{ color: 'rgba(226, 232, 240, 0.75)' }}>/mês</div>
           </div>
-          <div style={{ border: '2px solid rgba(99, 102, 241, 0.50)', borderRadius: '10px', padding: '12px' }}>
+          
+          {/* Plano Anual */}
+          <div 
+            style={{ 
+              border: isCurrentPlan('YEARLY') 
+                ? '2px solid rgba(99, 102, 241, 0.80)' 
+                : '1px solid rgba(148, 163, 184, 0.20)', 
+              borderRadius: '10px', 
+              padding: '12px',
+              position: 'relative',
+              backgroundColor: isCurrentPlan('YEARLY') 
+                ? 'rgba(99, 102, 241, 0.10)' 
+                : 'transparent'
+            }}
+          >
+            {isCurrentPlan('YEARLY') && (
+              <div style={{ 
+                position: 'absolute', 
+                top: '8px', 
+                right: '8px', 
+                fontSize: '10px', 
+                fontWeight: 700, 
+                color: 'rgba(99, 102, 241, 0.90)',
+                backgroundColor: 'rgba(99, 102, 241, 0.20)',
+                padding: '2px 6px',
+                borderRadius: '4px'
+              }}>
+                ATUAL
+              </div>
+            )}
             <div style={{ fontWeight: 700, color: 'rgba(255, 255, 255, 0.94)' }}>Anual</div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>R$ 199,00</div>
-            <div style={{ color: 'rgba(226, 232, 240, 0.75)' }}>/ano (economize 17%)</div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>
+              {loadingPlans ? 'Carregando...' : formatPrice(plans.YEARLY?.price)}
+            </div>
+            <div style={{ color: 'rgba(226, 232, 240, 0.75)' }}>
+              /ano {plans.YEARLY?.savings && `(economize ${plans.YEARLY.savings})`}
+            </div>
           </div>
-          <div style={{ border: '1px solid rgba(148, 163, 184, 0.20)', borderRadius: '10px', padding: '12px' }}>
+          
+          {/* Plano Vitalício */}
+          <div 
+            style={{ 
+              border: isCurrentPlan('LIFETIME') 
+                ? '2px solid rgba(99, 102, 241, 0.80)' 
+                : '1px solid rgba(148, 163, 184, 0.20)', 
+              borderRadius: '10px', 
+              padding: '12px',
+              position: 'relative',
+              backgroundColor: isCurrentPlan('LIFETIME') 
+                ? 'rgba(99, 102, 241, 0.10)' 
+                : 'transparent'
+            }}
+          >
+            {isCurrentPlan('LIFETIME') && (
+              <div style={{ 
+                position: 'absolute', 
+                top: '8px', 
+                right: '8px', 
+                fontSize: '10px', 
+                fontWeight: 700, 
+                color: 'rgba(99, 102, 241, 0.90)',
+                backgroundColor: 'rgba(99, 102, 241, 0.20)',
+                padding: '2px 6px',
+                borderRadius: '4px'
+              }}>
+                ATUAL
+              </div>
+            )}
             <div style={{ fontWeight: 700, color: 'rgba(255, 255, 255, 0.94)' }}>Vitalício</div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>R$ 499,00</div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.96)' }}>
+              {loadingPlans ? 'Carregando...' : formatPrice(plans.LIFETIME?.price)}
+            </div>
             <div style={{ color: 'rgba(226, 232, 240, 0.75)' }}>pagamento único</div>
           </div>
         </div>

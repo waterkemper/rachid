@@ -49,17 +49,16 @@ class EmailAggregationService {
         // Calcular quando processar (agora + janela de agregação)
         const processarApos = new Date();
         processarApos.setMinutes(processarApos.getMinutes() + JANELA_AGREGACAO_MINUTOS);
-        // Verificar se já existe uma notificação similar pendente
-        // Se existir, podemos atualizar os dados em vez de criar uma nova
-        const notificacaoExistente = await this.repository().findOne({
-            where: {
-                destinatario,
-                eventoId,
-                tipoNotificacao,
-                processado: false,
-            },
-            order: { criadoEm: 'DESC' },
-        });
+        // IMPORTANTE: Estender a janela de TODAS as notificações pendentes para este destinatário/evento
+        // Isso garante que múltiplas ações em sequência resultem em apenas 1 email consolidado
+        await this.repository()
+            .createQueryBuilder()
+            .update()
+            .set({ processarApos })
+            .where('destinatario = :destinatario', { destinatario })
+            .andWhere('evento_id = :eventoId', { eventoId })
+            .andWhere('processado = false')
+            .execute();
         // Para resumo-evento, verificar duplicatas por despesaId
         if (tipoNotificacao === 'resumo-evento' && dados.despesaId) {
             // Buscar todas as notificações pendentes para este destinatário/evento
@@ -84,7 +83,6 @@ class EmailAggregationService {
                     dados.mudancas = [...new Set([...mudancasExistentes, ...novasMudancas])];
                 }
                 duplicata.dados = dados;
-                duplicata.processarApos = processarApos;
                 await this.repository().save(duplicata);
                 console.log(`[EmailAggregation] ♻️  Atualizada notificação resumo-evento existente para ${destinatario} (despesa ${dados.despesaId})`);
                 return;

@@ -370,6 +370,65 @@ class EmailTemplateService {
         });
     }
     /**
+     * Renderiza template de pagamento falho
+     */
+    static renderPagamentoFalho(data) {
+        const periodEndHtml = data.periodEnd
+            ? `<p style="margin: 8px 0;"><strong>Vencimento:</strong> ${data.periodEnd}</p>`
+            : '';
+        const nextBillingHtml = data.nextBillingTime
+            ? `<p style="margin: 8px 0;"><strong>Próxima tentativa:</strong> ${data.nextBillingTime}</p>`
+            : '<p style="margin: 8px 0;"><strong>Próxima tentativa:</strong> Em breve</p>';
+        return this.render('pagamento-falho.html', {
+            titulo: 'Pagamento Não Processado - Rachid',
+            nome: data.nome,
+            planType: data.planType,
+            periodEnd: periodEndHtml,
+            nextBillingTime: data.nextBillingTime || 'Em breve',
+            linkPrecos: data.linkPrecos,
+        });
+    }
+    /**
+     * Renderiza template de assinatura suspensa
+     */
+    static renderAssinaturaSuspensa(data) {
+        const periodEndHtml = data.periodEnd
+            ? `<p style="margin: 8px 0;"><strong>Vencimento:</strong> ${data.periodEnd}</p>`
+            : '';
+        return this.render('assinatura-suspensa.html', {
+            titulo: 'Assinatura Suspensa - Rachid',
+            nome: data.nome,
+            planType: data.planType,
+            periodEnd: periodEndHtml,
+            linkPrecos: data.linkPrecos,
+        });
+    }
+    /**
+     * Renderiza template de assinatura expirada
+     */
+    static renderAssinaturaExpirada(data) {
+        return this.render('assinatura-expirada.html', {
+            titulo: 'Assinatura Expirada - Rachid',
+            nome: data.nome,
+            planType: data.planType,
+            expirationDate: data.expirationDate,
+            linkPrecos: data.linkPrecos,
+        });
+    }
+    /**
+     * Renderiza template de vencimento próximo
+     */
+    static renderVencimentoProximo(data) {
+        return this.render('vencimento-proximo.html', {
+            titulo: 'Assinatura Expirando em Breve - Rachid',
+            nome: data.nome,
+            planType: data.planType,
+            expirationDate: data.expirationDate,
+            diasRestantes: data.diasRestantes,
+            linkPrecos: data.linkPrecos,
+        });
+    }
+    /**
      * Renderiza template de resumo de atualizações (email consolidado)
      */
     static renderResumoAtualizacoes(data) {

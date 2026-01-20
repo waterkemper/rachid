@@ -1,18 +1,31 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.S3Service = void 0;
 const client_s3_1 = require("@aws-sdk/client-s3");
 const s3_request_presigner_1 = require("@aws-sdk/s3-request-presigner");
+const dotenv_1 = __importDefault(require("dotenv"));
+// Garantir que o dotenv está carregado
+dotenv_1.default.config();
 class S3Service {
     /**
      * Inicializa o cliente S3
      */
     static initializeClient() {
         if (!this.s3Client) {
-            const region = process.env.AWS_REGION || 'us-east-1';
+            // O bucket está em sa-east-1 (São Paulo), então usar essa região como padrão
+            const region = process.env.AWS_REGION || 'sa-east-1';
             this.bucketName = process.env.AWS_S3_BUCKET_NAME || '';
             this.cloudFrontDomain = process.env.AWS_CLOUDFRONT_DOMAIN || '';
+            // Debug: verificar se as variáveis estão sendo carregadas
             if (!this.bucketName) {
+                console.error('Variáveis AWS encontradas:');
+                console.error('- AWS_S3_BUCKET_NAME:', process.env.AWS_S3_BUCKET_NAME || 'NOT SET');
+                console.error('- AWS_REGION:', process.env.AWS_REGION || 'NOT SET');
+                console.error('- AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? 'SET' : 'NOT SET');
+                console.error('- AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY ? 'SET' : 'NOT SET');
                 throw new Error('AWS_S3_BUCKET_NAME não configurado');
             }
             this.s3Client = new client_s3_1.S3Client({
@@ -21,6 +34,8 @@ class S3Service {
                     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
                     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
                 },
+                // Permitir que o SDK siga redirects automaticamente se a região estiver errada
+                followRegionRedirects: true,
             });
         }
         return this.s3Client;
@@ -41,7 +56,8 @@ class S3Service {
      * Constrói a URL direta do S3
      */
     static getS3Url(key) {
-        const region = process.env.AWS_REGION || 'us-east-1';
+        // Usar a mesma região do cliente inicializado
+        const region = process.env.AWS_REGION || 'sa-east-1';
         const cleanKey = key.startsWith('/') ? key.substring(1) : key;
         return `https://${this.bucketName}.s3.${region}.amazonaws.com/${cleanKey}`;
     }

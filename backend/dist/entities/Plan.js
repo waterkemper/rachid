@@ -48,6 +48,10 @@ __decorate([
     __metadata("design:type", Number)
 ], Plan.prototype, "intervalCount", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'integer', nullable: true, default: 0, name: 'trial_days' }),
+    __metadata("design:type", Number)
+], Plan.prototype, "trialDays", void 0);
+__decorate([
     (0, typeorm_1.Column)({ type: 'boolean', default: false, name: 'is_one_time' }),
     __metadata("design:type", Boolean)
 ], Plan.prototype, "isOneTime", void 0);

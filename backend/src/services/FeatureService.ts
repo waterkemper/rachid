@@ -14,6 +14,17 @@ export class FeatureService {
    * Check if user has access to a feature (by feature key or limit key)
    */
   static async checkFeature(usuarioId: number, featureKey: FeatureLimitKey | string): Promise<boolean> {
+    const usuario = await this.usuarioRepository.findOne({ where: { id: usuarioId } });
+    if (!usuario) {
+      return false;
+    }
+
+    // Special case: 'PRO' or 'pro' means check if user has PRO plan
+    if (featureKey === 'PRO' || featureKey === 'pro') {
+      const planType = this.getPlanType(usuario);
+      return planType === 'PRO' || planType === 'LIFETIME';
+    }
+
     // Map subscription feature keys to plan limit keys
     const featureKeyMap: Record<string, FeatureLimitKey> = {
       'pdf_export': 'pdf_export_enabled',
@@ -23,11 +34,6 @@ export class FeatureService {
 
     const mappedKey = featureKeyMap[featureKey] || (featureKey as FeatureLimitKey);
     
-    const usuario = await this.usuarioRepository.findOne({ where: { id: usuarioId } });
-    if (!usuario) {
-      return false;
-    }
-
     // Determine plan type
     const planType = this.getPlanType(usuario);
 

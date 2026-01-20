@@ -24,6 +24,8 @@ const AdminSubscriptionController_1 = require("../controllers/AdminSubscriptionC
 const AdminFeatureLimitsController_1 = require("../controllers/AdminFeatureLimitsController");
 const AdminPlansController_1 = require("../controllers/AdminPlansController");
 const DespesaAnexoController_1 = require("../controllers/DespesaAnexoController");
+const GraficosController_1 = require("../controllers/GraficosController");
+const requirePro_1 = require("../middleware/requirePro");
 const router = (0, express_1.Router)();
 // Rotas públicas (sem autenticação)
 router.post('/auth/login', AuthController_1.AuthController.login);
@@ -65,6 +67,7 @@ router.post('/subscriptions/webhook', SubscriptionController_1.SubscriptionContr
 // Feature routes
 router.get('/features/check', auth_1.authMiddleware, FeatureController_1.FeatureController.check);
 router.get('/features/limits', auth_1.authMiddleware, FeatureController_1.FeatureController.getLimits);
+router.get('/features/plan-limits', FeatureController_1.FeatureController.getPublicPlanLimits); // Public route for pricing page
 router.get('/participantes', auth_1.authMiddleware, ParticipanteController_1.ParticipanteController.getAll);
 router.get('/participantes/:id', auth_1.authMiddleware, ParticipanteController_1.ParticipanteController.getById);
 router.post('/participantes', auth_1.authMiddleware, ParticipanteController_1.ParticipanteController.create);
@@ -101,6 +104,15 @@ router.get('/grupos/:id/saldos', auth_1.authMiddleware, RelatorioController_1.Re
 router.get('/grupos/:id/saldos-por-grupo', auth_1.authMiddleware, RelatorioController_1.RelatorioController.getSaldosPorGrupo);
 router.get('/grupos/:id/sugestoes-pagamento-grupos', auth_1.authMiddleware, RelatorioController_1.RelatorioController.getSugestoesPagamentoEntreGrupos);
 router.get('/grupos/:id/sugestoes-pagamento', auth_1.authMiddleware, RelatorioController_1.RelatorioController.getSugestoesPagamento);
+// Rotas de gráficos (requerem plano PRO)
+router.get('/grupos/:id/graficos/por-pagador', auth_1.authMiddleware, requirePro_1.requirePro, requireGroupMember_1.requireGroupMember, GraficosController_1.GraficosController.getGastosPorPagador);
+router.get('/grupos/:id/graficos/gastos-participantes', auth_1.authMiddleware, requirePro_1.requirePro, requireGroupMember_1.requireGroupMember, GraficosController_1.GraficosController.getGastosParticipantes);
+router.get('/grupos/:id/graficos/evolucao-tempo', auth_1.authMiddleware, requirePro_1.requirePro, requireGroupMember_1.requireGroupMember, GraficosController_1.GraficosController.getEvolucaoTempo);
+router.get('/grupos/:id/graficos/top-despesas', auth_1.authMiddleware, requirePro_1.requirePro, requireGroupMember_1.requireGroupMember, GraficosController_1.GraficosController.getTopDespesas);
+router.get('/grupos/:id/graficos/saldos-evolucao', auth_1.authMiddleware, requirePro_1.requirePro, requireGroupMember_1.requireGroupMember, GraficosController_1.GraficosController.getSaldosEvolucao);
+router.get('/graficos/gastos-mensais', auth_1.authMiddleware, requirePro_1.requirePro, GraficosController_1.GraficosController.getGastosMensais);
+router.get('/graficos/gastos-por-evento', auth_1.authMiddleware, requirePro_1.requirePro, GraficosController_1.GraficosController.getGastosPorEvento);
+router.get('/graficos/distribuicao-mensal-por-evento', auth_1.authMiddleware, requirePro_1.requirePro, GraficosController_1.GraficosController.getDistribuicaoMensalPorEvento);
 router.post('/despesas/:despesaId/participacoes', auth_1.authMiddleware, ParticipacaoController_1.ParticipacaoController.toggle);
 router.post('/despesas/:despesaId/recalcular', auth_1.authMiddleware, ParticipacaoController_1.ParticipacaoController.recalcular);
 router.get('/grupos/:eventoId/grupos-participantes', auth_1.authMiddleware, GrupoParticipantesController_1.GrupoParticipantesController.getAll);
@@ -155,6 +167,9 @@ router.get('/admin/subscriptions', auth_1.authMiddleware, requireAdmin_1.require
 router.get('/admin/subscriptions/:id', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminSubscriptionController_1.AdminSubscriptionController.getById);
 router.post('/admin/subscriptions/:id/refund', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminSubscriptionController_1.AdminSubscriptionController.refund);
 router.post('/admin/subscriptions/:id/extend', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminSubscriptionController_1.AdminSubscriptionController.extend);
+router.post('/admin/subscriptions/:id/sync', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminSubscriptionController_1.AdminSubscriptionController.sync);
+router.post('/admin/subscriptions/user/:userId/activate', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminSubscriptionController_1.AdminSubscriptionController.activateForUser);
+router.post('/admin/subscriptions/user/:userId/recreate', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminSubscriptionController_1.AdminSubscriptionController.recreateForUser);
 router.put('/admin/subscriptions/:id/features', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminSubscriptionController_1.AdminSubscriptionController.updateFeatures);
 router.get('/admin/subscriptions/stats', auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminSubscriptionController_1.AdminSubscriptionController.getStats);
 // Admin feature limits management routes

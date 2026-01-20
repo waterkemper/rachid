@@ -103,9 +103,9 @@ class EmailQueueService {
             this.boss.on('error', (error) => {
                 console.error('[EmailQueueService] ❌ Erro do pg-boss:', error);
             });
-            // Listener para monitoramento
+            // Listener para monitoramento (logs removidos)
             this.boss.on('monitor-states', (states) => {
-                console.log('[EmailQueueService] 📊 Estados das filas:', JSON.stringify(states, null, 2));
+                // Log removido para reduzir poluição no console
             });
             await this.boss.start();
             // Criar todas as filas/partições necessárias
@@ -692,6 +692,65 @@ class EmailQueueService {
             console.error('❌ Erro ao agendar job de agregação de emails:', error);
             // Não falhar inicialização se agendamento falhar
             console.warn('⚠️  Job de agregação não foi agendado, mas servidor continuará funcionando');
+        }
+    }
+    /**
+     * Agenda job diário para verificar assinaturas próximas do vencimento
+     * Executa uma vez por dia para enviar avisos de vencimento (3 dias antes)
+     */
+    static async agendarJobVencimentoProximo() {
+        if (!this.boss || !this.initialized) {
+            await this.initialize();
+        }
+        if (!this.boss) {
+            throw new Error('pg-boss não foi inicializado');
+        }
+        const jobName = 'verificar-vencimento-proximo';
+        try {
+            // Garantir que a queue existe
+            try {
+                await this.boss.createQueue(jobName);
+                console.log(`✅ Queue "${jobName}" criada/verificada`);
+            }
+            catch (e) {
+                if (!e.message?.includes('already exists')) {
+                    console.warn(`⚠️  Aviso ao criar queue ${jobName}:`, e.message);
+                }
+            }
+            // Registrar worker
+            await this.boss.work(jobName, async () => {
+                try {
+                    const { SubscriptionService } = await Promise.resolve().then(() => __importStar(require('./SubscriptionService')));
+                    const emailsEnviados = await SubscriptionService.verificarVencimentosProximos(3);
+                    if (emailsEnviados > 0) {
+                        console.log(`📧 [Vencimento Próximo] ${emailsEnviados} email(s) de aviso enviado(s)`);
+                    }
+                }
+                catch (error) {
+                    console.error('❌ Erro ao verificar vencimentos próximos:', error.message);
+                    throw error;
+                }
+            });
+            console.log(`✅ Worker registrado para "${jobName}"`);
+            // Agendar execução diária (todo dia às 10:00 UTC = 07:00 BRT)
+            const cronExpression = process.env.VENCIMENTO_CRON || '0 10 * * *'; // Default: 10:00 UTC (07:00 BRT)
+            try {
+                await this.boss.schedule(jobName, cronExpression, {});
+                console.log(`✅ Job de verificação de vencimento próximo agendado: ${cronExpression} (10:00 UTC = 07:00 BRT)`);
+            }
+            catch (scheduleError) {
+                if (scheduleError.message?.includes('already exists') || scheduleError.message?.includes('duplicate')) {
+                    console.log('📅 Job de verificação de vencimento próximo já está agendado');
+                }
+                else {
+                    throw scheduleError;
+                }
+            }
+        }
+        catch (error) {
+            console.error('❌ Erro ao agendar job de vencimento próximo:', error);
+            // Não falhar inicialização se agendamento falhar
+            console.warn('⚠️  Job de vencimento próximo não foi agendado, mas servidor continuará funcionando');
         }
     }
 }

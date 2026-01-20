@@ -17,6 +17,7 @@ import AdicionarParticipantesEvento from './pages/AdicionarParticipantesEvento';
 import Despesas from './pages/Despesas';
 import Participacoes from './pages/Participacoes';
 import Relatorio from './pages/Relatorio';
+import Graficos from './pages/Graficos';
 import Conta from './pages/Conta';
 import Ajuda from './pages/Ajuda';
 import ConvidarAmigos from './pages/ConvidarAmigos';
@@ -26,6 +27,7 @@ import Assinatura from './pages/Assinatura';
 import Precos from './pages/Precos';
 import AdminFeatureLimits from './pages/AdminFeatureLimits';
 import AdminPlans from './pages/AdminPlans';
+import AdminSubscriptions from './pages/AdminSubscriptions';
 import AdminEmailQueue from './pages/AdminEmailQueue';
 import AdminEmails from './pages/AdminEmails';
 
@@ -105,6 +107,15 @@ function Navbar() {
                 onClick={() => setIsMenuOpen(false)}
               >
                 Criar evento
+              </Link>
+            </li>
+            <li>
+              <Link 
+                to="/graficos" 
+                className={isActive('/graficos') ? 'active' : ''}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Gráficos
               </Link>
             </li>
             <li>
@@ -246,6 +257,14 @@ function AppContent() {
           }
         />
         <Route
+          path="/graficos"
+          element={
+            <ProtectedRoute>
+              <Graficos />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/conta"
           element={
             <ProtectedRoute>
@@ -299,6 +318,14 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <AdminPlans />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/subscriptions"
+          element={
+            <ProtectedRoute>
+              <AdminSubscriptions />
             </ProtectedRoute>
           }
         />

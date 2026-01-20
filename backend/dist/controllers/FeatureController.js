@@ -48,5 +48,19 @@ class FeatureController {
             res.status(500).json({ error: error.message || 'Erro ao buscar limites' });
         }
     }
+    /**
+     * Get public plan limits (for pricing page)
+     * GET /api/features/plan-limits
+     */
+    static async getPublicPlanLimits(req, res) {
+        try {
+            const limits = await FeatureService_1.FeatureService.getAllPlanLimits();
+            res.json(limits);
+        }
+        catch (error) {
+            console.error('Erro ao buscar limites públicos dos planos:', error);
+            res.status(500).json({ error: error.message || 'Erro ao buscar limites dos planos' });
+        }
+    }
 }
 exports.FeatureController = FeatureController;

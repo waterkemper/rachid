@@ -14,6 +14,14 @@ import {
   Plan,
   FeatureLimit,
   Usage,
+  GraficoPizzaPagador,
+  PontoTemporal,
+  GraficoGastosParticipante,
+  TopDespesa,
+  GastosMensais,
+  GastosPorEvento,
+  DistribuicaoMensalPorEvento,
+  SaldosEvolucao,
 } from '../types';
 
 // URL da API: usa variável de ambiente em produção ou proxy em desenvolvimento
@@ -766,6 +774,34 @@ export const adminApi = {
     const response = await api.get('/admin/subscriptions/stats');
     return response.data;
   },
+
+  syncSubscription: async (id: number): Promise<{ message: string; subscription: any }> => {
+    const response = await api.post(`/admin/subscriptions/${id}/sync`);
+    return response.data;
+  },
+
+  activateSubscriptionForUser: async (userId: number, planType?: 'MONTHLY' | 'YEARLY'): Promise<{
+    message: string;
+    subscription?: any;
+    subscriptionId?: number;
+    approvalUrl?: string;
+    paypalSubscriptionId?: string;
+  }> => {
+    const response = await api.post(`/admin/subscriptions/user/${userId}/activate`, { planType });
+    return response.data;
+  },
+
+  recreateSubscriptionForUser: async (userId: number, planType: 'MONTHLY' | 'YEARLY'): Promise<{
+    message: string;
+    canceledCount: number;
+    subscriptionId: number;
+    approvalUrl: string;
+    paypalSubscriptionId: string;
+    instructions: string;
+  }> => {
+    const response = await api.post(`/admin/subscriptions/user/${userId}/recreate`, { planType });
+    return response.data;
+  },
   
   // Feature limits management
   getAllPlanLimits: async (): Promise<Record<string, Record<string, any>>> => {
@@ -1032,6 +1068,50 @@ export const templateApi = {
 
   getById: async (id: string): Promise<EventTemplate> => {
     const response = await api.get(`/templates/${id}`);
+    return response.data;
+  },
+};
+
+export const graficosApi = {
+  getGastosPorPagador: async (grupoId: number): Promise<GraficoPizzaPagador[]> => {
+    const response = await api.get(`/grupos/${grupoId}/graficos/por-pagador`);
+    return response.data;
+  },
+
+  getGastosParticipantes: async (grupoId: number): Promise<GraficoGastosParticipante[]> => {
+    const response = await api.get(`/grupos/${grupoId}/graficos/gastos-participantes`);
+    return response.data;
+  },
+
+  getEvolucaoTempo: async (grupoId: number): Promise<PontoTemporal[]> => {
+    const response = await api.get(`/grupos/${grupoId}/graficos/evolucao-tempo`);
+    return response.data;
+  },
+
+  getTopDespesas: async (grupoId: number, limite: number = 10): Promise<TopDespesa[]> => {
+    const response = await api.get(`/grupos/${grupoId}/graficos/top-despesas`, {
+      params: { limite },
+    });
+    return response.data;
+  },
+
+  getSaldosEvolucao: async (grupoId: number): Promise<SaldosEvolucao[]> => {
+    const response = await api.get(`/grupos/${grupoId}/graficos/saldos-evolucao`);
+    return response.data;
+  },
+
+  getGastosMensais: async (): Promise<GastosMensais[]> => {
+    const response = await api.get('/graficos/gastos-mensais');
+    return response.data;
+  },
+
+  getGastosPorEvento: async (): Promise<GastosPorEvento[]> => {
+    const response = await api.get('/graficos/gastos-por-evento');
+    return response.data;
+  },
+
+  getDistribuicaoMensalPorEvento: async (): Promise<DistribuicaoMensalPorEvento[]> => {
+    const response = await api.get('/graficos/distribuicao-mensal-por-evento');
     return response.data;
   },
 };

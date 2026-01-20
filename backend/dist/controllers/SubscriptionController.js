@@ -84,10 +84,26 @@ class SubscriptionController {
             const usage = {
                 events: await FeatureService_1.FeatureService.getCurrentUsage(usuarioId, 'max_events'),
             };
+            // If subscription is pending, try to get approval URL from PayPal
+            let approvalUrl = undefined;
+            if (subscription && subscription.status === 'APPROVAL_PENDING' && subscription.paypalSubscriptionId) {
+                try {
+                    const paypalSubscription = await PayPalService_1.PayPalService.getSubscription(subscription.paypalSubscriptionId);
+                    // PayPal subscriptions in APPROVAL_PENDING status have approval links
+                    const approvalLink = paypalSubscription.links?.find((link) => link.rel === 'approve' || link.rel === 'approval_url');
+                    if (approvalLink) {
+                        approvalUrl = approvalLink.href;
+                    }
+                }
+                catch (error) {
+                    console.warn('Could not get approval URL from PayPal:', error.message);
+                }
+            }
             res.json({
                 subscription,
                 limits,
                 usage,
+                approvalUrl, // Include approval URL if subscription is pending
             });
         }
         catch (error) {

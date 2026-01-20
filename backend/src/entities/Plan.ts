@@ -30,6 +30,9 @@ export class Plan {
   @Column({ type: 'integer', nullable: true, default: 1, name: 'interval_count' })
   intervalCount?: number;
 
+  @Column({ type: 'integer', nullable: true, default: 0, name: 'trial_days' })
+  trialDays?: number; // Trial period in days (0 = no trial, default 7 days)
+
   @Column({ type: 'boolean', default: false, name: 'is_one_time' })
   isOneTime!: boolean;
 

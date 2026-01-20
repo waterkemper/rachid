@@ -446,6 +446,12 @@ class GrupoService {
             where: { grupo_id: grupoId },
         });
         const totalDespesas = despesas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
+        // Só enviar email de inclusão se houver pelo menos uma despesa com valor > 0
+        const temDespesaComValor = despesas.some(d => Number(d.valorTotal || 0) > 0);
+        if (!temDespesaComValor) {
+            console.log(`[GrupoService] Email de inclusão não enviado para ${email} - evento ${grupoId} ainda não tem despesas com valor`);
+            return;
+        }
         // Contar participantes
         const numeroParticipantes = grupo.participantes?.length || 0;
         // Obter ou gerar link público do evento

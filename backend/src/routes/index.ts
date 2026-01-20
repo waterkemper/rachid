@@ -22,6 +22,8 @@ import { AdminSubscriptionController } from '../controllers/AdminSubscriptionCon
 import { AdminFeatureLimitsController } from '../controllers/AdminFeatureLimitsController';
 import { AdminPlansController } from '../controllers/AdminPlansController';
 import { DespesaAnexoController } from '../controllers/DespesaAnexoController';
+import { GraficosController } from '../controllers/GraficosController';
+import { requirePro } from '../middleware/requirePro';
 
 const router = Router();
 
@@ -114,6 +116,16 @@ router.get('/grupos/:id/saldos-por-grupo', authMiddleware, RelatorioController.g
 router.get('/grupos/:id/sugestoes-pagamento-grupos', authMiddleware, RelatorioController.getSugestoesPagamentoEntreGrupos);
 router.get('/grupos/:id/sugestoes-pagamento', authMiddleware, RelatorioController.getSugestoesPagamento);
 
+// Rotas de gráficos (requerem plano PRO)
+router.get('/grupos/:id/graficos/por-pagador', authMiddleware, requirePro, requireGroupMember, GraficosController.getGastosPorPagador);
+router.get('/grupos/:id/graficos/gastos-participantes', authMiddleware, requirePro, requireGroupMember, GraficosController.getGastosParticipantes);
+router.get('/grupos/:id/graficos/evolucao-tempo', authMiddleware, requirePro, requireGroupMember, GraficosController.getEvolucaoTempo);
+router.get('/grupos/:id/graficos/top-despesas', authMiddleware, requirePro, requireGroupMember, GraficosController.getTopDespesas);
+router.get('/grupos/:id/graficos/saldos-evolucao', authMiddleware, requirePro, requireGroupMember, GraficosController.getSaldosEvolucao);
+router.get('/graficos/gastos-mensais', authMiddleware, requirePro, GraficosController.getGastosMensais);
+router.get('/graficos/gastos-por-evento', authMiddleware, requirePro, GraficosController.getGastosPorEvento);
+router.get('/graficos/distribuicao-mensal-por-evento', authMiddleware, requirePro, GraficosController.getDistribuicaoMensalPorEvento);
+
 router.post('/despesas/:despesaId/participacoes', authMiddleware, ParticipacaoController.toggle);
 router.post('/despesas/:despesaId/recalcular', authMiddleware, ParticipacaoController.recalcular);
 
@@ -176,6 +188,9 @@ router.get('/admin/subscriptions', authMiddleware, requireAdmin, AdminSubscripti
 router.get('/admin/subscriptions/:id', authMiddleware, requireAdmin, AdminSubscriptionController.getById);
 router.post('/admin/subscriptions/:id/refund', authMiddleware, requireAdmin, AdminSubscriptionController.refund);
 router.post('/admin/subscriptions/:id/extend', authMiddleware, requireAdmin, AdminSubscriptionController.extend);
+router.post('/admin/subscriptions/:id/sync', authMiddleware, requireAdmin, AdminSubscriptionController.sync);
+router.post('/admin/subscriptions/user/:userId/activate', authMiddleware, requireAdmin, AdminSubscriptionController.activateForUser);
+router.post('/admin/subscriptions/user/:userId/recreate', authMiddleware, requireAdmin, AdminSubscriptionController.recreateForUser);
 router.put('/admin/subscriptions/:id/features', authMiddleware, requireAdmin, AdminSubscriptionController.updateFeatures);
 router.get('/admin/subscriptions/stats', authMiddleware, requireAdmin, AdminSubscriptionController.getStats);
 

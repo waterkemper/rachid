@@ -94,6 +94,11 @@ app.listen(PORT, () => {
         console.log('🔄 Agendando job de agregação de emails...');
         await EmailQueueService.agendarJobAgregacaoEmails();
         console.log('✅ Job de agregação de emails agendado');
+        
+        // Agendar job diário de verificação de vencimento próximo
+        console.log('🔄 Agendando job de verificação de vencimento próximo...');
+        await EmailQueueService.agendarJobVencimentoProximo();
+        console.log('✅ Job de verificação de vencimento próximo agendado');
       } catch (error: any) {
         console.error('❌ Error initializing email queue service:', error);
         console.error('Email notifications will not work, but server will continue running');

@@ -9,20 +9,20 @@ class AdminPlansController {
      */
     static async create(req, res) {
         try {
-            const { planType, name, description, price, currency, intervalUnit, intervalCount, isOneTime, enabled, displayOrder, createInPayPal, } = req.body;
+            const { planType, name, description, price, currency, intervalUnit, intervalCount, trialDays, isOneTime, enabled, displayOrder, createInPayPal, } = req.body;
             if (!planType || !name || price === undefined) {
-                return res.status(400).json({ error: 'planType, name e price s�o obrigat�rios' });
+                return res.status(400).json({ error: 'planType, name e price s?o obrigat?rios' });
             }
             if (!['MONTHLY', 'YEARLY', 'LIFETIME'].includes(planType)) {
                 return res.status(400).json({ error: 'planType deve ser MONTHLY, YEARLY ou LIFETIME' });
             }
             // Validate price
             if (isNaN(price) || price < 0) {
-                return res.status(400).json({ error: 'Pre�o inv�lido (deve ser um n�mero positivo)' });
+                return res.status(400).json({ error: 'Pre?o inv?lido (deve ser um n?mero positivo)' });
             }
             // Validate interval for recurring plans
             if (!isOneTime && !intervalUnit) {
-                return res.status(400).json({ error: 'intervalUnit � obrigat�rio para planos recorrentes' });
+                return res.status(400).json({ error: 'intervalUnit ? obrigat?rio para planos recorrentes' });
             }
             const newPlan = await SubscriptionPlanService_1.SubscriptionPlanService.createPlan({
                 planType: planType,
@@ -32,6 +32,7 @@ class AdminPlansController {
                 currency: currency || 'BRL',
                 intervalUnit: intervalUnit,
                 intervalCount: intervalCount ? parseInt(intervalCount) : 1,
+                trialDays: trialDays !== undefined ? parseInt(trialDays) || 0 : 0,
                 isOneTime: Boolean(isOneTime),
                 enabled: enabled !== undefined ? Boolean(enabled) : true,
                 displayOrder: displayOrder ? parseInt(displayOrder) : 0,
@@ -69,11 +70,11 @@ class AdminPlansController {
         try {
             const { planType } = req.params;
             if (!['MONTHLY', 'YEARLY', 'LIFETIME'].includes(planType)) {
-                return res.status(400).json({ error: 'planType inv�lido' });
+                return res.status(400).json({ error: 'planType inv?lido' });
             }
             const plan = await SubscriptionPlanService_1.SubscriptionPlanService.getPlanByType(planType);
             if (!plan) {
-                return res.status(404).json({ error: 'Plano n�o encontrado' });
+                return res.status(404).json({ error: 'Plano n?o encontrado' });
             }
             res.json(plan);
         }
@@ -89,13 +90,13 @@ class AdminPlansController {
     static async update(req, res) {
         try {
             const { planType } = req.params;
-            const { name, description, price, currency, intervalUnit, intervalCount, isOneTime, paypalPlanId, enabled, displayOrder, } = req.body;
+            const { name, description, price, currency, intervalUnit, intervalCount, trialDays, isOneTime, paypalPlanId, enabled, displayOrder, createInPayPal, } = req.body;
             if (!['MONTHLY', 'YEARLY', 'LIFETIME'].includes(planType)) {
-                return res.status(400).json({ error: 'planType inv�lido' });
+                return res.status(400).json({ error: 'planType inv?lido' });
             }
             // Validate price
             if (price !== undefined && (isNaN(price) || price < 0)) {
-                return res.status(400).json({ error: 'Pre�o inv�lido (deve ser um n�mero positivo)' });
+                return res.status(400).json({ error: 'Pre?o inv?lido (deve ser um n?mero positivo)' });
             }
             const updates = {};
             if (name !== undefined)
@@ -121,6 +122,10 @@ class AdminPlansController {
                 // Explicitly set to null for one-time plans
                 updates.intervalCount = null;
             }
+            if (trialDays !== undefined) {
+                const parsed = parseInt(String(trialDays));
+                updates.trialDays = !isNaN(parsed) && parsed >= 0 ? parsed : 0;
+            }
             if (isOneTime !== undefined)
                 updates.isOneTime = Boolean(isOneTime);
             if (paypalPlanId !== undefined)
@@ -131,6 +136,8 @@ class AdminPlansController {
                 const parsed = parseInt(displayOrder);
                 updates.displayOrder = isNaN(parsed) ? 0 : parsed;
             }
+            if (createInPayPal !== undefined)
+                updates.createInPayPal = Boolean(createInPayPal);
             const updatedPlan = await SubscriptionPlanService_1.SubscriptionPlanService.updatePlan(planType, updates);
             res.json({
                 message: 'Plano atualizado com sucesso',
