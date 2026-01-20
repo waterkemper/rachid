@@ -256,7 +256,15 @@ const Assinatura: React.FC = () => {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-primary"
-                  style={{ backgroundColor: '#0070ba', color: '#fff', border: 'none', textDecoration: 'none' }}
+                  style={{ 
+                    background: 'linear-gradient(135deg, #0070ba 0%, #005ea6 50%, #004d8c 100%)',
+                    color: '#fff', 
+                    border: 'none', 
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
                 >
                   ✅ Completar Aprovação no PayPal
                 </a>
@@ -283,14 +291,26 @@ const Assinatura: React.FC = () => {
                   }
                 }}
                 className="btn btn-secondary"
-                style={{ backgroundColor: '#ffc107', color: '#000', border: 'none' }}
+                style={{ 
+                  backgroundColor: '#ffc107', 
+                  color: '#000', 
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
               >
                 🔄 Verificar Status
               </button>
               <a
                 href="/precos"
                 className="btn btn-secondary"
-                style={{ textDecoration: 'none' }}
+                style={{ 
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
               >
                 Criar Nova Assinatura
               </a>
@@ -319,7 +339,15 @@ const Assinatura: React.FC = () => {
               <a
                 href="/precos"
                 className="btn btn-primary"
-                style={{ backgroundColor: '#dc3545', color: '#fff', border: 'none', textDecoration: 'none' }}
+                style={{ 
+                  background: 'linear-gradient(135deg, #dc3545 0%, #c82333 50%, #bd2130 100%)',
+                  color: '#fff', 
+                  border: 'none', 
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
               >
                 🔄 Criar Nova Assinatura
               </a>
@@ -340,7 +368,14 @@ const Assinatura: React.FC = () => {
                   }
                 }}
                 className="btn btn-secondary"
-                style={{ backgroundColor: '#6c757d', color: '#fff', border: 'none' }}
+                style={{ 
+                  backgroundColor: '#6c757d', 
+                  color: '#fff', 
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
               >
                 🔄 Verificar Status Novamente
               </button>

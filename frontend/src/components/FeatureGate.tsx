@@ -277,20 +277,29 @@ export const FeatureGate: React.FC<FeatureGateProps> = ({
                       style={{
                         flex: 1,
                         padding: '12px 20px',
-                        backgroundColor: '#6366f1',
+                        background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 30%, #3b82f6 60%, #22c55e 100%)',
                         border: 'none',
                         borderRadius: '8px',
                         color: 'white',
                         fontSize: '14px',
                         fontWeight: '600',
                         cursor: 'pointer',
-                        transition: 'background-color 0.2s',
+                        transition: 'all 0.2s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        textAlign: 'center',
+                        boxShadow: '0 10px 30px rgba(99, 102, 241, 0.35)',
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#4f46e5';
+                        e.currentTarget.style.filter = 'brightness(1.1)';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                        e.currentTarget.style.boxShadow = '0 12px 35px rgba(99, 102, 241, 0.45)';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#6366f1';
+                        e.currentTarget.style.filter = 'none';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 10px 30px rgba(99, 102, 241, 0.35)';
                       }}
                     >
                       Ir para Planos

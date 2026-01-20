@@ -160,8 +160,12 @@
   font-size: 18px;
   font-weight: bold;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: background-color 0.3s, transform 0.2s, box-shadow 0.2s;
   margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .btn-plan:disabled {
@@ -170,27 +174,37 @@
 }
 
 .btn-primary {
-  background-color: rgba(99, 102, 241, 0.9);
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 30%, #3b82f6 60%, #22c55e 100%);
   color: white;
-  border: 1px solid rgba(99, 102, 241, 0.5);
+  border: none;
+  box-shadow: 0 10px 30px rgba(99, 102, 241, 0.35);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: rgba(99, 102, 241, 1);
-  border-color: rgba(99, 102, 241, 0.7);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 35px rgba(99, 102, 241, 0.45);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .btn-lifetime {
-  background-color: rgba(34, 197, 94, 0.9);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%);
   color: white;
-  border: 1px solid rgba(34, 197, 94, 0.5);
+  border: none;
+  box-shadow: 0 10px 30px rgba(34, 197, 94, 0.35);
 }
 
 .btn-lifetime:hover:not(:disabled) {
-  background-color: rgba(34, 197, 94, 1);
-  border-color: rgba(34, 197, 94, 0.7);
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 35px rgba(34, 197, 94, 0.45);
+}
+
+.btn-lifetime:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .promo-code-section {

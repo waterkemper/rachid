@@ -425,11 +425,10 @@ const Conta: React.FC = () => {
             ⚠ Esta assinatura será cancelada em {subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString('pt-BR') : 'fim do período'}
           </p>
         )}
-        <div style={{ marginTop: '15px' }}>
+        <div style={{ marginTop: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button
             onClick={() => navigate('/assinatura')}
             className="btn btn-primary"
-            style={{ marginRight: '10px' }}
           >
             Gerenciar Assinatura
           </button>
@@ -573,7 +572,7 @@ const Conta: React.FC = () => {
           <button
             onClick={() => navigate('/precos')}
             className="btn btn-primary"
-            style={{ width: '100%' }}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             Ver Todos os Planos e Assinar
           </button>
