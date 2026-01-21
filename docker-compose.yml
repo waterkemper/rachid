@@ -8,19 +8,58 @@ services:
     container_name: rachid_backend
     restart: unless-stopped
     environment:
+      # Server Configuration
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${PORT:-3001}
+      
+      # Database Configuration (PostgreSQL)
       DATABASE_URL: ${DATABASE_URL:-}
       DB_HOST: ${DB_HOST:-host.docker.internal}
       DB_PORT: ${DB_PORT:-5437}
       DB_USERNAME: ${DB_USERNAME:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DB_DATABASE: ${DB_DATABASE:-rachid}
+      
+      # JWT Configuration
       JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      
+      # Frontend URL
       FRONTEND_URL: ${FRONTEND_URL:-https://orachid.com.br}
+      
+      # SendGrid Email Configuration
       SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
       SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL:-noreply@orachid.com.br}
       SENDGRID_FROM_NAME: ${SENDGRID_FROM_NAME:-Rachid}
+      
+      # AWS S3 Configuration (for file uploads)
+      AWS_REGION: ${AWS_REGION:-sa-east-1}
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-}
+      AWS_CLOUDFRONT_DOMAIN: ${AWS_CLOUDFRONT_DOMAIN:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      
+      # PayPal Configuration (for subscriptions)
+      PAYPAL_MODE: ${PAYPAL_MODE:-sandbox}
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
+      PAYPAL_PRODUCT_ID: ${PAYPAL_PRODUCT_ID:-}
+      PAYPAL_PLAN_ID_MONTHLY: ${PAYPAL_PLAN_ID_MONTHLY:-}
+      PAYPAL_PLAN_ID_YEARLY: ${PAYPAL_PLAN_ID_YEARLY:-}
+      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID:-}
+      
+      # Google OAuth Configuration
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      
+      # Email Queue Cron Jobs (optional)
+      REATIVACAO_CRON: ${REATIVACAO_CRON:-0 12 * * *}
+      VENCIMENTO_CRON: ${VENCIMENTO_CRON:-0 10 * * *}
+      
+      # Image Optimization (optional)
+      IMAGE_MAX_WIDTH: ${IMAGE_MAX_WIDTH:-1920}
+      IMAGE_JPEG_QUALITY: ${IMAGE_JPEG_QUALITY:-85}
+      IMAGE_PNG_QUALITY: ${IMAGE_PNG_QUALITY:-80}
+      IMAGE_ENABLE_WEBP: ${IMAGE_ENABLE_WEBP:-true}
     ports:
       - "3001:3001"
     # Add host.docker.internal to access host's PostgreSQL on port 5437
