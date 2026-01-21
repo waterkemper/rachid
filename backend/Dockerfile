@@ -4,6 +4,7 @@ FROM node:20-alpine AS builder
 # Install build dependencies for native modules (bcrypt, sharp, etc.)
 RUN apk add --no-cache \
     python3 \
+    py3-setuptools \
     make \
     g++ \
     vips-dev \
