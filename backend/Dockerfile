@@ -1,5 +1,13 @@
 # Multi-stage build for backend
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
+
+# Install build dependencies for native modules (bcrypt, sharp, etc.)
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    vips-dev \
+    vips
 
 # Set working directory
 WORKDIR /app
@@ -7,27 +15,24 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Install all dependencies (including dev dependencies for building)
+RUN npm ci && npm cache clean --force
 
 # Copy source files
 COPY . .
-
-# Install dev dependencies for building
-RUN npm install --save-dev
 
 # Build TypeScript
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine
+FROM node:20-alpine
 
-# Install dependencies for sharp (image processing library)
-# Sharp has pre-built binaries, but vips may be needed for some operations
+# Install runtime dependencies for native modules
+# - vips: Required for sharp (image processing library)
+# - libc6-compat: Compatibility layer for some native modules
 RUN apk add --no-cache \
-    vips-dev \
     vips \
-    || true  # vips is optional, sharp can work without it
+    libc6-compat
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
