@@ -14,6 +14,11 @@ export class SubscriptionService {
   private static subscriptionFeatureRepository = AppDataSource.getRepository(SubscriptionFeature);
   private static usuarioRepository = AppDataSource.getRepository(Usuario);
   private static planRepository = AppDataSource.getRepository(Plan);
+  
+  // Cache for last sync time per subscription to prevent excessive API calls
+  // Format: { paypalSubscriptionId: timestamp }
+  private static lastSyncCache: Map<string, number> = new Map();
+  private static readonly SYNC_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
   /**
    * Create a new subscription
@@ -441,19 +446,29 @@ export class SubscriptionService {
     // CRITICAL: Also sync if local is ACTIVE but PayPal might be EXPIRED (inconsistency)
     // This ensures we always have the latest status from PayPal
     if (subscription && subscription.paypalSubscriptionId) {
-      // Always sync if:
-      // 1. Pending approval (might have been activated)
-      // 2. Missing payer ID (might have been activated)
-      // 3. ACTIVE but might need to check expiration
-      // 4. ACTIVE - always check PayPal to catch EXPIRED inconsistencies
-      const needsSync = subscription.status === 'APPROVAL_PENDING' || 
-                       (!subscription.paypalPayerId && subscription.status !== 'CANCELLED') ||
-                       (subscription.status === 'ACTIVE' && subscription.currentPeriodEnd && new Date(subscription.currentPeriodEnd) < new Date()) ||
-                       subscription.status === 'ACTIVE'; // Always check ACTIVE subscriptions to catch PayPal EXPIRED
+      const now = Date.now();
+      const lastSyncTime = this.lastSyncCache.get(subscription.paypalSubscriptionId) || 0;
+      const timeSinceLastSync = now - lastSyncTime;
+      
+      // Determine if we need to sync:
+      // 1. Pending approval (always sync - might have been activated)
+      // 2. Missing payer ID (always sync - might have been activated)
+      // 3. ACTIVE but expired (always sync - needs immediate update)
+      // 4. ACTIVE but cache expired (sync only if cache TTL passed - prevents excessive calls)
+      const isPending = subscription.status === 'APPROVAL_PENDING';
+      const needsPayerId = !subscription.paypalPayerId && subscription.status !== 'CANCELLED';
+      const isExpired = subscription.status === 'ACTIVE' && subscription.currentPeriodEnd && new Date(subscription.currentPeriodEnd) < new Date();
+      const cacheExpired = subscription.status === 'ACTIVE' && timeSinceLastSync > this.SYNC_CACHE_TTL;
+      
+      const needsSync = isPending || needsPayerId || isExpired || cacheExpired;
       
       if (needsSync) {
         try {
           console.log(`[SubscriptionService] 🔄 Auto-syncing subscription ${subscription.paypalSubscriptionId} for user ${usuarioId} (current status: ${subscription.status})`);
+          
+          // Update cache before making API call
+          this.lastSyncCache.set(subscription.paypalSubscriptionId, now);
+          
           const paypalSubscription = await PayPalService.getSubscription(subscription.paypalSubscriptionId);
           const paypalStatus = this.mapPayPalStatus(paypalSubscription.status);
           
@@ -492,7 +507,12 @@ export class SubscriptionService {
           if (error.stack) {
             console.error(`[SubscriptionService] Error stack:`, error.stack);
           }
+          // Remove from cache on error so we can retry next time
+          this.lastSyncCache.delete(subscription.paypalSubscriptionId);
         }
+      } else if (subscription.status === 'ACTIVE') {
+        // Cache hit - skip sync but log for debugging
+        console.log(`[SubscriptionService] ⏭️ Skipping auto-sync for ACTIVE subscription ${subscription.paypalSubscriptionId} (cached, last sync ${Math.round(timeSinceLastSync / 1000)}s ago)`);
       }
     } else if (subscription && !subscription.paypalSubscriptionId) {
       console.log(`[SubscriptionService] ⚠️ Subscription found but no PayPal ID for user ${usuarioId}`);

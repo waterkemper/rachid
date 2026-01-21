@@ -477,13 +477,37 @@ export class PayPalService {
       return true; // Allow in development
     }
 
-    const authAlgo = headers['paypal-auth-algo'];
-    const transmissionId = headers['paypal-transmission-id'];
-    const certUrl = headers['paypal-cert-url'];
-    const transmissionSig = headers['paypal-transmission-sig'];
-    const transmissionTime = headers['paypal-transmission-time'];
+    // Helper function to get header value (case-insensitive)
+    const getHeader = (key: string): string | undefined => {
+      // Try exact match first
+      if (headers[key]) return headers[key];
+      // Try lowercase
+      const lowerKey = key.toLowerCase();
+      if (headers[lowerKey]) return headers[lowerKey];
+      // Try all possible case variations
+      for (const headerKey in headers) {
+        if (headerKey.toLowerCase() === lowerKey) {
+          return headers[headerKey];
+        }
+      }
+      return undefined;
+    };
+
+    const authAlgo = getHeader('paypal-auth-algo');
+    const transmissionId = getHeader('paypal-transmission-id');
+    const certUrl = getHeader('paypal-cert-url');
+    const transmissionSig = getHeader('paypal-transmission-sig');
+    const transmissionTime = getHeader('paypal-transmission-time');
 
     if (!authAlgo || !transmissionId || !certUrl || !transmissionSig || !transmissionTime) {
+      console.warn('Missing PayPal webhook headers:', {
+        hasAuthAlgo: !!authAlgo,
+        hasTransmissionId: !!transmissionId,
+        hasCertUrl: !!certUrl,
+        hasTransmissionSig: !!transmissionSig,
+        hasTransmissionTime: !!transmissionTime,
+        availableHeaders: Object.keys(headers),
+      });
       return false;
     }
 
@@ -511,13 +535,28 @@ export class PayPalService {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('PayPal webhook verification failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+        });
         return false;
       }
 
       const result = await response.json() as { verification_status?: string };
-      return result.verification_status === 'SUCCESS';
+      const isValid = result.verification_status === 'SUCCESS';
+      
+      if (!isValid) {
+        console.warn('PayPal webhook verification returned non-SUCCESS status:', result.verification_status);
+      }
+      
+      return isValid;
     } catch (error) {
       console.error('Webhook verification error:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message, error.stack);
+      }
       return false;
     }
   }
