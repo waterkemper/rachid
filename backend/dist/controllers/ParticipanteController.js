@@ -38,6 +38,10 @@ class ParticipanteController {
             res.status(201).json(participante);
         }
         catch (error) {
+            // Se for erro de duplicata, retornar erro 409 (Conflict)
+            if (error.message && error.message.includes('já existe')) {
+                return res.status(409).json({ error: error.message });
+            }
             res.status(500).json({ error: 'Erro ao criar participante' });
         }
     }

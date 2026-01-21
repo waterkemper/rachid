@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RelatorioController = void 0;
 const CalculadoraService_1 = require("../services/CalculadoraService");
+const EventoFinalizadoService_1 = require("../services/EventoFinalizadoService");
+const PagamentoService_1 = require("../services/PagamentoService");
 class RelatorioController {
     static async getSaldosGrupo(req, res) {
         try {
@@ -31,7 +33,67 @@ class RelatorioController {
             const usuarioId = req.usuarioId;
             const saldos = await CalculadoraService_1.CalculadoraService.calcularSaldosGrupo(grupoId, usuarioId);
             const sugestoes = CalculadoraService_1.CalculadoraService.otimizarPagamentos(saldos);
-            res.json(sugestoes);
+            // Buscar pagamentos do evento (tipo INDIVIDUAL) e mapear com sugestões
+            const pagamentos = await PagamentoService_1.PagamentoService.getPagamentosPorEvento(grupoId, 'INDIVIDUAL');
+            // Enriquecer sugestões com status de pagamentos (matching por IDs, não nomes)
+            const sugestoesComStatus = sugestoes.map((sugestao, index) => {
+                // Buscar pagamento correspondente por IDs de participantes e valor (matching por IDs)
+                const pagamento = pagamentos.find((p) => {
+                    // Matching por IDs (não usar nomes)
+                    const idsCorrespondem = p.deParticipanteId === sugestao.deParticipanteId &&
+                        p.paraParticipanteId === sugestao.paraParticipanteId;
+                    const valoresCorrespondem = Math.abs(p.sugestaoValor - sugestao.valor) <= 0.01;
+                    return idsCorrespondem && valoresCorrespondem;
+                });
+                return {
+                    ...sugestao,
+                    pago: pagamento !== undefined,
+                    confirmado: pagamento?.confirmadoEm !== null && pagamento?.confirmadoEm !== undefined,
+                    pagamentoId: pagamento?.id,
+                    pagoPor: pagamento?.pagoPor?.nome,
+                    confirmadoPor: pagamento?.confirmadoPor?.nome,
+                    dataPagamento: pagamento?.dataPagamento?.toISOString(),
+                    dataConfirmacao: pagamento?.confirmadoEm?.toISOString(),
+                };
+            });
+            // Verificar se evento está finalizado e notificar participantes (não bloquear se falhar)
+            if (sugestoes.length === 0) {
+                // Se não há sugestões, pode significar que todos os saldos estão quitados (matemático)
+                try {
+                    await EventoFinalizadoService_1.EventoFinalizadoService.notificarEventoFinalizado(grupoId, usuarioId);
+                }
+                catch (err) {
+                    console.error('[RelatorioController] Erro ao verificar evento finalizado:', err);
+                    // Não falhar resposta se verificação falhar
+                }
+            }
+            else {
+                // Verificar se todas as sugestões individuais foram confirmadas (manual)
+                try {
+                    const todosPagos = await PagamentoService_1.PagamentoService.verificarTodosPagos(grupoId, sugestoes);
+                    if (todosPagos) {
+                        // Verificar também pagamentos entre grupos antes de marcar como finalizado
+                        const saldosGrupos = await CalculadoraService_1.CalculadoraService.calcularSaldosPorGrupo(grupoId, usuarioId);
+                        const sugestoesEntreGrupos = CalculadoraService_1.CalculadoraService.otimizarPagamentosEntreGrupos(saldosGrupos);
+                        if (sugestoesEntreGrupos.length === 0) {
+                            // Não há sugestões entre grupos, pode marcar como finalizado
+                            await EventoFinalizadoService_1.EventoFinalizadoService.notificarEventoFinalizado(grupoId, usuarioId);
+                        }
+                        else {
+                            // Verificar se todas as sugestões entre grupos também foram confirmadas
+                            const todosPagosEntreGrupos = await PagamentoService_1.PagamentoService.verificarTodosPagosEntreGrupos(grupoId, sugestoesEntreGrupos);
+                            if (todosPagosEntreGrupos && todosPagos) {
+                                await EventoFinalizadoService_1.EventoFinalizadoService.notificarEventoFinalizado(grupoId, usuarioId);
+                            }
+                        }
+                    }
+                }
+                catch (err) {
+                    console.error('[RelatorioController] Erro ao verificar pagamentos:', err);
+                    // Não falhar resposta se verificação falhar
+                }
+            }
+            res.json(sugestoesComStatus);
         }
         catch (error) {
             res.status(500).json({ error: 'Erro ao calcular sugestões de pagamento' });
@@ -43,7 +105,57 @@ class RelatorioController {
             const usuarioId = req.usuarioId;
             const saldosGrupos = await CalculadoraService_1.CalculadoraService.calcularSaldosPorGrupo(grupoId, usuarioId);
             const sugestoes = CalculadoraService_1.CalculadoraService.otimizarPagamentosEntreGrupos(saldosGrupos);
-            res.json(sugestoes);
+            // Buscar pagamentos do evento (tipo ENTRE_GRUPOS) e mapear com sugestões
+            const pagamentos = await PagamentoService_1.PagamentoService.getPagamentosPorEvento(grupoId, 'ENTRE_GRUPOS');
+            // Enriquecer sugestões com status de pagamentos (matching por IDs de grupos, não nomes)
+            const sugestoesComStatus = sugestoes.map((sugestao, index) => {
+                // Buscar pagamento correspondente por IDs de grupos e valor (matching por IDs)
+                const pagamento = pagamentos.find((p) => {
+                    // Matching por IDs de grupos (não usar nomes)
+                    const idsGruposCorrespondem = p.deGrupoId === sugestao.deGrupoId &&
+                        p.paraGrupoId === sugestao.paraGrupoId;
+                    const valoresCorrespondem = Math.abs(p.sugestaoValor - sugestao.valor) <= 0.01;
+                    return idsGruposCorrespondem && valoresCorrespondem;
+                });
+                return {
+                    ...sugestao,
+                    pago: pagamento !== undefined,
+                    confirmado: pagamento?.confirmadoEm !== null && pagamento?.confirmadoEm !== undefined,
+                    pagamentoId: pagamento?.id,
+                    pagoPor: pagamento?.pagoPor?.nome,
+                    confirmadoPor: pagamento?.confirmadoPor?.nome,
+                    dataPagamento: pagamento?.dataPagamento?.toISOString(),
+                    dataConfirmacao: pagamento?.confirmadoEm?.toISOString(),
+                };
+            });
+            // Verificar se evento está finalizado considerando ambos os tipos (não bloquear se falhar)
+            try {
+                // Verificar se todas as sugestões entre grupos foram confirmadas (manual)
+                if (sugestoes.length > 0) {
+                    const todosPagosEntreGrupos = await PagamentoService_1.PagamentoService.verificarTodosPagosEntreGrupos(grupoId, sugestoes);
+                    // Verificar também pagamentos individuais antes de marcar como finalizado
+                    const saldos = await CalculadoraService_1.CalculadoraService.calcularSaldosGrupo(grupoId, usuarioId);
+                    const sugestoesIndividuais = CalculadoraService_1.CalculadoraService.otimizarPagamentos(saldos);
+                    if (sugestoesIndividuais.length === 0) {
+                        // Não há sugestões individuais, pode marcar como finalizado se grupos também estão pagos
+                        if (todosPagosEntreGrupos) {
+                            await EventoFinalizadoService_1.EventoFinalizadoService.notificarEventoFinalizado(grupoId, usuarioId);
+                        }
+                    }
+                    else {
+                        // Verificar se todas as sugestões individuais também foram confirmadas
+                        const todosPagosIndividuais = await PagamentoService_1.PagamentoService.verificarTodosPagos(grupoId, sugestoesIndividuais);
+                        if (todosPagosEntreGrupos && todosPagosIndividuais) {
+                            await EventoFinalizadoService_1.EventoFinalizadoService.notificarEventoFinalizado(grupoId, usuarioId);
+                        }
+                    }
+                }
+            }
+            catch (err) {
+                console.error('[RelatorioController] Erro ao verificar pagamentos entre grupos:', err);
+                // Não falhar resposta se verificação falhar
+            }
+            res.json(sugestoesComStatus);
         }
         catch (error) {
             res.status(500).json({ error: 'Erro ao calcular sugestões de pagamento entre grupos' });

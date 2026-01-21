@@ -33,12 +33,28 @@ const AdicionarParticipantesEvento: React.FC = () => {
   const [editandoParticipante, setEditandoParticipante] = useState<Participante | null>(null);
   const [erroModalParticipante, setErroModalParticipante] = useState('');
   const [sucessoModalParticipante, setSucessoModalParticipante] = useState('');
+  const [salvandoFamilia, setSalvandoFamilia] = useState(false);
+  const [carregandoFamilias, setCarregandoFamilias] = useState(false);
 
   useEffect(() => {
     if (eventoId) {
       loadData();
     }
   }, [eventoId]);
+
+  // Recarregar familias quando o modal de subgrupo abrir para garantir dados atualizados
+  useEffect(() => {
+    if (isModalFamiliaOpen && eventoId) {
+      const carregar = async () => {
+        setCarregandoFamilias(true);
+        await reloadFamilias();
+        // Pequeno delay para garantir que o estado foi atualizado
+        await new Promise(resolve => setTimeout(resolve, 100));
+        setCarregandoFamilias(false);
+      };
+      carregar();
+    }
+  }, [isModalFamiliaOpen, eventoId]);
 
   const loadData = async () => {
     if (!eventoId) return;
@@ -188,23 +204,53 @@ const AdicionarParticipantesEvento: React.FC = () => {
         await loadData();
       }
 
+      // Pequeno delay para garantir que o participante foi adicionado ao evento antes de adicionar às despesas
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Adicionar participante a todas as despesas existentes do evento (se solicitado)
       if (incluirEmDespesas) {
         try {
+          // Aguardar um pouco mais para garantir que o participante foi adicionado ao evento no backend
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
           const despesas = await despesaApi.getAll(Number(eventoId));
+          let adicionadas = 0;
+          let erros = 0;
+          
           for (const despesa of despesas) {
             // Verificar se o participante já está na despesa
-            const jaTemParticipacao = despesa.participacoes?.some(p => p.participante_id === participanteId);
+            // Verificar tanto participante_id quanto participante?.id (caso a relação esteja carregada)
+            const jaTemParticipacao = despesa.participacoes?.some(p => 
+              p.participante_id === participanteId || p.participante?.id === participanteId
+            );
+            
             if (!jaTemParticipacao) {
               try {
+                // Usar toggle que adiciona se não existir, remove se existir
                 await participacaoApi.toggle(despesa.id, participanteId);
-              } catch (err) {
+                adicionadas++;
+                console.log(`✓ Participante ${participanteId} adicionado à despesa ${despesa.id} (${despesa.descricao})`);
+              } catch (err: any) {
+                erros++;
                 console.error(`Erro ao adicionar participante à despesa ${despesa.id}:`, err);
+                // Se o erro for porque o participante não está no evento, logar mas continuar
+                if (err?.response?.status === 400 || err?.response?.status === 404) {
+                  console.warn(`Participante ${participanteId} pode não estar no evento ainda para a despesa ${despesa.id}`);
+                }
               }
+            } else {
+              console.log(`Participante ${participanteId} já está na despesa ${despesa.id} (${despesa.descricao})`);
             }
           }
+          
+          if (adicionadas > 0) {
+            console.log(`✓ Participante adicionado a ${adicionadas} despesa(s)`);
+          }
+          if (erros > 0) {
+            console.warn(`⚠ Houve ${erros} erro(s) ao adicionar participante às despesas`);
+          }
         } catch (err) {
-          console.error('Erro ao adicionar participante às despesas:', err);
+          console.error('Erro ao buscar despesas para adicionar participante:', err);
           // Não bloquear o fluxo se houver erro ao adicionar às despesas
         }
       } else {
@@ -220,7 +266,11 @@ const AdicionarParticipantesEvento: React.FC = () => {
     if (!participantePendente) return;
     
     const participanteId = participantePendente.id;
+    
+    // Fechar modal imediatamente para evitar cliques múltiplos
     setModalIncluirDespesasVisible(false);
+    setParticipantePendente(null);
+    setDespesasComPagador(0);
     
     try {
       setAdicionandoParticipantes(prev => new Set(prev).add(participanteId));
@@ -235,8 +285,6 @@ const AdicionarParticipantesEvento: React.FC = () => {
         novo.delete(participanteId);
         return novo;
       });
-      setParticipantePendente(null);
-      setDespesasComPagador(0);
     }
   };
 
@@ -364,6 +412,52 @@ const AdicionarParticipantesEvento: React.FC = () => {
     setSucessoModalParticipante('');
   };
 
+  const verificarDuplicata = (data: { nome: string; email?: string; chavePix?: string; telefone?: string }): { participante: Participante; camposIguais: string[] } | null => {
+    // Normalizar valores para comparação (trim e lowercase)
+    const nomeNormalizado = data.nome.trim().toLowerCase();
+    const emailNormalizado = data.email?.trim().toLowerCase() || null;
+    const telefoneNormalizado = data.telefone?.trim() || null;
+    const chavePixNormalizada = data.chavePix?.trim() || null;
+
+    // Verificar duplicatas: nome igual + qualquer outro campo igual
+    for (const p of participantesDisponiveis) {
+      const pNomeNormalizado = p.nome.trim().toLowerCase();
+      const pEmailNormalizado = p.email?.trim().toLowerCase() || null;
+      const pTelefoneNormalizado = p.telefone?.trim() || null;
+      const pChavePixNormalizada = p.chavePix?.trim() || null;
+
+      // Verificar se o nome é igual (obrigatório)
+      if (pNomeNormalizado !== nomeNormalizado) {
+        continue;
+      }
+
+      // Se o nome é igual, verificar se algum outro campo também é igual
+      const camposIguais: string[] = ['nome'];
+      
+      // Verificar email (ambos não null e iguais)
+      if (emailNormalizado && pEmailNormalizado && emailNormalizado === pEmailNormalizado) {
+        camposIguais.push('email');
+      }
+      
+      // Verificar telefone (ambos não null e iguais)
+      if (telefoneNormalizado && pTelefoneNormalizado && telefoneNormalizado === pTelefoneNormalizado) {
+        camposIguais.push('telefone');
+      }
+      
+      // Verificar chavePix (ambos não null e iguais)
+      if (chavePixNormalizada && pChavePixNormalizada && chavePixNormalizada === pChavePixNormalizada) {
+        camposIguais.push('chave PIX');
+      }
+
+      // Se encontrou nome igual + pelo menos um outro campo igual, é duplicata
+      if (camposIguais.length > 1) {
+        return { participante: p, camposIguais };
+      }
+    }
+
+    return null;
+  };
+
   const salvarParticipante = async (data: { nome: string; email?: string; chavePix?: string; telefone?: string }) => {
     if (criandoParticipante) {
       return; // Evitar múltiplas requisições simultâneas
@@ -394,19 +488,37 @@ const AdicionarParticipantesEvento: React.FC = () => {
           fecharModalParticipante();
         }, 1000);
       } else {
+        // Verificar duplicatas antes de criar
+        const duplicata = verificarDuplicata(data);
+        if (duplicata) {
+          const camposTexto = duplicata.camposIguais.join(', ');
+          setErroModalParticipante(`Já existe um participante com os mesmos dados: ${camposTexto}. Por favor, altere pelo menos um desses campos.`);
+          return;
+        }
+
         // Criar novo participante
         const participante = await participanteApi.create(data);
 
         setParticipantesDisponiveis((prev) =>
           prev.some((p) => p.id === participante.id) ? prev : [...prev, participante]
         );
+        
+        // Adicionar ao evento (pode abrir modal de despesas)
         await adicionarParticipanteAoEvento(participante.id, participante);
 
         // Limpar busca e mostrar mensagem de sucesso
         setBusca('');
         setSucessoModalParticipante('Participante adicionado');
         
-        // Não fechar modal para permitir adicionar mais participantes rapidamente
+        // Fechar modal após adicionar para evitar cliques múltiplos
+        // Se houver modal de despesas aberto, ele será fechado quando o usuário escolher
+        // Usar um pequeno delay para garantir que o estado foi atualizado
+        setTimeout(() => {
+          // Só fechar se o modal de despesas não estiver aberto
+          if (!modalIncluirDespesasVisible) {
+            fecharModalParticipante();
+          }
+        }, 100);
       }
       
       // Limpar mensagem após 3 segundos
@@ -414,7 +526,16 @@ const AdicionarParticipantesEvento: React.FC = () => {
         setSucessoModalParticipante('');
       }, 3000);
     } catch (error: any) {
-      setErroModalParticipante(error.response?.data?.error || (editandoParticipante ? 'Erro ao atualizar participante' : 'Erro ao criar participante'));
+      const errorMessage = error.response?.data?.error || (editandoParticipante ? 'Erro ao atualizar participante' : 'Erro ao criar participante');
+      
+      // Se o erro já contém a mensagem detalhada do backend, usar ela diretamente
+      if (errorMessage.includes('já existe') || errorMessage.includes('mesmos dados')) {
+        setErroModalParticipante(errorMessage);
+      } else if (errorMessage.includes('duplicat') || errorMessage.includes('already exists')) {
+        setErroModalParticipante('Já existe um participante com dados duplicados. Por favor, altere pelo menos um campo.');
+      } else {
+        setErroModalParticipante(errorMessage);
+      }
       setSucessoModalParticipante('');
     } finally {
       setCriandoParticipante(false);
@@ -423,18 +544,49 @@ const AdicionarParticipantesEvento: React.FC = () => {
 
   // Função para verificar se um participante já está em outro subgrupo
   const participanteJaEmOutroSubgrupo = (participanteId: number, subgrupoAtualId?: number): boolean => {
-    return familiasEvento.some(familia => {
+    // Se não há familias carregadas, não pode estar em outro subgrupo
+    if (!familiasEvento || familiasEvento.length === 0) {
+      return false;
+    }
+
+    // Verificar em todas as familias/subgrupos
+    for (const familia of familiasEvento) {
       // Ignorar o subgrupo atual se estiver editando
       if (subgrupoAtualId && familia.id === subgrupoAtualId) {
-        return false;
+        continue;
       }
+      
       // Verificar se o participante está neste subgrupo
-      return (familia.participantes || []).some(p => p.participante_id === participanteId);
-    });
+      if (familia.participantes && Array.isArray(familia.participantes) && familia.participantes.length > 0) {
+        // Verificar tanto participante_id quanto participante?.id (caso a relação esteja populada)
+        const encontrado = familia.participantes.some(p => 
+          p.participante_id === participanteId || 
+          (p.participante && p.participante.id === participanteId)
+        );
+        if (encontrado) {
+          return true;
+        }
+      }
+    }
+    return false;
   };
 
-  const abrirModalFamilia = (familia?: GrupoParticipantesEvento) => {
+  const abrirModalFamilia = async (familia?: GrupoParticipantesEvento) => {
     setErro('');
+    setCarregandoFamilias(true);
+    
+    // Recarregar familias para garantir que temos os dados mais atualizados
+    if (eventoId) {
+      try {
+        const data = await grupoParticipantesApi.getAll(Number(eventoId));
+        setFamiliasEvento(data || []);
+      } catch (error) {
+        console.error('Erro ao recarregar familias:', error);
+      }
+    }
+    
+    setCarregandoFamilias(false);
+    
     if (familia) {
       setFamiliaEditando(familia);
       setFamiliaNome(familia.nome || '');
@@ -450,14 +602,34 @@ const AdicionarParticipantesEvento: React.FC = () => {
 
   const salvarFamilia = async () => {
     if (!eventoId) return;
-    if (!familiaNome.trim()) {
-      setErro('Nome da sub grupo é obrigatório');
-      return;
-    }
+    if (salvandoFamilia) return; // Prevenir múltiplos cliques
+    
     if (familiaSelecionados.length === 0) {
       setErro('Selecione pelo menos uma pessoa para a sub grupo');
       return;
     }
+
+    // Se não tiver nome, sugerir baseado nos participantes selecionados
+    let nomeFinal = familiaNome.trim();
+    if (!nomeFinal) {
+      const nomesParticipantes = familiaSelecionados
+        .map(id => {
+          const participante = participantesNoEvento.find(p => p.id === id);
+          return participante?.nome || '';
+        })
+        .filter(nome => nome.length > 0);
+      
+      if (nomesParticipantes.length > 0) {
+        nomeFinal = nomesParticipantes.join(' e ');
+        setFamiliaNome(nomeFinal);
+      } else {
+        setErro('Nome da sub grupo é obrigatório');
+        return;
+      }
+    }
+
+    // Recarregar familias antes de validar para garantir dados atualizados
+    await reloadFamilias();
 
     // Validar se algum participante selecionado já está em outro subgrupo
     const participantesEmConflito: string[] = [];
@@ -476,11 +648,12 @@ const AdicionarParticipantesEvento: React.FC = () => {
     }
 
     try {
+      setSalvandoFamilia(true);
       setErro('');
       const evId = Number(eventoId);
 
       if (familiaEditando) {
-        await grupoParticipantesApi.update(evId, familiaEditando.id, { nome: familiaNome.trim() });
+        await grupoParticipantesApi.update(evId, familiaEditando.id, { nome: nomeFinal });
 
         const atuais = new Set<number>((familiaEditando.participantes || []).map((p) => p.participante_id));
         const desejados = new Set<number>(familiaSelecionados);
@@ -501,12 +674,43 @@ const AdicionarParticipantesEvento: React.FC = () => {
           }
         }
       } else {
-        const familia = await grupoParticipantesApi.create(evId, { nome: familiaNome.trim() });
+        const familia = await grupoParticipantesApi.create(evId, { nome: nomeFinal });
+        let participantesAdicionados = 0;
         for (const id of familiaSelecionados) {
           // Verificar novamente antes de adicionar (caso tenha mudado enquanto criava)
           if (!participanteJaEmOutroSubgrupo(id, familia.id)) {
-            await grupoParticipantesApi.adicionarParticipante(evId, familia.id, id);
+            try {
+              await grupoParticipantesApi.adicionarParticipante(evId, familia.id, id);
+              participantesAdicionados++;
+            } catch (err: any) {
+              // Se o erro for porque o participante já está em outro subgrupo, logar mas continuar
+              if (err?.response?.status === 400) {
+                const participante = participantesNoEvento.find(p => p.id === id);
+                if (participante) {
+                  participantesEmConflito.push(participante.nome);
+                }
+              } else {
+                throw err; // Re-throw se for outro tipo de erro
+              }
+            }
           }
+        }
+        
+        // Se nenhum participante foi adicionado, mostrar erro
+        if (participantesAdicionados === 0 && familiaSelecionados.length > 0) {
+          if (participantesEmConflito.length > 0) {
+            setErro(`Não foi possível adicionar os participantes ao subgrupo. Os seguintes participantes já estão em outro subgrupo: ${participantesEmConflito.join(', ')}`);
+          } else {
+            setErro('Não foi possível adicionar os participantes ao subgrupo. Verifique se os participantes selecionados ainda estão disponíveis.');
+          }
+          // Deletar o subgrupo vazio que foi criado
+          try {
+            await grupoParticipantesApi.delete(evId, familia.id);
+          } catch (deleteErr) {
+            // Ignorar erro ao deletar
+          }
+          setSalvandoFamilia(false);
+          return;
         }
       }
 
@@ -516,7 +720,10 @@ const AdicionarParticipantesEvento: React.FC = () => {
       setFamiliaSelecionados([]);
       await reloadFamilias();
     } catch (error: any) {
-      setErro(error?.response?.data?.error || 'Erro ao salvar sub grupo');
+      const errorMessage = error?.response?.data?.error || error?.message || 'Erro ao salvar sub grupo';
+      setErro(errorMessage);
+    } finally {
+      setSalvandoFamilia(false);
     }
   };
 
@@ -823,53 +1030,65 @@ const AdicionarParticipantesEvento: React.FC = () => {
               background: 'rgba(2, 6, 23, 0.18)',
             }}
           >
-            {participantesNoEvento.map((p) => {
-              const jaEmOutroSubgrupo = participanteJaEmOutroSubgrupo(p.id, familiaEditando?.id);
-              const estaSelecionado = familiaSelecionados.includes(p.id);
-              const podeSelecionar = !jaEmOutroSubgrupo || estaSelecionado;
-              
-              return (
-                <label 
-                  key={p.id} 
-                  style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: 10, 
-                    padding: '8px 6px',
-                    opacity: podeSelecionar ? 1 : 0.5,
-                    cursor: podeSelecionar ? 'pointer' : 'not-allowed'
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={estaSelecionado}
-                    disabled={!podeSelecionar}
-                    onChange={() => {
-                      if (podeSelecionar) {
-                        setFamiliaSelecionados((prev) =>
-                          prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]
-                        );
-                      }
+            {carregandoFamilias ? (
+              <div style={{ padding: '10px', textAlign: 'center', color: 'rgba(226, 232, 240, 0.6)' }}>
+                Carregando...
+              </div>
+            ) : (
+              participantesNoEvento.map((p) => {
+                // Verificar se o participante já está em outro subgrupo
+                const jaEmOutroSubgrupo = participanteJaEmOutroSubgrupo(p.id, familiaEditando?.id);
+                const estaSelecionado = familiaSelecionados.includes(p.id);
+                
+                // Se está editando: permitir apenas se o participante já está selecionado neste subgrupo OU se não está em outro subgrupo
+                // Se está criando: permitir apenas se NÃO está em outro subgrupo
+                const podeSelecionar = familiaEditando 
+                  ? (estaSelecionado || !jaEmOutroSubgrupo)
+                  : !jaEmOutroSubgrupo;
+                
+                return (
+                  <label 
+                    key={p.id} 
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 10, 
+                      padding: '8px 6px',
+                      opacity: podeSelecionar ? 1 : 0.5,
+                      cursor: podeSelecionar ? 'pointer' : 'not-allowed'
                     }}
-                  />
-                  <span style={{ 
-                    color: podeSelecionar ? 'rgba(226, 232, 240, 0.92)' : 'rgba(148, 163, 184, 0.6)'
-                  }}>
-                    {p.nome}
-                    {jaEmOutroSubgrupo && !estaSelecionado && (
-                      <span style={{ 
-                        marginLeft: '8px', 
-                        fontSize: '12px', 
-                        color: 'rgba(239, 68, 68, 0.8)',
-                        fontStyle: 'italic'
-                      }}>
-                        (já em outro subgrupo)
-                      </span>
-                    )}
-                  </span>
-                </label>
-              );
-            })}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={estaSelecionado}
+                      disabled={!podeSelecionar}
+                      onChange={() => {
+                        if (podeSelecionar) {
+                          setFamiliaSelecionados((prev) =>
+                            prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]
+                          );
+                        }
+                      }}
+                    />
+                    <span style={{ 
+                      color: podeSelecionar ? 'rgba(226, 232, 240, 0.92)' : 'rgba(148, 163, 184, 0.6)'
+                    }}>
+                      {p.nome}
+                      {jaEmOutroSubgrupo && !estaSelecionado && (
+                        <span style={{ 
+                          marginLeft: '8px', 
+                          fontSize: '12px', 
+                          color: 'rgba(239, 68, 68, 0.8)',
+                          fontStyle: 'italic'
+                        }}>
+                          (já em outro subgrupo)
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })
+            )}
           </div>
           <p className="help-text">Dica: você pode editar isso depois. Cada participante só pode estar em um subgrupo.</p>
         </div>
@@ -887,8 +1106,13 @@ const AdicionarParticipantesEvento: React.FC = () => {
           >
             <FaArrowLeft /> <span>Cancelar</span>
           </button>
-          <button type="button" className="btn btn-primary btn-with-icon" onClick={salvarFamilia}>
-            <FaUsers /> <span>Salvar sub grupo</span>
+          <button 
+            type="button" 
+            className="btn btn-primary btn-with-icon" 
+            onClick={salvarFamilia}
+            disabled={salvandoFamilia}
+          >
+            <FaUsers /> <span>{salvandoFamilia ? 'Salvando...' : 'Salvar sub grupo'}</span>
           </button>
         </div>
       </Modal>
@@ -899,6 +1123,10 @@ const AdicionarParticipantesEvento: React.FC = () => {
           setModalIncluirDespesasVisible(false);
           setParticipantePendente(null);
           setDespesasComPagador(0);
+          // Fechar também o modal de novo participante se estiver aberto
+          if (isModalNovoParticipanteOpen && !editandoParticipante) {
+            fecharModalParticipante();
+          }
         }}
         title="Incluir participante nas despesas?"
       >

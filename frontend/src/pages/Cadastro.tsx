@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { authApi, publicEventoApi } from '../services/api';
@@ -48,12 +48,16 @@ const Cadastro: React.FC = () => {
     setCarregando(true);
 
     try {
+      // Capturar parâmetro de referral da URL
+      const referralCode = searchParams.get('ref');
+      
       await authApi.createUser({
         nome: nome.trim(),
         email: email.trim(),
         ddd: ddd.trim() || undefined,
         telefone: telefone.trim() || undefined,
         senha,
+        referralCode: referralCode || undefined,
       });
 
       // Login automático

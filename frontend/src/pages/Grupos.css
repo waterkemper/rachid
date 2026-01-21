@@ -105,9 +105,38 @@
   white-space: nowrap;
 }
 
-/* Mobile styles - use card layout instead of table */
+/* Estilos para o filtro de status */
+.grupos-filter-select {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background-color: rgba(226, 232, 240, 0.1);
+  color: rgba(226, 232, 240, 0.9);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.grupos-filter-select option {
+  background-color: rgba(15, 23, 42, 0.98) !important;
+  color: rgba(226, 232, 240, 0.95) !important;
+  padding: 8px 12px;
+}
+
+.grupos-filter-select option:hover {
+  background-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+.grupos-filter-select option:checked,
+.grupos-filter-select option:focus {
+  background-color: rgba(99, 102, 241, 0.6) !important;
+  color: rgba(255, 255, 255, 1) !important;
+}
+
+/* Card layout - Desktop and Mobile */
 .grupos-cards {
-  display: none;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
 }
 
 .grupos-card {
@@ -115,7 +144,15 @@
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 12px;
   padding: 20px;
-  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.grupos-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: rgba(148, 163, 184, 0.24);
 }
 
 .grupos-card-header {
@@ -130,7 +167,7 @@
 }
 
 .grupos-card-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: rgba(226, 232, 240, 0.92);
   margin: 0;
@@ -141,31 +178,161 @@
 .grupos-card-info {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  font-size: 13px;
+  gap: 12px;
+  font-size: 14px;
   color: rgba(226, 232, 240, 0.78);
+  margin-bottom: 16px;
 }
 
 .grupos-card-total {
-  margin-top: 8px;
+  margin-top: 4px;
   padding-top: 12px;
   border-top: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .grupos-card-total-value {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   color: rgba(34, 197, 94, 0.9);
 }
 
 .grupos-card-info-item {
   display: flex;
   gap: 8px;
+  align-items: center;
 }
 
 .grupos-card-info-label {
   font-weight: 600;
-  min-width: 90px;
+  min-width: 120px;
+  color: rgba(226, 232, 240, 0.85);
+}
+
+/* Status action button */
+.grupos-card-status-action {
+  margin-bottom: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.btn-status-complete {
+  width: 100%;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, rgba(40, 167, 69, 0.2) 0%, rgba(40, 167, 69, 0.15) 100%);
+  border: 1px solid rgba(40, 167, 69, 0.4);
+  border-radius: 8px;
+  color: rgba(40, 167, 69, 0.95);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-status-complete:hover {
+  background: linear-gradient(135deg, rgba(40, 167, 69, 0.3) 0%, rgba(40, 167, 69, 0.25) 100%);
+  border-color: rgba(40, 167, 69, 0.6);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);
+}
+
+.btn-status-complete:active {
+  transform: translateY(0);
+}
+
+.btn-status-reopen {
+  width: 100%;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(99, 102, 241, 0.15) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 8px;
+  color: rgba(99, 102, 241, 0.95);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-status-reopen:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(99, 102, 241, 0.25) 100%);
+  border-color: rgba(99, 102, 241, 0.6);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+}
+
+.btn-status-reopen:active {
+  transform: translateY(0);
+}
+
+/* Card actions area */
+.grupos-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 16px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  margin-top: auto;
+}
+
+.grupos-card-actions .btn {
+  padding: 8px 12px !important;
+  min-width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-width: calc(25% - 6px);
+}
+
+.grupos-card-actions .btn svg {
+  font-size: 16px;
+}
+
+/* Desktop: Grid layout with 2-3 columns */
+@media (min-width: 769px) {
+  .grupos-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+
+  .grupos-card {
+    padding: 24px;
+  }
+
+  .grupos-card-title {
+    font-size: 20px;
+  }
+
+  .grupos-card-info {
+    font-size: 15px;
+  }
+
+  .grupos-card-actions .btn {
+    min-width: calc(25% - 6px);
+    max-width: calc(25% - 6px);
+  }
+}
+
+@media (min-width: 1200px) {
+  .grupos-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1600px) {
+  .grupos-cards {
+    grid-template-columns: repeat(3, 1fr);
+    max-width: 1600px;
+    margin: 0 auto;
+  }
 }
 
 @media (max-width: 768px) {
@@ -179,42 +346,58 @@
   }
 
   .grupos-cards {
-    display: block;
+    grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   .grupos-card {
     padding: 18px;
-    margin-bottom: 18px;
   }
 
   .grupos-card-header {
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     padding-bottom: 16px;
   }
 
   .grupos-card-title {
     width: 100%;
+    font-size: 16px;
   }
 
-  .grupos-actions {
+  .grupos-card-actions {
     width: 100%;
     flex-wrap: wrap;
     justify-content: flex-start;
     gap: 8px;
   }
 
+  .grupos-card-actions .btn {
+    min-width: calc(50% - 4px);
+    max-width: calc(50% - 4px);
+    flex: 0 0 calc(50% - 4px);
+  }
+
   .grupos-card-info {
-    gap: 12px;
+    gap: 10px;
+    font-size: 13px;
   }
 
   .grupos-card-info-item {
     padding: 4px 0;
   }
 
+  .grupos-card-info-label {
+    min-width: 100px;
+  }
+
   .grupos-card-total {
-    margin-top: 12px;
-    padding-top: 14px;
+    margin-top: 8px;
+    padding-top: 12px;
+  }
+
+  .grupos-card-status-action {
+    margin-bottom: 12px;
   }
 
   .grupos-header {
@@ -233,23 +416,41 @@
 
 /* Very small screens */
 @media (max-width: 480px) {
-  .grupos-table {
-    min-width: 650px;
+  .grupos-cards {
+    gap: 12px;
   }
 
-  .grupos-table th,
-  .grupos-table td {
-    padding: 6px 4px;
-    font-size: 11px;
+  .grupos-card {
+    padding: 16px;
   }
 
-  .grupos-actions button {
-    padding: 5px 6px !important;
-    min-width: 28px;
-    height: 28px;
+  .grupos-card-title {
+    font-size: 15px;
   }
 
-  .grupos-actions button svg {
-    font-size: 11px;
+  .grupos-card-info {
+    font-size: 12px;
+    gap: 8px;
+  }
+
+  .grupos-card-info-label {
+    min-width: 90px;
+    font-size: 12px;
+  }
+
+  .grupos-card-actions .btn {
+    min-width: calc(50% - 4px);
+    max-width: calc(50% - 4px);
+    padding: 6px 8px !important;
+    height: 36px;
+  }
+
+  .grupos-card-actions .btn svg {
+    font-size: 14px;
+  }
+
+  .btn-status-complete {
+    padding: 8px 12px;
+    font-size: 13px;
   }
 }

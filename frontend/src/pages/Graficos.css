@@ -1,0 +1,236 @@
+.graficos-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.graficos-container h2 {
+  display: flex;
+  align-items: center;
+  margin-bottom: 30px;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.graficos-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.graficos-tab {
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(226, 232, 240, 0.86);
+  transition: all 0.2s;
+  margin-bottom: 0;
+}
+
+.graficos-tab:hover {
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.graficos-tab.active {
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(99, 102, 241, 0.20);
+  border-color: rgba(99, 102, 241, 0.40);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+}
+
+.graficos-container .card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
+  padding: 18px;
+  margin-bottom: 20px;
+  overflow: visible;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(10px);
+}
+
+.graficos-container .card > div {
+  width: 100%;
+}
+
+.graficos-container .card h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: rgba(226, 232, 240, 0.92);
+  font-weight: 600;
+}
+
+.graficos-container table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.graficos-container table th {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 2px solid rgba(148, 163, 184, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+
+.graficos-container table td {
+  padding: 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.graficos-container table tr:hover {
+  background: rgba(99, 102, 241, 0.05);
+}
+
+@media (max-width: 768px) {
+  .graficos-container {
+    padding: 10px;
+  }
+
+  .graficos-container h2 {
+    font-size: 20px;
+    margin-bottom: 20px;
+  }
+
+  .graficos-tabs {
+    flex-direction: row;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .graficos-tab {
+    flex: 1;
+    text-align: center;
+    padding: 10px 14px;
+    font-size: 13px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .graficos-tab.active {
+    border-color: rgba(99, 102, 241, 0.40);
+    border-left: 1px solid rgba(99, 102, 241, 0.40);
+  }
+
+  .graficos-container .card {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .graficos-container .card h3 {
+    font-size: 16px;
+    margin-bottom: 16px;
+  }
+
+  .graficos-container .form-group {
+    margin-bottom: 0;
+  }
+
+  .graficos-container .form-group label {
+    font-size: 13px;
+    margin-bottom: 8px;
+    font-weight: 700;
+    color: rgba(226, 232, 240, 0.92);
+  }
+
+  .graficos-container .form-group select {
+    font-size: 14px;
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.20);
+    background: rgba(2, 6, 23, 0.32);
+    color: rgba(255, 255, 255, 0.92);
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .graficos-container .form-group select:focus {
+    border-color: rgba(99, 102, 241, 0.60);
+    background: rgba(2, 6, 23, 0.42);
+  }
+
+  .graficos-container .form-group select option {
+    background-color: rgba(2, 6, 23, 0.98);
+    color: rgba(226, 232, 240, 0.95);
+    padding: 8px 12px;
+  }
+
+  .graficos-container table {
+    font-size: 11px;
+  }
+
+  .graficos-container table th,
+  .graficos-container table td {
+    padding: 6px 4px;
+  }
+
+  /* Scroll horizontal para tabelas grandes */
+  .graficos-container table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .graficos-container table thead,
+  .graficos-container table tbody,
+  .graficos-container table tr {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+  }
+}
+
+@media (max-width: 480px) {
+  .graficos-container {
+    padding: 8px;
+  }
+
+  .graficos-container h2 {
+    font-size: 18px;
+    margin-bottom: 16px;
+  }
+
+  .graficos-container h2 svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .graficos-container .card {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .graficos-container .card h3 {
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+
+  .graficos-tab {
+    padding: 10px 12px;
+    font-size: 12px;
+    min-height: 42px;
+  }
+
+  .graficos-container table {
+    font-size: 10px;
+  }
+
+  .graficos-container table th,
+  .graficos-container table td {
+    padding: 4px 2px;
+  }
+}

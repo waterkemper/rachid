@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { usePageFocus } from '../hooks/usePageFocus';
 import { grupoApi, participanteApi, despesaApi } from '../services/api';
 import { Grupo, Participante } from '../types';
 import Modal from '../components/Modal';
@@ -22,6 +21,7 @@ const Grupos: React.FC = () => {
   const [shareLinkLoading, setShareLinkLoading] = useState(false);
   const [shareLinkError, setShareLinkError] = useState<string | null>(null);
   const [currentShareGrupoId, setCurrentShareGrupoId] = useState<number | null>(null);
+  const [filtroStatus, setFiltroStatus] = useState<'TODOS' | 'EM_ABERTO' | 'CONCLUIDO' | 'CANCELADO'>('TODOS');
 
   const formatarData = (dataStr: string): string => {
     const dataParte = dataStr.split('T')[0];
@@ -36,16 +36,58 @@ const Grupos: React.FC = () => {
     }).format(value);
   };
 
+// Função para renderizar badge de status
+  const renderStatusBadge = (status?: 'EM_ABERTO' | 'CONCLUIDO' | 'CANCELADO') => {
+    if (!status) status = 'EM_ABERTO'; // Default
+
+    const statusConfig = {
+      'EM_ABERTO': { label: 'Em Aberto', color: '#667eea', bgColor: 'rgba(102, 126, 234, 0.15)', icon: '📋' },
+      'CONCLUIDO': { label: 'Concluído', color: '#28a745', bgColor: 'rgba(40, 167, 69, 0.15)', icon: '✅' },
+      'CANCELADO': { label: 'Cancelado', color: '#6c757d', bgColor: 'rgba(108, 117, 125, 0.15)', icon: '❌' },
+    };
+
+    const config = statusConfig[status];
+    return (
+      <span
+        style={{
+          padding: '4px 10px',
+          borderRadius: '12px',
+          fontSize: '12px',
+          fontWeight: '600',
+          color: config.color,
+          backgroundColor: config.bgColor,
+          border: `1px solid ${config.color}40`,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px'
+        }}
+      >
+        {config.icon} {config.label}
+      </span>
+    );
+  };
+
+  // Filtrar grupos por status
+  const gruposFiltrados = grupos.filter(grupo => {
+    if (filtroStatus === 'TODOS') return true;
+    return grupo.status === filtroStatus || (!grupo.status && filtroStatus === 'EM_ABERTO');
+  });
+
+  // Ordenar grupos: em aberto primeiro, depois por data descendente
+  const gruposOrdenados = [...gruposFiltrados].sort((a, b) => {
+    // Em aberto primeiro
+    const aAberto = !a.status || a.status === 'EM_ABERTO';
+    const bAberto = !b.status || b.status === 'EM_ABERTO';
+    if (aAberto !== bAberto) {
+      return aAberto ? -1 : 1;
+    }
+    // Depois ordenar por data descendente
+    return new Date(b.data).getTime() - new Date(a.data).getTime();
+  });
+
   useEffect(() => {
     loadData();
   }, []);
-
-  const reloadData = useCallback(() => {
-    loadData();
-  }, []);
-
-  // Recarregar dados quando a página voltar ao foco
-  usePageFocus(reloadData, []);
 
   const loadData = async () => {
     try {
@@ -250,6 +292,22 @@ const Grupos: React.FC = () => {
     navigate(`/participacoes?evento=${eventoId}`);
   };
 
+  const handleUpdateStatus = async (id: number, status: 'CONCLUIDO' | 'CANCELADO' | 'EM_ABERTO') => {
+    if (status === 'CONCLUIDO' && !window.confirm('Tem certeza que deseja marcar este evento como concluído?')) {
+      return;
+    }
+    if (status === 'EM_ABERTO' && !window.confirm('Tem certeza que deseja reabrir este evento?')) {
+      return;
+    }
+    try {
+      await grupoApi.updateStatus(id, status);
+      loadData();
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || 'Erro ao alterar status do evento';
+      setError(errorMessage);
+    }
+  };
+
   const toggleParticipante = (participanteId: number) => {
     setFormData({
       ...formData,
@@ -266,7 +324,22 @@ const Grupos: React.FC = () => {
   return (
     <div>
       <div className="grupos-header">
-        <h2>Meus eventos</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0 }}>Meus eventos</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontSize: '14px', color: 'rgba(226, 232, 240, 0.8)', marginRight: '4px' }}>Filtrar por status:</label>
+            <select
+              value={filtroStatus}
+              onChange={(e) => setFiltroStatus(e.target.value as 'TODOS' | 'EM_ABERTO' | 'CONCLUIDO' | 'CANCELADO')}
+              className="grupos-filter-select"
+            >
+              <option value="TODOS">Todos</option>
+              <option value="EM_ABERTO">Em Aberto</option>
+              <option value="CONCLUIDO">Concluído</option>
+              <option value="CANCELADO">Cancelado</option>
+            </select>
+          </div>
+        </div>
         <button className="btn btn-primary" onClick={() => navigate('/novo-evento')}>
           + Novo Evento
         </button>
@@ -286,110 +359,72 @@ const Grupos: React.FC = () => {
       )}
 
       <div className="card">
-        {/* Desktop Table View */}
-        <div className="grupos-table-wrapper">
-          <table className="grupos-table">
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Descrição</th>
-                <th>Data</th>
-                <th>Participantes</th>
-                <th>Total Despesas</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {grupos.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>
-                    Nenhum evento cadastrado
-                  </td>
-                </tr>
-              ) : (
-                grupos.map((grupo) => (
-                  <tr key={grupo.id}>
-                    <td>{grupo.nome}</td>
-                    <td>{grupo.descricao || '-'}</td>
-                    <td>{formatarData(grupo.data)}</td>
-                    <td>{grupo.participantes?.length || 0}</td>
-                    <td>{formatCurrency(totaisDespesas.get(grupo.id) || 0)}</td>
-                    <td>
-                      <div className="grupos-actions">
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() => handleOpenModal(grupo)}
-                          title="Editar evento"
-                        >
-                          <FaEdit />
-                        </button>
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() => handleGerenciarParticipantes(grupo.id)}
-                          title="Adicionar/remover participantes"
-                        >
-                          <FaUsers />
-                        </button>
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() => handleAbrirDespesas(grupo.id)}
-                          title="Adicionar despesas deste evento"
-                        >
-                          <FaMoneyBillWave />
-                        </button>
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() => handleVerResultado(grupo.id)}
-                          title="Ver resultado deste evento"
-                        >
-                          <FaChartBar />
-                        </button>
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() => handleDuplicar(grupo.id)}
-                          title="Duplicar evento"
-                        >
-                          <FaCopy />
-                        </button>
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() => navigate(`/convidar-amigos/${grupo.id}`)}
-                          title="Convidar amigos"
-                        >
-                          <FaUserPlus />
-                        </button>
-                        <button
-                          className="btn btn-danger"
-                          onClick={() => handleDelete(grupo.id)}
-                          title="Excluir evento"
-                        >
-                          <FaTrash />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile Card View */}
+        {/* Card View - Desktop and Mobile */}
         <div className="grupos-cards">
-          {grupos.length === 0 ? (
+          {gruposOrdenados.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '20px' }}>
-              Nenhum evento cadastrado
+              {grupos.length === 0 ? 'Nenhum evento cadastrado' : `Nenhum evento com status "${filtroStatus === 'TODOS' ? 'Todos' : filtroStatus === 'EM_ABERTO' ? 'Em Aberto' : filtroStatus === 'CONCLUIDO' ? 'Concluído' : 'Cancelado'}"`}
             </div>
           ) : (
-            grupos.map((grupo) => (
-              <div key={grupo.id} className="grupos-card">
-                <div className="grupos-card-header">
-                  <h3 className="grupos-card-title">{grupo.nome}</h3>
-                  <div className="grupos-actions">
+            gruposOrdenados.map((grupo) => {
+              const isConcluidoOuCancelado = grupo.status === 'CONCLUIDO' || grupo.status === 'CANCELADO';
+              const isEmAberto = !grupo.status || grupo.status === 'EM_ABERTO';
+              return (
+                <div key={grupo.id} className="grupos-card">
+                  <div className="grupos-card-header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1 }}>
+                      <h3 className="grupos-card-title">{grupo.nome}</h3>
+                      {renderStatusBadge(grupo.status)}
+                    </div>
+                  </div>
+                  <div className="grupos-card-info">
+                    {grupo.usuario?.nome && (
+                      <div className="grupos-card-info-item">
+                        <span className="grupos-card-info-label">Organizador:</span>
+                        <span>{grupo.usuario.nome}</span>
+                      </div>
+                    )}
+                    <div className="grupos-card-info-item">
+                      <span className="grupos-card-info-label">Data:</span>
+                      <span>{formatarData(grupo.data)}</span>
+                    </div>
+                    <div className="grupos-card-info-item">
+                      <span className="grupos-card-info-label">Participantes:</span>
+                      <span>{grupo.participantes?.length || 0}</span>
+                    </div>
+                    <div className="grupos-card-info-item grupos-card-total">
+                      <span className="grupos-card-info-label">Total de despesas:</span>
+                      <span className="grupos-card-total-value">{formatCurrency(totaisDespesas.get(grupo.id) || 0)}</span>
+                    </div>
+                  </div>
+                  {isEmAberto && (
+                    <div className="grupos-card-status-action">
+                      <button
+                        className="btn btn-status-complete"
+                        onClick={() => handleUpdateStatus(grupo.id, 'CONCLUIDO')}
+                        title="Marcar evento como concluído"
+                      >
+                        ✅ Marcar como Concluído
+                      </button>
+                    </div>
+                  )}
+                  {grupo.status === 'CONCLUIDO' && (
+                    <div className="grupos-card-status-action">
+                      <button
+                        className="btn btn-status-reopen"
+                        onClick={() => handleUpdateStatus(grupo.id, 'EM_ABERTO')}
+                        title="Reabrir evento"
+                      >
+                        🔄 Reabrir Evento
+                      </button>
+                    </div>
+                  )}
+                  <div className="grupos-card-actions">
                     <button
                       className="btn btn-secondary"
                       onClick={() => handleOpenModal(grupo)}
                       title="Editar evento"
+                      disabled={isConcluidoOuCancelado}
                     >
                       <FaEdit />
                     </button>
@@ -397,6 +432,7 @@ const Grupos: React.FC = () => {
                       className="btn btn-secondary"
                       onClick={() => handleGerenciarParticipantes(grupo.id)}
                       title="Adicionar/remover participantes"
+                      disabled={isConcluidoOuCancelado}
                     >
                       <FaUsers />
                     </button>
@@ -404,6 +440,7 @@ const Grupos: React.FC = () => {
                       className="btn btn-secondary"
                       onClick={() => handleAbrirDespesas(grupo.id)}
                       title="Adicionar despesas deste evento"
+                      disabled={isConcluidoOuCancelado}
                     >
                       <FaMoneyBillWave />
                     </button>
@@ -444,28 +481,8 @@ const Grupos: React.FC = () => {
                     </button>
                   </div>
                 </div>
-                <div className="grupos-card-info">
-                  {grupo.descricao && (
-                    <div className="grupos-card-info-item">
-                      <span className="grupos-card-info-label">Descrição:</span>
-                      <span>{grupo.descricao}</span>
-                    </div>
-                  )}
-                  <div className="grupos-card-info-item">
-                    <span className="grupos-card-info-label">Data:</span>
-                    <span>{formatarData(grupo.data)}</span>
-                  </div>
-                  <div className="grupos-card-info-item">
-                    <span className="grupos-card-info-label">Participantes:</span>
-                    <span>{grupo.participantes?.length || 0}</span>
-                  </div>
-                  <div className="grupos-card-info-item grupos-card-total">
-                    <span className="grupos-card-info-label">Total de despesas:</span>
-                    <span className="grupos-card-total-value">{formatCurrency(totaisDespesas.get(grupo.id) || 0)}</span>
-                  </div>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { participanteApi } from '../services/api';
-import { usePageFocus } from '../hooks/usePageFocus';
 import { Participante } from '../types';
 import ParticipanteFormModal from '../components/ParticipanteFormModal';
 import './Participantes.css';
@@ -16,13 +15,6 @@ const Participantes: React.FC = () => {
   useEffect(() => {
     loadParticipantes();
   }, []);
-
-  const reloadParticipantes = useCallback(() => {
-    loadParticipantes();
-  }, []);
-
-  // Recarregar dados quando a página voltar ao foco
-  usePageFocus(reloadParticipantes, []);
 
   const loadParticipantes = async () => {
     try {

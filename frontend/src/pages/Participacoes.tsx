@@ -1,25 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { usePageFocus } from '../hooks/usePageFocus';
-import { grupoApi, despesaApi, grupoParticipantesApi, relatorioApi, participanteApi } from '../services/api';
-import { Grupo, Despesa, Participante, GrupoParticipantesEvento, SugestaoPagamento, SaldoParticipante, SaldoGrupo } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { grupoApi, despesaApi, grupoParticipantesApi, relatorioApi, participanteApi, pagamentoApi } from '../services/api';
+import { Grupo, Despesa, DespesaAnexo, Participante, GrupoParticipantesEvento, SugestaoPagamento, SaldoParticipante, SaldoGrupo } from '../types';
 import Modal from '../components/Modal';
-import { formatarSugestoesPagamento } from '../utils/whatsappFormatter';
-import { FaUsers, FaMoneyBillWave, FaShareAlt, FaUserPlus, FaCopy } from 'react-icons/fa';
+import { formatarSugestoesPagamento, filtrarDespesasPlaceholder } from '../utils/whatsappFormatter';
+import { FaUsers, FaMoneyBillWave, FaShareAlt, FaUserPlus, FaCopy, FaCheckCircle, FaPaperclip, FaDownload, FaImage, FaFilePdf, FaFile } from 'react-icons/fa';
 import { FaWhatsapp } from 'react-icons/fa6';
 import './Participacoes.css';
 
 const Participacoes: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { usuario } = useAuth();
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [grupoSelecionado, setGrupoSelecionado] = useState<number | ''>('');
+  const [grupoSelecionadoData, setGrupoSelecionadoData] = useState<Grupo | null>(null); // Dados completos do grupo selecionado
   const [saldos, setSaldos] = useState<SaldoParticipante[]>([]);
   const [saldosGrupos, setSaldosGrupos] = useState<SaldoGrupo[]>([]);
   const [sugestoes, setSugestoes] = useState<SugestaoPagamento[]>([]);
+  const [sugestoesEntreGrupos, setSugestoesEntreGrupos] = useState<SugestaoPagamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [carregandoRelatorio, setCarregandoRelatorio] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [marcandoPagamento, setMarcandoPagamento] = useState<number | null>(null); // Index da sugestão sendo marcada
+  const [confirmandoPagamento, setConfirmandoPagamento] = useState<number | null>(null); // ID do pagamento sendo confirmado
   
   // Estados para modal de detalhes
   const [modalDetalhesVisible, setModalDetalhesVisible] = useState(false);
@@ -93,16 +98,6 @@ const Participacoes: React.FC = () => {
     }
   }, [grupoSelecionado]);
 
-  const reloadRelatorio = useCallback(() => {
-    if (grupoSelecionado) {
-      loadRelatorio();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grupoSelecionado]);
-
-  // Recarregar dados quando a página voltar ao foco
-  usePageFocus(reloadRelatorio, [grupoSelecionado]);
-
   const loadGrupos = async () => {
     try {
       setLoading(true);
@@ -136,8 +131,10 @@ const Participacoes: React.FC = () => {
       let despesasEvento: Despesa[] = [];
       try {
         despesasEvento = await despesaApi.getAll(Number(grupoSelecionado));
-        setDespesas(despesasEvento);
-        const total = despesasEvento.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
+        // Filtrar despesas placeholder (zeradas ou sem participantes válidos)
+        const despesasValidas = filtrarDespesasPlaceholder(despesasEvento);
+        setDespesas(despesasValidas);
+        const total = despesasValidas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
         setTotalDespesas(total);
       } catch (err) {
         console.error('Erro ao carregar despesas:', err);
@@ -153,27 +150,51 @@ const Participacoes: React.FC = () => {
       setSaldos(saldosData);
       setSaldosGrupos(saldosGruposData);
       
-      // Verificar se há grupos no evento e carregar sugestões
+      // Buscar dados completos do grupo selecionado (incluindo status)
+      let eventoCompleto: Grupo | null = null;
+      try {
+        eventoCompleto = await grupoApi.getById(Number(grupoSelecionado));
+        setGrupoSelecionadoData(eventoCompleto);
+      } catch (err) {
+        console.error('Erro ao buscar dados do grupo:', err);
+        setGrupoSelecionadoData(null);
+      }
+
+      // Verificar se há grupos no evento e carregar sugestões (ambos os tipos)
       let gruposParticipantes: GrupoParticipantesEvento[] = [];
       try {
         gruposParticipantes = await grupoParticipantesApi.getAll(Number(grupoSelecionado));
         setSubgrupos(gruposParticipantes || []);
         const temGrupos = gruposParticipantes && gruposParticipantes.length > 0;
         
-        const sugestoesData = temGrupos
-          ? await relatorioApi.getSugestoesPagamentoGrupos(Number(grupoSelecionado))
-          : await relatorioApi.getSugestoesPagamento(Number(grupoSelecionado));
-        setSugestoes(sugestoesData);
+        // IMPORTANTE: Se houver subgrupos, carregar APENAS sugestões entre grupos
+        // Se não houver subgrupos, carregar APENAS sugestões individuais
+        if (temGrupos) {
+          // Quando há subgrupos, mostrar apenas sugestões entre grupos
+          const sugestoesGrupos = await relatorioApi.getSugestoesPagamentoGrupos(Number(grupoSelecionado));
+          setSugestoesEntreGrupos(sugestoesGrupos);
+          setSugestoes([]); // Limpar sugestões individuais
+        } else {
+          // Quando não há subgrupos, mostrar apenas sugestões individuais
+          const sugestoesIndividuais = await relatorioApi.getSugestoesPagamento(Number(grupoSelecionado));
+          setSugestoes(sugestoesIndividuais);
+          setSugestoesEntreGrupos([]); // Limpar sugestões entre grupos
+        }
       } catch (err) {
+        // Se falhar ao carregar subgrupos, assumir que não há subgrupos
         setSubgrupos([]);
+        // Carregar apenas sugestões individuais (não há subgrupos)
         const sugestoesData = await relatorioApi.getSugestoesPagamento(Number(grupoSelecionado));
         setSugestoes(sugestoesData);
+        setSugestoesEntreGrupos([]);
       }
 
       // Buscar TODOS os participantes do evento (não apenas os do usuário logado)
       // Isso é necessário para exibir as chaves PIX corretamente
       try {
-        const eventoCompleto = await grupoApi.getById(Number(grupoSelecionado));
+        if (!eventoCompleto) {
+          eventoCompleto = await grupoApi.getById(Number(grupoSelecionado));
+        }
         
         // Criar um mapa de participantes a partir das despesas e do evento
         const participantesMap = new Map<number, Participante>();
@@ -228,6 +249,11 @@ const Participacoes: React.FC = () => {
         gruposParticipantes.forEach(subgrupo => {
           if (subgrupo.participantes) {
             subgrupo.participantes.forEach(p => {
+              // Se o backend enviou o objeto participante completo, adicionar diretamente
+              if (p.participante) {
+                participantesMap.set(p.participante.id, p.participante);
+              }
+              // Adicionar ID para buscar caso não tenha vindo completo
               if (p.participante_id) {
                 participantesIdsNecessarios.add(p.participante_id);
               }
@@ -302,7 +328,19 @@ const Participacoes: React.FC = () => {
         return false;
       });
       
-      setDespesasDetalhes(despesasRelacionadas);
+      // Carregar anexos para cada despesa
+      const despesasComAnexos = await Promise.all(
+        despesasRelacionadas.map(async (despesa) => {
+          try {
+            const anexos = await despesaApi.listAnexos(despesa.id);
+            return { ...despesa, anexos };
+          } catch (error) {
+            return { ...despesa, anexos: [] };
+          }
+        })
+      );
+      
+      setDespesasDetalhes(despesasComAnexos);
     } catch (err) {
       setError('Erro ao carregar detalhes do participante');
     } finally {
@@ -317,7 +355,10 @@ const Participacoes: React.FC = () => {
   };
 
   const handleCompartilharWhatsApp = async () => {
-    if (!grupoSelecionado || sugestoes.length === 0) {
+    // Se houver subgrupos, usar sugestões entre grupos; caso contrário, usar sugestões individuais
+    const sugestoesParaCompartilhar = subgrupos.length > 0 ? sugestoesEntreGrupos : sugestoes;
+    
+    if (!grupoSelecionado || sugestoesParaCompartilhar.length === 0) {
       setError('Não há sugestões de pagamento para compartilhar');
       return;
     }
@@ -335,9 +376,14 @@ const Participacoes: React.FC = () => {
       let despesasParaFormatar = despesas;
       let subgruposParaFormatar = subgrupos;
       let participantesParaFormatar = participantes;
-      
+
       if (despesasParaFormatar.length === 0) {
-        despesasParaFormatar = await despesaApi.getAll(Number(grupoSelecionado));
+        const todasDespesas = await despesaApi.getAll(Number(grupoSelecionado));
+        // Filtrar despesas placeholder antes de formatar
+        despesasParaFormatar = filtrarDespesasPlaceholder(todasDespesas);
+      } else {
+        // Garantir que as despesas já carregadas também estão filtradas
+        despesasParaFormatar = filtrarDespesasPlaceholder(despesasParaFormatar);
       }
       if (subgruposParaFormatar.length === 0) {
         try {
@@ -426,9 +472,6 @@ const Participacoes: React.FC = () => {
       setParticipantes(participantesParaFormatar);
 
       // Obter ou gerar link de compartilhamento primeiro
-      let textoInicio = '📊 Pessoal, organizei as contas do evento em oRachid.\n';
-      textoInicio += 'Ele calcula tudo automaticamente (inclusive por famílias) e mostra quem paga quem, sem confusão.\n\n';
-      
       let linkCompartilhamento = '';
       try {
         let linkData = await grupoApi.obterLink(Number(grupoSelecionado));
@@ -439,29 +482,32 @@ const Participacoes: React.FC = () => {
         
         if (linkData.link) {
           linkCompartilhamento = linkData.link;
-          textoInicio += '🔗 *Visualize o evento online:*\n';
-          textoInicio += linkData.link + '\n';
-          textoInicio += '👉 Dá pra ver o resumo e seus saldos sem criar conta.\n\n';
         }
       } catch (err) {
-        // Se falhar ao obter link, continua sem adicionar o link mas mantém o texto inicial
+        // Se falhar ao obter link, continua sem adicionar o link
         console.error('Erro ao obter link de compartilhamento:', err);
-        textoInicio += '\n';
       }
+
+      // Calcular número de participantes e total
+      const numeroParticipantes = participantesParaFormatar.length;
+      const totalDespesas = despesasParaFormatar.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
+
+      // Obter nome do organizador (usuário logado ou do evento)
+      let nomeOrganizador = usuario?.nome || 'Eu';
 
       let mensagem = formatarSugestoesPagamento(
         evento,
-        sugestoes,
+        sugestoesParaCompartilhar,
         despesasParaFormatar,
         participantesParaFormatar,
         saldos,
         saldosGrupos,
         subgruposParaFormatar.length > 0 ? subgruposParaFormatar : undefined,
-        linkCompartilhamento
+        linkCompartilhamento,
+        numeroParticipantes,
+        totalDespesas,
+        nomeOrganizador
       );
-
-      // Adicionar texto inicial no início da mensagem
-      mensagem = textoInicio + mensagem;
 
       setMensagemWhatsApp(mensagem);
     } catch (err) {
@@ -575,7 +621,19 @@ const Participacoes: React.FC = () => {
         return false;
       });
       
-      setDespesasGrupoDetalhes(despesasRelacionadas);
+      // Carregar anexos para cada despesa
+      const despesasComAnexos = await Promise.all(
+        despesasRelacionadas.map(async (despesa) => {
+          try {
+            const anexos = await despesaApi.listAnexos(despesa.id);
+            return { ...despesa, anexos };
+          } catch (error) {
+            return { ...despesa, anexos: [] };
+          }
+        })
+      );
+      
+      setDespesasGrupoDetalhes(despesasComAnexos);
     } catch (err) {
       setError('Erro ao carregar detalhes do grupo');
     } finally {
@@ -589,26 +647,303 @@ const Participacoes: React.FC = () => {
     setDespesasGrupoDetalhes([]);
   };
 
+  // Função para encontrar participante do usuário atual no evento (via email)
+  const encontrarParticipanteUsuario = useCallback((): Participante | null => {
+    if (!usuario?.email) return null;
+    
+    const emailUsuarioNormalizado = usuario.email.trim().toLowerCase();
+    const participanteEncontrado = participantes.find(p => {
+      const emailParticipanteNormalizado = p.email?.trim().toLowerCase();
+      return emailParticipanteNormalizado === emailUsuarioNormalizado;
+    });
+    
+    return participanteEncontrado || null;
+  }, [usuario, participantes]);
+
+  // Handler para marcar sugestão individual como paga
+  const handleMarcarComoPago = async (sugestao: SugestaoPagamento, index: number) => {
+    if (!grupoSelecionado || !sugestao.deParticipanteId || !sugestao.paraParticipanteId) {
+      alert('Dados da sugestão incompletos. Recarregue a página.');
+      return;
+    }
+
+    const participanteUsuario = encontrarParticipanteUsuario();
+    if (!participanteUsuario) {
+      alert('Não foi possível identificar seu participante no evento. Verifique se você está adicionado ao evento.');
+      return;
+    }
+
+    if (!confirm(`Deseja marcar este pagamento como realizado?\n\n${sugestao.de} deve pagar ${formatCurrency(sugestao.valor)} para ${sugestao.para}`)) {
+      return;
+    }
+
+    setMarcandoPagamento(index);
+    try {
+      await pagamentoApi.marcarComoPago(Number(grupoSelecionado), {
+        sugestaoIndex: index,
+        deParticipanteId: sugestao.deParticipanteId,
+        paraParticipanteId: sugestao.paraParticipanteId,
+        sugestaoValor: sugestao.valor,
+        pagoPorParticipanteId: participanteUsuario.id,
+        valor: sugestao.valor,
+        deNome: sugestao.de,
+        paraNome: sugestao.para,
+      });
+
+      // Recarregar sugestões para atualizar status
+      await loadRelatorio();
+      alert('Pagamento marcado como realizado! Aguarde confirmação do credor.');
+    } catch (error: any) {
+      console.error('Erro ao marcar pagamento:', error);
+      alert(error.response?.data?.error || 'Erro ao marcar pagamento como realizado');
+    } finally {
+      setMarcandoPagamento(null);
+    }
+  };
+
+  // Handler para marcar sugestão entre grupos como paga
+  const handleMarcarComoPagoEntreGrupos = async (sugestao: SugestaoPagamento, index: number) => {
+    if (!grupoSelecionado || !sugestao.deGrupoId || !sugestao.paraGrupoId) {
+      alert('Dados da sugestão incompletos. Recarregue a página.');
+      return;
+    }
+
+    const participanteUsuario = encontrarParticipanteUsuario();
+    if (!participanteUsuario) {
+      alert('Não foi possível identificar seu participante no evento. Verifique se você está adicionado ao evento.');
+      return;
+    }
+
+    if (!confirm(`Deseja marcar este pagamento entre grupos como realizado?\n\n${sugestao.de} deve pagar ${formatCurrency(sugestao.valor)} para ${sugestao.para}`)) {
+      return;
+    }
+
+    setMarcandoPagamento(index);
+    try {
+      await pagamentoApi.marcarComoPagoEntreGrupos(Number(grupoSelecionado), {
+        sugestaoIndex: index,
+        deGrupoId: sugestao.deGrupoId,
+        paraGrupoId: sugestao.paraGrupoId,
+        sugestaoValor: sugestao.valor,
+        pagoPorParticipanteId: participanteUsuario.id,
+        valor: sugestao.valor,
+        deNome: sugestao.de,
+        paraNome: sugestao.para,
+      });
+
+      // Recarregar sugestões para atualizar status
+      await loadRelatorio();
+      alert('Pagamento marcado como realizado! Aguarde confirmação do grupo credor.');
+    } catch (error: any) {
+      console.error('Erro ao marcar pagamento entre grupos:', error);
+      alert(error.response?.data?.error || 'Erro ao marcar pagamento entre grupos');
+    } finally {
+      setMarcandoPagamento(null);
+    }
+  };
+
+  // Verificar se o usuário é criador do evento
+  const isCriadorEvento = useCallback((): boolean => {
+    if (!grupoSelecionadoData || !usuario) return false;
+    return grupoSelecionadoData.usuario_id === usuario.id;
+  }, [grupoSelecionadoData, usuario]);
+
+  // Handler para confirmar recebimento de pagamento
+  const handleConfirmarPagamento = async (pagamentoId: number, sugestao: SugestaoPagamento) => {
+    if (!pagamentoId) {
+      alert('ID do pagamento não encontrado.');
+      return;
+    }
+
+    const participanteUsuario = encontrarParticipanteUsuario();
+    if (!participanteUsuario) {
+      alert('Não foi possível identificar seu participante no evento. Verifique se você está adicionado ao evento.');
+      return;
+    }
+
+    if (!confirm(`Deseja confirmar o recebimento deste pagamento?\n\n${sugestao.de} pagou ${formatCurrency(sugestao.valor)} para ${sugestao.para}`)) {
+      return;
+    }
+
+    setConfirmandoPagamento(pagamentoId);
+    try {
+      await pagamentoApi.confirmarPagamento(pagamentoId, participanteUsuario.id);
+
+      // Recarregar sugestões para atualizar status
+      await loadRelatorio();
+      alert('Pagamento confirmado com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao confirmar pagamento:', error);
+      alert(error.response?.data?.error || 'Erro ao confirmar pagamento. Verifique se você é o credor.');
+    } finally {
+      setConfirmandoPagamento(null);
+    }
+  };
+
+  // Handler para desconfirmar pagamento
+  const handleDesconfirmarPagamento = async (pagamentoId: number, sugestao: SugestaoPagamento) => {
+    if (!pagamentoId) {
+      alert('ID do pagamento não encontrado.');
+      return;
+    }
+
+    if (!confirm(`Deseja desconfirmar este pagamento?\n\n${sugestao.de} pagou ${formatCurrency(sugestao.valor)} para ${sugestao.para}\n\nO pagamento voltará ao status "Aguardando confirmação".`)) {
+      return;
+    }
+
+    setConfirmandoPagamento(pagamentoId);
+    try {
+      await pagamentoApi.desconfirmarPagamento(pagamentoId);
+
+      // Recarregar sugestões para atualizar status
+      await loadRelatorio();
+      alert('Pagamento desconfirmado com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao desconfirmar pagamento:', error);
+      alert(error.response?.data?.error || 'Erro ao desconfirmar pagamento. Verifique se você tem permissão.');
+    } finally {
+      setConfirmandoPagamento(null);
+    }
+  };
+
+  // Handler para marcar evento como concluído
+  const handleMarcarEventoComoConcluido = async () => {
+    if (!grupoSelecionado || !grupoSelecionadoData) {
+      return;
+    }
+
+    if (!confirm('Deseja marcar este evento como concluído?\n\nIsso impedirá novas edições.')) {
+      return;
+    }
+
+    try {
+      await grupoApi.updateStatus(Number(grupoSelecionado), 'CONCLUIDO');
+      await loadRelatorio();
+      alert('Evento marcado como concluído com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao marcar evento como concluído:', error);
+      alert(error.response?.data?.error || 'Erro ao marcar evento como concluído. Verifique se todos os pagamentos foram confirmados.');
+    }
+  };
+
+  // Verificar se usuário pode confirmar pagamento (é credor)
+  const podeConfirmarPagamento = useCallback((sugestao: SugestaoPagamento): boolean => {
+    const participanteUsuario = encontrarParticipanteUsuario();
+    if (!participanteUsuario) return false;
+
+    // Para pagamentos individuais: verificar se participante é o credor
+    if (sugestao.tipo === 'INDIVIDUAL' && sugestao.paraParticipanteId) {
+      return participanteUsuario.id === sugestao.paraParticipanteId;
+    }
+
+    // Para pagamentos entre grupos: verificar se participante pertence ao grupo credor
+    if (sugestao.tipo === 'ENTRE_GRUPOS' && sugestao.paraGrupoId) {
+      const grupoCredor = subgrupos.find(sg => sg.id === sugestao.paraGrupoId);
+      if (grupoCredor?.participantes) {
+        return grupoCredor.participantes.some(p => p.participante_id === participanteUsuario.id);
+      }
+    }
+
+    return false;
+  }, [encontrarParticipanteUsuario, subgrupos]);
+
+  // Verificar se evento pode ser marcado como concluído (organizador e condições atendidas)
+  const podeMarcarComoConcluido = useCallback((): boolean => {
+    if (!grupoSelecionadoData || !usuario) return false;
+
+    // Verificar se é organizador
+    // Verificar se o grupo está na lista de grupos do usuário (se estiver, é organizador)
+    const grupoDoUsuario = grupos.find(g => g.id === grupoSelecionadoData?.id);
+    if (!grupoDoUsuario) return false;
+
+    // Verificar status
+    if (grupoSelecionadoData.status !== 'EM_ABERTO') return false;
+
+    // Se houver subgrupos, verificar apenas sugestões entre grupos; caso contrário, verificar apenas sugestões individuais
+    if (subgrupos.length > 0) {
+      // Quando há subgrupos, considerar apenas sugestões entre grupos
+      const todasSugestoesGruposConfirmadas = sugestoesEntreGrupos.length === 0 || sugestoesEntreGrupos.every(s => s.confirmado === true);
+      return todasSugestoesGruposConfirmadas;
+    } else {
+      // Quando não há subgrupos, considerar apenas sugestões individuais
+      const todasSugestoesIndividuaisConfirmadas = sugestoes.length === 0 || sugestoes.every(s => s.confirmado === true);
+      return todasSugestoesIndividuaisConfirmadas;
+    }
+  }, [grupoSelecionadoData, usuario, grupos, sugestoes, sugestoesEntreGrupos, subgrupos]);
+
   if (loading) {
     return <div className="loading">Carregando...</div>;
   }
 
+  // Função para renderizar badge de status
+  const renderStatusBadge = (status?: 'EM_ABERTO' | 'CONCLUIDO' | 'CANCELADO') => {
+    if (!status) return null;
+
+    const statusConfig = {
+      'EM_ABERTO': { label: 'Em Aberto', color: '#667eea', bgColor: 'rgba(102, 126, 234, 0.15)' },
+      'CONCLUIDO': { label: 'Concluído', color: '#28a745', bgColor: 'rgba(40, 167, 69, 0.15)' },
+      'CANCELADO': { label: 'Cancelado', color: '#6c757d', bgColor: 'rgba(108, 117, 125, 0.15)' },
+    };
+
+    const config = statusConfig[status];
+    return (
+      <span
+        style={{
+          padding: '4px 10px',
+          borderRadius: '12px',
+          fontSize: '12px',
+          fontWeight: '600',
+          color: config.color,
+          backgroundColor: config.bgColor,
+          border: `1px solid ${config.color}40`,
+        }}
+      >
+        {status === 'CONCLUIDO' && '✅ '}
+        {status === 'CANCELADO' && '❌ '}
+        {config.label}
+      </span>
+    );
+  };
+
   return (
     <div>
       <div className="despesas-header">
-        <h2>Resultados</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0 }}>Resultados</h2>
+          {grupoSelecionadoData && renderStatusBadge(grupoSelecionadoData.status)}
+        </div>
         <div className="despesas-header-actions">
           {grupoSelecionado && (
             <>
-              <button className="btn btn-secondary" onClick={() => navigate(`/adicionar-participantes/${grupoSelecionado}`)}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => navigate(`/adicionar-participantes/${grupoSelecionado}`)}
+                disabled={grupoSelecionadoData?.status !== 'EM_ABERTO'}
+              >
                 <FaUsers /> <span>Participantes</span>
               </button>
-              <button className="btn btn-secondary" onClick={() => navigate(`/despesas?evento=${grupoSelecionado}`)}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => navigate(`/despesas?evento=${grupoSelecionado}`)}
+                disabled={grupoSelecionadoData?.status !== 'EM_ABERTO'}
+              >
                 <FaMoneyBillWave /> <span>Despesas</span>
               </button>
-              <button className="btn btn-secondary" onClick={() => navigate(`/convidar-amigos/${grupoSelecionado}`)}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => navigate(`/convidar-amigos/${grupoSelecionado}`)}
+              >
                 <FaUserPlus /> <span>Convidar amigos</span>
               </button>
+              {grupoSelecionadoData?.status === 'EM_ABERTO' && podeMarcarComoConcluido() && (
+                <button 
+                  className="btn btn-primary" 
+                  onClick={handleMarcarEventoComoConcluido}
+                  style={{ backgroundColor: '#28a745', borderColor: '#28a745' }}
+                >
+                  ✅ Marcar como Concluído
+                </button>
+              )}
             </>
           )}
         </div>
@@ -657,64 +992,66 @@ const Participacoes: React.FC = () => {
       ) : grupoSelecionado ? (
         <>
           {/* 1. Tabela de Sugestões de Pagamento */}
-          <div className="card" style={{ marginBottom: '20px' }}>
-            <div style={{ marginBottom: '15px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', flexWrap: 'wrap', gap: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                  <h3 style={{ margin: 0 }}>Sugestões de Pagamento</h3>
-                  <span style={{ 
-                    padding: '4px 10px', 
-                    backgroundColor: 'rgba(99, 102, 241, 0.2)', 
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    color: 'rgba(148, 163, 184, 0.9)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}>
-                    🧩 Por grupo de pessoas
-                  </span>
-                </div>
-                {sugestoes.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                    <button
-                      className="btn btn-primary"
-                      onClick={handleCompartilharWhatsApp}
-                      style={{ 
-                        padding: '8px 16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        backgroundColor: '#25D366'
-                      }}
-                    >
-                      <FaShareAlt />
-                      <FaWhatsapp />
-                      <span>Compartilhar resumo (WhatsApp)</span>
-                    </button>
-                    <span style={{ fontSize: '11px', color: 'rgba(226, 232, 240, 0.6)', whiteSpace: 'nowrap' }}>
-                      Qualquer pessoa pode visualizar sem criar conta
+          {/* Mostrar sugestões individuais APENAS se NÃO houver subgrupos */}
+          {subgrupos.length === 0 && (
+            <div className="card" style={{ marginBottom: '20px' }}>
+              <div style={{ marginBottom: '15px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <h3 style={{ margin: 0 }}>Sugestões de Pagamento</h3>
+                    <span style={{ 
+                      padding: '4px 10px', 
+                      backgroundColor: 'rgba(99, 102, 241, 0.2)', 
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      color: 'rgba(148, 163, 184, 0.9)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      👤 Individuais
                     </span>
                   </div>
-                )}
+                  {sugestoes.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleCompartilharWhatsApp}
+                        style={{ 
+                          padding: '8px 16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          backgroundColor: '#25D366'
+                        }}
+                      >
+                        <FaShareAlt />
+                        <FaWhatsapp />
+                        <span>Compartilhar resumo (WhatsApp)</span>
+                      </button>
+                      <span style={{ fontSize: '11px', color: 'rgba(226, 232, 240, 0.6)', whiteSpace: 'nowrap' }}>
+                        Qualquer pessoa pode visualizar sem criar conta
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <p style={{ 
+                  fontSize: '13px', 
+                  color: 'rgba(226, 232, 240, 0.7)', 
+                  margin: 0,
+                  fontStyle: 'italic'
+                }}>
+                  Sugestões de pagamento entre participantes individuais.
+                </p>
               </div>
-              <p style={{ 
-                fontSize: '13px', 
-                color: 'rgba(226, 232, 240, 0.7)', 
-                margin: 0,
-                fontStyle: 'italic'
-              }}>
-                O Rachid reduz o número de transferências agrupando pagamentos entre famílias.
-              </p>
-            </div>
-            {sugestoes.length === 0 ? (
-              <p style={{ textAlign: 'center', color: 'rgba(226, 232, 240, 0.6)', padding: '20px' }}>
-                Nenhuma sugestão encontrada
-              </p>
-            ) : (
-              <>
-                {sugestoes.map((sugestao, index) => {
+              {sugestoes.length === 0 ? (
+                <p style={{ textAlign: 'center', color: 'rgba(226, 232, 240, 0.6)', padding: '20px' }}>
+                  Nenhuma sugestão encontrada
+                </p>
+              ) : (
+                <>
+                  {sugestoes.map((sugestao, index) => {
                   // Buscar chave PIX do recebedor
                   const obterChavesPix = (nomeRecebedor: string): string[] => {
                     // Primeiro, verificar se é um subgrupo (GrupoParticipantesEvento)
@@ -737,7 +1074,12 @@ const Participacoes: React.FC = () => {
                       if (subgrupo && subgrupo.participantes) {
                         const pixKeys: string[] = [];
                         subgrupo.participantes.forEach(p => {
-                          const participante = participantes.find(part => part.id === p.participante_id);
+                          // Tentar usar participante diretamente (se backend enviou)
+                          let participante = p.participante;
+                          // Se não tiver, buscar no array de participantes
+                          if (!participante) {
+                            participante = participantes.find(part => part.id === p.participante_id);
+                          }
                           if (participante?.chavePix && participante.chavePix.trim()) {
                             pixKeys.push(participante.chavePix.trim());
                           }
@@ -751,6 +1093,7 @@ const Participacoes: React.FC = () => {
                     if (grupo) {
                       const pixKeys: string[] = [];
                       grupo.participantes.forEach(p => {
+                        // Buscar participante pelo ID
                         const participante = participantes.find(part => part.id === p.participanteId);
                         if (participante?.chavePix && participante.chavePix.trim()) {
                           pixKeys.push(participante.chavePix.trim());
@@ -769,23 +1112,136 @@ const Participacoes: React.FC = () => {
                   };
 
                   const chavesPix = obterChavesPix(sugestao.para);
+                  const isPago = sugestao.pago === true;
+                  const isConfirmado = sugestao.confirmado === true;
+                  const criadorEvento = isCriadorEvento();
+                  // Se está confirmado, não mostrar "Marcar como pago", apenas "Desconfirmar"
+                  // Criador do evento sempre pode marcar como pago (se não estiver confirmado) ou desconfirmar (se estiver confirmado)
+                  const podeMarcar = !isConfirmado && grupoSelecionadoData?.status === 'EM_ABERTO' && (criadorEvento || !isPago);
+                  const podeConfirmar = isPago && !isConfirmado && podeConfirmarPagamento(sugestao) && grupoSelecionadoData?.status === 'EM_ABERTO';
+                  // Criador do evento ou quem confirmou pode desconfirmar
+                  const podeDesconfirmar = isConfirmado && grupoSelecionadoData?.status === 'EM_ABERTO' && (criadorEvento || podeConfirmarPagamento(sugestao));
+                  const estaMarcando = marcandoPagamento === index;
+                  const estaConfirmando = confirmandoPagamento === sugestao.pagamentoId;
                   
                   return (
                     <div
                       key={index}
                       style={{
                         padding: '12px',
-                        borderBottom: '1px solid rgba(148, 163, 184, 0.2)'
+                        borderBottom: '1px solid rgba(148, 163, 184, 0.2)',
+                        backgroundColor: isConfirmado ? 'rgba(40, 167, 69, 0.08)' : isPago ? 'rgba(255, 193, 7, 0.08)' : 'transparent',
+                        borderRadius: '8px',
+                        marginBottom: '8px'
                       }}
                     >
-                      <div style={{ fontSize: '16px', color: 'rgba(255, 255, 255, 0.92)', marginBottom: '4px' }}>
-                        {sugestao.de} → {sugestao.para}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '8px' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '16px', color: 'rgba(255, 255, 255, 0.92)', marginBottom: '4px' }}>
+                            {sugestao.de} → {sugestao.para}
+                          </div>
+                          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2', marginBottom: '4px' }}>
+                            {formatCurrency(sugestao.valor)}
+                          </div>
+                          
+                          {/* Status de pagamento */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+                            {isConfirmado ? (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#28a745', fontSize: '13px', fontWeight: '600' }}>
+                                <FaCheckCircle /> Confirmado
+                                {sugestao.confirmadoPor && ` por ${sugestao.confirmadoPor}`}
+                                {sugestao.dataConfirmacao && ` em ${new Date(sugestao.dataConfirmacao).toLocaleDateString('pt-BR')}`}
+                              </span>
+                            ) : isPago ? (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#ffc107', fontSize: '13px', fontWeight: '600' }}>
+                                ❳ Aguardando confirmação
+                                {sugestao.pagoPor && ` (marcado por ${sugestao.pagoPor})`}
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.6)', fontStyle: 'italic' }}>
+                                Pendente
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Botões de ação */}
+                        {grupoSelecionadoData?.status === 'EM_ABERTO' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
+                            {podeMarcar && (
+                              <>
+                                {sugestao.tipo === 'ENTRE_GRUPOS' ? (
+                                  <button
+                                    className="btn btn-primary"
+                                    onClick={() => handleMarcarComoPagoEntreGrupos(sugestao, index)}
+                                    disabled={estaMarcando}
+                                    style={{ 
+                                      padding: '6px 12px',
+                                      fontSize: '12px',
+                                      minWidth: 'auto',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    {estaMarcando ? 'Marcando...' : '✓ Marcar como pago (entre grupos)'}
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="btn btn-primary"
+                                    onClick={() => handleMarcarComoPago(sugestao, index)}
+                                    disabled={estaMarcando}
+                                    style={{ 
+                                      padding: '6px 12px',
+                                      fontSize: '12px',
+                                      minWidth: 'auto',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    {estaMarcando ? 'Marcando...' : '✓ Marcar como pago'}
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            {podeConfirmar && sugestao.pagamentoId && (
+                              <button
+                                className="btn btn-success"
+                                onClick={() => handleConfirmarPagamento(sugestao.pagamentoId!, sugestao)}
+                                disabled={estaConfirmando}
+                                style={{ 
+                                  padding: '6px 12px',
+                                  fontSize: '12px',
+                                  minWidth: 'auto',
+                                  whiteSpace: 'nowrap',
+                                  backgroundColor: '#28a745',
+                                  borderColor: '#28a745'
+                                }}
+                              >
+                                {estaConfirmando ? 'Confirmando...' : '✓ Confirmar recebimento'}
+                              </button>
+                            )}
+                            {podeDesconfirmar && sugestao.pagamentoId && (
+                              <button
+                                className="btn btn-warning"
+                                onClick={() => handleDesconfirmarPagamento(sugestao.pagamentoId!, sugestao)}
+                                disabled={estaConfirmando}
+                                style={{ 
+                                  padding: '6px 12px',
+                                  fontSize: '12px',
+                                  minWidth: 'auto',
+                                  whiteSpace: 'nowrap',
+                                  backgroundColor: '#ff9800',
+                                  borderColor: '#ff9800',
+                                  color: '#fff'
+                                }}
+                              >
+                                {estaConfirmando ? 'Desconfirmando...' : '↶ Desconfirmar pagamento'}
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2', marginBottom: chavesPix.length > 0 ? '4px' : '0' }}>
-                        {formatCurrency(sugestao.valor)}
-                      </div>
+
                       {chavesPix.length > 0 && (
-                        <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginTop: '4px' }}>
+                        <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(148, 163, 184, 0.1)' }}>
                           💳 PIX:{' '}
                           {chavesPix.length === 1 ? (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
@@ -851,10 +1307,311 @@ const Participacoes: React.FC = () => {
                       )}
                     </div>
                   );
-                })}
-              </>
-            )}
-          </div>
+                  })}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* 1b. Tabela de Sugestões de Pagamento Entre Grupos */}
+          {/* Mostrar sugestões entre grupos APENAS se houver subgrupos */}
+          {subgrupos.length > 0 && (
+            <div className="card" style={{ marginBottom: '20px' }}>
+              <div style={{ marginBottom: '15px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <h3 style={{ margin: 0 }}>Sugestões de Pagamento</h3>
+                    <span style={{ 
+                      padding: '4px 10px', 
+                      backgroundColor: 'rgba(99, 102, 241, 0.2)', 
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      color: 'rgba(148, 163, 184, 0.9)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      👥 Entre subgrupos
+                    </span>
+                  </div>
+                  {sugestoesEntreGrupos.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleCompartilharWhatsApp}
+                        style={{ 
+                          padding: '8px 16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          backgroundColor: '#25D366'
+                        }}
+                      >
+                        <FaShareAlt />
+                        <FaWhatsapp />
+                        <span>Compartilhar resumo (WhatsApp)</span>
+                      </button>
+                      <span style={{ fontSize: '11px', color: 'rgba(226, 232, 240, 0.6)', whiteSpace: 'nowrap' }}>
+                        Qualquer pessoa pode visualizar sem criar conta
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <p style={{ 
+                  fontSize: '13px', 
+                  color: 'rgba(226, 232, 240, 0.7)', 
+                  margin: 0,
+                  fontStyle: 'italic'
+                }}>
+                  {sugestoesEntreGrupos.length === 0 
+                    ? 'Nenhuma sugestão encontrada. Quando houver saldos entre subgrupos, as sugestões aparecerão aqui.'
+                    : 'O Rachid reduz o número de transferências agrupando pagamentos entre subgrupos (famílias, casais, etc.).'}
+                </p>
+              </div>
+              {sugestoesEntreGrupos.length === 0 ? (
+                <p style={{ textAlign: 'center', color: 'rgba(226, 232, 240, 0.6)', padding: '20px' }}>
+                  Nenhuma sugestão encontrada
+                </p>
+              ) : (
+                <>
+              {sugestoesEntreGrupos.map((sugestao, index) => {
+                // Buscar chaves PIX do grupo credor (recebedor)
+                const obterChavesPixGrupoCredor = (nomeGrupoRecebedor: string): string[] => {
+                  // Primeiro, verificar se é um subgrupo (GrupoParticipantesEvento)
+                  if (subgrupos && subgrupos.length > 0) {
+                    const grupoNomeNormalizado = nomeGrupoRecebedor.trim().toLowerCase();
+                    let subgrupo = subgrupos.find(sg => {
+                      if (!sg.nome) return false;
+                      return sg.nome.trim().toLowerCase() === grupoNomeNormalizado;
+                    });
+                    
+                    if (!subgrupo) {
+                      subgrupo = subgrupos.find(sg => {
+                        if (!sg.nome) return false;
+                        const nomeSubgrupoNormalizado = sg.nome.trim().toLowerCase();
+                        return nomeSubgrupoNormalizado.includes(grupoNomeNormalizado) ||
+                               grupoNomeNormalizado.includes(nomeSubgrupoNormalizado);
+                      });
+                    }
+                    
+                    if (subgrupo && subgrupo.participantes) {
+                      const pixKeys: string[] = [];
+                      subgrupo.participantes.forEach(p => {
+                        // Tentar usar participante diretamente (se backend enviou)
+                        let participante = p.participante;
+                        // Se não tiver, buscar no array de participantes
+                        if (!participante) {
+                          participante = participantes.find(part => part.id === p.participante_id);
+                        }
+                        if (participante?.chavePix && participante.chavePix.trim()) {
+                          pixKeys.push(participante.chavePix.trim());
+                        }
+                      });
+                      return pixKeys;
+                    }
+                  }
+                  
+                  // Verificar se é um grupo em saldosGrupos
+                  const grupo = saldosGrupos.find(g => g.grupoNome === nomeGrupoRecebedor);
+                  if (grupo) {
+                    const pixKeys: string[] = [];
+                    grupo.participantes.forEach(p => {
+                      const participante = participantes.find(part => part.id === p.participanteId);
+                      if (participante?.chavePix && participante.chavePix.trim()) {
+                        pixKeys.push(participante.chavePix.trim());
+                      }
+                    });
+                    return pixKeys;
+                  }
+                  
+                  return [];
+                };
+
+                const chavesPix = obterChavesPixGrupoCredor(sugestao.para);
+                const isPago = sugestao.pago === true;
+                const isConfirmado = sugestao.confirmado === true;
+                const criadorEvento = isCriadorEvento();
+                // Se está confirmado, não mostrar "Marcar como pago", apenas "Desconfirmar"
+                // Criador do evento sempre pode marcar como pago (se não estiver confirmado) ou desconfirmar (se estiver confirmado)
+                const podeMarcar = !isConfirmado && grupoSelecionadoData?.status === 'EM_ABERTO' && (criadorEvento || !isPago);
+                const podeConfirmar = isPago && !isConfirmado && podeConfirmarPagamento(sugestao) && grupoSelecionadoData?.status === 'EM_ABERTO';
+                // Criador do evento ou quem confirmou pode desconfirmar
+                const podeDesconfirmar = isConfirmado && grupoSelecionadoData?.status === 'EM_ABERTO' && (criadorEvento || podeConfirmarPagamento(sugestao));
+                const estaMarcando = marcandoPagamento === index;
+                const estaConfirmando = confirmandoPagamento === sugestao.pagamentoId;
+
+                return (
+                  <div
+                    key={`grupo-${index}`}
+                    style={{
+                      padding: '12px',
+                      borderBottom: '1px solid rgba(148, 163, 184, 0.2)',
+                      backgroundColor: isConfirmado ? 'rgba(40, 167, 69, 0.08)' : isPago ? 'rgba(255, 193, 7, 0.08)' : 'transparent',
+                      borderRadius: '8px',
+                      marginBottom: '8px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '8px' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '16px', color: 'rgba(255, 255, 255, 0.92)', marginBottom: '4px' }}>
+                          {sugestao.de} → {sugestao.para}
+                        </div>
+                        <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2', marginBottom: '4px' }}>
+                          {formatCurrency(sugestao.valor)}
+                        </div>
+                        
+                        {/* Chaves PIX do grupo credor */}
+                        {chavesPix.length > 0 && (
+                          <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(148, 163, 184, 0.1)' }}>
+                            💳 PIX:{' '}
+                            {chavesPix.length === 1 ? (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                {chavesPix[0]}
+                                <button
+                                  className="btn btn-secondary btn-small"
+                                  style={{ 
+                                    padding: '4px 8px', 
+                                    fontSize: '12px', 
+                                    minWidth: 'auto',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    lineHeight: '1'
+                                  }}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      await navigator.clipboard.writeText(chavesPix[0]);
+                                      alert('PIX copiado para a área de transferência!');
+                                    } catch (err) {
+                                      alert('Erro ao copiar PIX');
+                                    }
+                                  }}
+                                  title="Copiar PIX"
+                                >
+                                  <FaCopy />
+                                </button>
+                              </span>
+                            ) : (
+                              <span>
+                                {chavesPix.map((pix, pixIndex) => (
+                                  <span key={pixIndex} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginRight: '8px' }}>
+                                    {pix}
+                                    <button
+                                      className="btn btn-secondary btn-small"
+                                      style={{ 
+                                        padding: '4px 8px', 
+                                        fontSize: '12px', 
+                                        minWidth: 'auto',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        lineHeight: '1'
+                                      }}
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          await navigator.clipboard.writeText(pix);
+                                          alert('PIX copiado para a área de transferência!');
+                                        } catch (err) {
+                                          alert('Erro ao copiar PIX');
+                                        }
+                                      }}
+                                      title="Copiar PIX"
+                                    >
+                                      <FaCopy />
+                                    </button>
+                                    {pixIndex < chavesPix.length - 1 && ' ou '}
+                                  </span>
+                                ))}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Status de pagamento */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+                          {isConfirmado ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#28a745', fontSize: '13px', fontWeight: '600' }}>
+                              <FaCheckCircle /> Confirmado
+                              {sugestao.confirmadoPor && ` por ${sugestao.confirmadoPor}`}
+                              {sugestao.dataConfirmacao && ` em ${new Date(sugestao.dataConfirmacao).toLocaleDateString('pt-BR')}`}
+                            </span>
+                          ) : isPago ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#ffc107', fontSize: '13px', fontWeight: '600' }}>
+                              ❳ Aguardando confirmação
+                              {sugestao.pagoPor && ` (marcado por ${sugestao.pagoPor})`}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.6)', fontStyle: 'italic' }}>
+                              Pendente
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Botões de ação */}
+                      {grupoSelecionadoData?.status === 'EM_ABERTO' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
+                          {podeMarcar && (
+                            <button
+                              className="btn btn-primary"
+                              onClick={() => handleMarcarComoPagoEntreGrupos(sugestao, index)}
+                              disabled={estaMarcando}
+                              style={{ 
+                                padding: '6px 12px',
+                                fontSize: '12px',
+                                minWidth: 'auto',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {estaMarcando ? 'Marcando...' : '✓ Marcar como pago'}
+                            </button>
+                          )}
+                          {podeConfirmar && sugestao.pagamentoId && (
+                            <button
+                              className="btn btn-success"
+                              onClick={() => handleConfirmarPagamento(sugestao.pagamentoId!, sugestao)}
+                              disabled={estaConfirmando}
+                              style={{ 
+                                padding: '6px 12px',
+                                fontSize: '12px',
+                                minWidth: 'auto',
+                                whiteSpace: 'nowrap',
+                                backgroundColor: '#28a745',
+                                borderColor: '#28a745'
+                              }}
+                            >
+                              {estaConfirmando ? 'Confirmando...' : '✓ Confirmar recebimento'}
+                            </button>
+                          )}
+                          {podeDesconfirmar && sugestao.pagamentoId && (
+                            <button
+                              className="btn btn-warning"
+                              onClick={() => handleDesconfirmarPagamento(sugestao.pagamentoId!, sugestao)}
+                              disabled={estaConfirmando}
+                              style={{ 
+                                padding: '6px 12px',
+                                fontSize: '12px',
+                                minWidth: 'auto',
+                                whiteSpace: 'nowrap',
+                                backgroundColor: '#ff9800',
+                                borderColor: '#ff9800',
+                                color: '#fff'
+                              }}
+                            >
+                              {estaConfirmando ? 'Desconfirmando...' : '↶ Desconfirmar pagamento'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+                </>
+              )}
+            </div>
+          )}
 
           {/* 2. Detalhamento por Participantes (Saldos por Participante) */}
           <div className="card">
@@ -1317,6 +2074,83 @@ const Participacoes: React.FC = () => {
                           </div>
                         </div>
                       )}
+
+                      {/* Anexos da despesa */}
+                      {despesa.anexos && despesa.anexos.length > 0 && (
+                        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(148, 163, 184, 0.20)' }}>
+                          <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <FaPaperclip /> Anexos ({despesa.anexos.length})
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '8px' }}>
+                            {despesa.anexos.map((anexo) => (
+                              <div key={anexo.id} style={{ position: 'relative', border: '1px solid rgba(148, 163, 184, 0.20)', borderRadius: '6px', overflow: 'hidden' }}>
+                                {anexo.tipo_mime.startsWith('image/') ? (
+                                  <div style={{ position: 'relative', width: '100%', aspectRatio: 1 }}>
+                                    <img 
+                                      src={anexo.url_cloudfront} 
+                                      alt={anexo.nome_original}
+                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src = anexo.url_s3;
+                                      }}
+                                    />
+                                    <a
+                                      href={anexo.url_cloudfront}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{
+                                        position: 'absolute',
+                                        bottom: '4px',
+                                        left: '4px',
+                                        background: 'rgba(0, 0, 0, 0.7)',
+                                        color: 'white',
+                                        padding: '4px 6px',
+                                        borderRadius: '4px',
+                                        fontSize: '10px',
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                      }}
+                                      title="Abrir em nova aba"
+                                    >
+                                      <FaDownload />
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                                    <div style={{ fontSize: '20px', color: '#6366f1' }}>
+                                      {anexo.tipo_mime === 'application/pdf' ? <FaFilePdf /> : <FaFile />}
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: 'rgba(226, 232, 240, 0.8)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+                                      {anexo.nome_original}
+                                    </div>
+                                    <a
+                                      href={anexo.url_cloudfront}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{
+                                        background: '#6366f1',
+                                        color: 'white',
+                                        padding: '4px 8px',
+                                        borderRadius: '4px',
+                                        fontSize: '10px',
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                      }}
+                                      title="Download"
+                                    >
+                                      <FaDownload />
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -1472,6 +2306,83 @@ const Participacoes: React.FC = () => {
                               </div>
                             );
                           })}
+                        </div>
+                      )}
+
+                      {/* Anexos da despesa */}
+                      {despesa.anexos && despesa.anexos.length > 0 && (
+                        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(148, 163, 184, 0.20)' }}>
+                          <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <FaPaperclip /> Anexos ({despesa.anexos.length})
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '8px' }}>
+                            {despesa.anexos.map((anexo) => (
+                              <div key={anexo.id} style={{ position: 'relative', border: '1px solid rgba(148, 163, 184, 0.20)', borderRadius: '6px', overflow: 'hidden' }}>
+                                {anexo.tipo_mime.startsWith('image/') ? (
+                                  <div style={{ position: 'relative', width: '100%', aspectRatio: 1 }}>
+                                    <img 
+                                      src={anexo.url_cloudfront} 
+                                      alt={anexo.nome_original}
+                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src = anexo.url_s3;
+                                      }}
+                                    />
+                                    <a
+                                      href={anexo.url_cloudfront}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{
+                                        position: 'absolute',
+                                        bottom: '4px',
+                                        left: '4px',
+                                        background: 'rgba(0, 0, 0, 0.7)',
+                                        color: 'white',
+                                        padding: '4px 6px',
+                                        borderRadius: '4px',
+                                        fontSize: '10px',
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                      }}
+                                      title="Abrir em nova aba"
+                                    >
+                                      <FaDownload />
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                                    <div style={{ fontSize: '20px', color: '#6366f1' }}>
+                                      {anexo.tipo_mime === 'application/pdf' ? <FaFilePdf /> : <FaFile />}
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: 'rgba(226, 232, 240, 0.8)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+                                      {anexo.nome_original}
+                                    </div>
+                                    <a
+                                      href={anexo.url_cloudfront}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{
+                                        background: '#6366f1',
+                                        color: 'white',
+                                        padding: '4px 8px',
+                                        borderRadius: '4px',
+                                        fontSize: '10px',
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                      }}
+                                      title="Download"
+                                    >
+                                      <FaDownload />
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>

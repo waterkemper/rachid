@@ -29,11 +29,11 @@ __decorate([
     __metadata("design:type", Number)
 ], EventoAcesso.prototype, "evento_id", void 0);
 __decorate([
-    (0, typeorm_1.Column)('varchar', { nullable: true }),
+    (0, typeorm_1.Column)('varchar', { name: 'ip_address', nullable: true }),
     __metadata("design:type", String)
 ], EventoAcesso.prototype, "ipAddress", void 0);
 __decorate([
-    (0, typeorm_1.Column)('text', { nullable: true }),
+    (0, typeorm_1.Column)('text', { name: 'user_agent', nullable: true }),
     __metadata("design:type", String)
 ], EventoAcesso.prototype, "userAgent", void 0);
 __decorate([

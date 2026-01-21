@@ -13,6 +13,7 @@ export interface Grupo {
   descricao?: string;
   data: string;
   criadoEm: string;
+  status?: 'EM_ABERTO' | 'CONCLUIDO' | 'CANCELADO';
   participantes?: ParticipanteGrupo[];
 }
 
@@ -55,9 +56,23 @@ export interface SaldoParticipante {
 }
 
 export interface SugestaoPagamento {
-  de: string;
-  para: string;
+  de: string; // Nome - mantido para compatibilidade e exibição
+  para: string; // Nome - mantido para compatibilidade e exibição
   valor: number;
+  // IDs para identificação única (obrigatórios para matching)
+  deParticipanteId?: number; // ID do participante devedor (se tipo INDIVIDUAL)
+  paraParticipanteId?: number; // ID do participante credor (se tipo INDIVIDUAL)
+  deGrupoId?: number; // ID do GrupoParticipantesEvento devedor (se tipo ENTRE_GRUPOS)
+  paraGrupoId?: number; // ID do GrupoParticipantesEvento credor (se tipo ENTRE_GRUPOS)
+  tipo?: 'INDIVIDUAL' | 'ENTRE_GRUPOS'; // Tipo da sugestão
+  // Campos de status de pagamento (adicionados no RelatorioController)
+  pago?: boolean; // se foi marcado como pago
+  confirmado?: boolean; // se foi confirmado pelo credor
+  pagamentoId?: number; // ID do registro de pagamento (se existir)
+  pagoPor?: string; // nome de quem marcou como pago
+  confirmadoPor?: string; // nome de quem confirmou
+  dataPagamento?: string; // data/hora do pagamento
+  dataConfirmacao?: string; // data/hora da confirmação
 }
 
 export interface GrupoParticipantesEvento {

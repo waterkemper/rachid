@@ -14,7 +14,7 @@ class GrupoParticipantesService {
             throw new Error('Grupo não encontrado ou usuário não tem acesso');
         }
         return await this.grupoParticipantesRepository.find({
-            where: { grupo_id: eventoId },
+            where: { grupoId: eventoId },
             relations: ['participantes', 'participantes.participante'],
             order: { nome: 'ASC' },
         });
@@ -41,7 +41,7 @@ class GrupoParticipantesService {
             throw new Error('Grupo não encontrado ou usuário não tem acesso');
         }
         const grupoParticipantes = this.grupoParticipantesRepository.create({
-            grupo_id: data.grupo_id,
+            grupoId: data.grupo_id,
             nome: data.nome,
             descricao: data.descricao,
         });
@@ -70,15 +70,15 @@ class GrupoParticipantesService {
         const participanteJaEmGrupo = await this.participanteGrupoEventoRepository
             .createQueryBuilder('pge')
             .innerJoin('pge.grupoParticipantes', 'gpe')
-            .where('pge.participante_id = :participanteId', { participanteId })
-            .andWhere('gpe.grupo_id = :eventoId', { eventoId })
+            .where('pge.participanteId = :participanteId', { participanteId })
+            .andWhere('gpe.grupoId = :eventoId', { eventoId })
             .getOne();
         if (participanteJaEmGrupo) {
             return false;
         }
         const participanteGrupo = this.participanteGrupoEventoRepository.create({
-            grupo_participantes_evento_id: grupoParticipantesId,
-            participante_id: participanteId,
+            grupoParticipantesEventoId: grupoParticipantesId,
+            participanteId: participanteId,
         });
         await this.participanteGrupoEventoRepository.save(participanteGrupo);
         return true;
@@ -90,8 +90,8 @@ class GrupoParticipantesService {
             return false;
         }
         const result = await this.participanteGrupoEventoRepository.delete({
-            grupo_participantes_evento_id: grupoParticipantesId,
-            participante_id: participanteId,
+            grupoParticipantesEventoId: grupoParticipantesId,
+            participanteId: participanteId,
         });
         return (result.affected ?? 0) > 0;
     }

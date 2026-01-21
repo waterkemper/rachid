@@ -3,22 +3,45 @@ import { ParticipacaoDespesa } from '../entities/ParticipacaoDespesa';
 import { Despesa } from '../entities/Despesa';
 import { Participante } from '../entities/Participante';
 import { Grupo } from '../entities/Grupo';
+import { ParticipanteGrupo } from '../entities/ParticipanteGrupo';
 import { EmailQueueService } from './EmailQueueService';
+import { NotificationService } from './NotificationService';
+import { GrupoService } from './GrupoService';
 
 export class ParticipacaoService {
   private static participacaoRepository = AppDataSource.getRepository(ParticipacaoDespesa);
   private static despesaRepository = AppDataSource.getRepository(Despesa);
   private static participanteRepository = AppDataSource.getRepository(Participante);
   private static grupoRepository = AppDataSource.getRepository(Grupo);
+  private static participanteGrupoRepository = AppDataSource.getRepository(ParticipanteGrupo);
 
   static async toggleParticipacao(despesaId: number, participanteId: number, usuarioId: number): Promise<ParticipacaoDespesa | null> {
+    // Buscar despesa sem filtrar por usuario_id primeiro
     const despesa = await this.despesaRepository.findOne({
-      where: { id: despesaId, usuario_id: usuarioId },
-      relations: ['participacoes'],
+      where: { id: despesaId },
+      relations: ['participacoes', 'grupo'],
     });
 
     if (!despesa) {
-      throw new Error('Despesa não encontrada ou não pertence ao usuário');
+      throw new Error('Despesa não encontrada');
+    }
+
+    // Verificar se o usuário tem acesso ao grupo da despesa (é dono ou membro)
+    const hasAccess = await GrupoService.isUserGroupMember(usuarioId, despesa.grupo_id);
+    if (!hasAccess && despesa.usuario_id !== usuarioId) {
+      throw new Error('Despesa não encontrada ou usuário não tem acesso');
+    }
+
+    // Verificar se o participante está no evento/grupo
+    const participanteNoGrupo = await this.participanteGrupoRepository.findOne({
+      where: {
+        grupoId: despesa.grupo_id,
+        participanteId: participanteId,
+      },
+    });
+
+    if (!participanteNoGrupo) {
+      throw new Error('Participante não está no evento');
     }
 
     const participacaoExistente = await this.participacaoRepository.findOne({
@@ -31,6 +54,19 @@ export class ParticipacaoService {
     if (participacaoExistente) {
       await this.participacaoRepository.delete(participacaoExistente.id);
       await this.recalcularValores(despesaId, usuarioId);
+      
+      // Notificar mudanças de saldo após remover participação (não bloquear se falhar)
+      try {
+        const grupoId = despesa.grupo_id;
+        const saldosDepois = await NotificationService.calcularSaldosAtuais(grupoId, usuarioId);
+        if (saldosDepois.length > 0) {
+          await NotificationService.notificarMudancasSaldo(grupoId, [], saldosDepois);
+        }
+      } catch (err) {
+        console.error('[ParticipacaoService.toggleParticipacao] Erro ao notificar mudanças de saldo após remoção:', err);
+        // Não falhar remoção se notificação falhar
+      }
+      
       return null;
     } else {
       const valorPorPessoa = await this.calcularValorPorPessoa(despesaId);
@@ -45,6 +81,18 @@ export class ParticipacaoService {
       // Notificar participante sobre adição à despesa (não bloquear se falhar)
       try {
         await this.notificarParticipanteAdicionadoDespesa(despesaId, participanteId, participacaoSalva.valorDevePagar);
+        
+        // Notificar mudanças de saldo após adicionar participação (não bloquear se falhar)
+        try {
+          const grupoId = despesa.grupo_id;
+          const saldosDepois = await NotificationService.calcularSaldosAtuais(grupoId, usuarioId);
+          if (saldosDepois.length > 0) {
+            await NotificationService.notificarMudancasSaldo(grupoId, [], saldosDepois);
+          }
+        } catch (err) {
+          console.error('[ParticipacaoService.toggleParticipacao] Erro ao notificar mudanças de saldo:', err);
+          // Não falhar adição se notificação de saldo falhar
+        }
       } catch (err) {
         console.error('[ParticipacaoService.toggleParticipacao] Erro ao adicionar notificação à fila:', err);
         // Não falhar a adição se a notificação falhar
@@ -99,15 +147,22 @@ export class ParticipacaoService {
     const linkEvento = `${frontendUrl}/eventos/${despesa.grupo.id}`;
 
     try {
-      await EmailQueueService.adicionarEmailParticipanteAdicionadoDespesa({
+      // Usar sistema de agregação para evitar spam de emails
+      const { EmailAggregationService } = await import('./EmailAggregationService');
+      await EmailAggregationService.adicionarNotificacao({
         destinatario: email,
-        nomeDestinatario: participante.nome,
-        eventoNome: despesa.grupo.nome,
+        usuarioId: participante.usuario_id,
         eventoId: despesa.grupo.id,
-        despesaDescricao: despesa.descricao,
-        despesaValorTotal: despesa.valorTotal,
-        valorDevePagar,
-        linkEvento,
+        tipoNotificacao: 'resumo-evento',
+        dados: {
+          eventoNome: despesa.grupo.nome,
+          eventoId: despesa.grupo.id,
+          nomeDestinatario: participante.nome,
+          despesaId: despesa.id,
+          despesaDescricao: despesa.descricao,
+          despesaValorTotal: despesa.valorTotal.toString(),
+          linkEvento,
+        },
       });
     } catch (err) {
       console.error(`Erro ao adicionar notificação de participante adicionado a despesa para ${email}:`, err);
@@ -119,10 +174,10 @@ export class ParticipacaoService {
     // Buscar despesa sem filtrar por usuario_id para permitir colaboração
     const despesa = await this.despesaRepository.findOne({
       where: { id: despesaId },
-      relations: ['participacoes'],
+      relations: ['participacoes', 'grupo'],
     });
 
-    if (!despesa) return;
+    if (!despesa || !despesa.grupo) return;
 
     const participacoes = await this.participacaoRepository.find({
       where: { despesa_id: despesaId },
@@ -147,6 +202,18 @@ export class ParticipacaoService {
         primeiraParticipacao.valorDevePagar = Number(primeiraParticipacao.valorDevePagar) + diferenca;
         await this.participacaoRepository.save(primeiraParticipacao);
       }
+    }
+    
+    // Notificar mudanças de saldo após recalcular valores (não bloquear se falhar)
+    try {
+      const grupoId = despesa.grupo_id;
+      const saldosDepois = await NotificationService.calcularSaldosAtuais(grupoId, usuarioId);
+      if (saldosDepois.length > 0) {
+        await NotificationService.notificarMudancasSaldo(grupoId, [], saldosDepois);
+      }
+    } catch (err) {
+      console.error('[ParticipacaoService.recalcularValores] Erro ao notificar mudanças de saldo:', err);
+      // Não falhar recálculo se notificação falhar
     }
   }
 

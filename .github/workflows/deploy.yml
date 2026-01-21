@@ -34,6 +34,23 @@ jobs:
           SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}
           SENDGRID_FROM_EMAIL=${{ secrets.SENDGRID_FROM_EMAIL }}
           SENDGRID_FROM_NAME=${{ secrets.SENDGRID_FROM_NAME }}
+          PAYPAL_CLIENT_ID=${{ secrets.PAYPAL_CLIENT_ID }}
+          PAYPAL_CLIENT_SECRET=${{ secrets.PAYPAL_CLIENT_SECRET }}
+          PAYPAL_MODE=${{ secrets.PAYPAL_MODE }}
+          PAYPAL_WEBHOOK_ID=${{ secrets.PAYPAL_WEBHOOK_ID }}
+          PAYPAL_PLAN_ID_MONTHLY=${{ secrets.PAYPAL_PLAN_ID_MONTHLY }}
+          PAYPAL_PLAN_ID_YEARLY=${{ secrets.PAYPAL_PLAN_ID_YEARLY }}
+          PAYPAL_LIFETIME_AMOUNT=${{ secrets.PAYPAL_LIFETIME_AMOUNT }}
+          PAYPAL_PRODUCT_ID=${{ secrets.PAYPAL_PRODUCT_ID }}
+          AWS_REGION=${{ secrets.AWS_REGION }}
+          AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_S3_BUCKET_NAME=${{ secrets.AWS_S3_BUCKET_NAME }}
+          AWS_CLOUDFRONT_DOMAIN=${{ secrets.AWS_CLOUDFRONT_DOMAIN }}
+          IMAGE_MAX_WIDTH=${{ secrets.IMAGE_MAX_WIDTH }}
+          IMAGE_JPEG_QUALITY=${{ secrets.IMAGE_JPEG_QUALITY }}
+          IMAGE_PNG_QUALITY=${{ secrets.IMAGE_PNG_QUALITY }}
+          IMAGE_ENABLE_WEBP=${{ secrets.IMAGE_ENABLE_WEBP }}
           VITE_API_URL=${{ secrets.VITE_API_URL }}
           VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           EOF

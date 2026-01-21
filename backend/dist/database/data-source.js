@@ -17,6 +17,16 @@ const GrupoMaiorParticipante_1 = require("../entities/GrupoMaiorParticipante");
 const PasswordResetToken_1 = require("../entities/PasswordResetToken");
 const DespesaHistorico_1 = require("../entities/DespesaHistorico");
 const EventoAcesso_1 = require("../entities/EventoAcesso");
+const Pagamento_1 = require("../entities/Pagamento");
+const Subscription_1 = require("../entities/Subscription");
+const SubscriptionHistory_1 = require("../entities/SubscriptionHistory");
+const SubscriptionFeature_1 = require("../entities/SubscriptionFeature");
+const PlanLimit_1 = require("../entities/PlanLimit");
+const PromoCode_1 = require("../entities/PromoCode");
+const Plan_1 = require("../entities/Plan");
+const Email_1 = require("../entities/Email");
+const EmailPendente_1 = require("../entities/EmailPendente");
+const DespesaAnexo_1 = require("../entities/DespesaAnexo");
 // Suporta DATABASE_URL (formato URI) ou variáveis individuais
 function getDataSourceConfig() {
     // Se DATABASE_URL estiver definida, usa ela
@@ -44,6 +54,16 @@ function getDataSourceConfig() {
                 PasswordResetToken_1.PasswordResetToken,
                 DespesaHistorico_1.DespesaHistorico,
                 EventoAcesso_1.EventoAcesso,
+                Pagamento_1.Pagamento,
+                Subscription_1.Subscription,
+                SubscriptionHistory_1.SubscriptionHistory,
+                SubscriptionFeature_1.SubscriptionFeature,
+                PlanLimit_1.PlanLimit,
+                PromoCode_1.PromoCode,
+                Plan_1.Plan,
+                Email_1.Email,
+                EmailPendente_1.EmailPendente,
+                DespesaAnexo_1.DespesaAnexo,
             ],
             migrations: [],
             subscribers: [],
@@ -75,6 +95,16 @@ function getDataSourceConfig() {
             PasswordResetToken_1.PasswordResetToken,
             DespesaHistorico_1.DespesaHistorico,
             EventoAcesso_1.EventoAcesso,
+            Pagamento_1.Pagamento,
+            Subscription_1.Subscription,
+            SubscriptionHistory_1.SubscriptionHistory,
+            SubscriptionFeature_1.SubscriptionFeature,
+            PlanLimit_1.PlanLimit,
+            PromoCode_1.PromoCode,
+            Plan_1.Plan,
+            Email_1.Email,
+            EmailPendente_1.EmailPendente,
+            DespesaAnexo_1.DespesaAnexo,
         ],
         migrations: [],
         subscribers: [],

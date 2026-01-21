@@ -10,8 +10,9 @@ import { DespesaService } from './DespesaService';
 import { ParticipacaoService } from './ParticipacaoService';
 import { Usuario } from '../entities/Usuario';
 import { Participante } from '../entities/Participante';
-import { In } from 'typeorm';
+import { In, IsNull } from 'typeorm';
 import { EmailQueueService } from './EmailQueueService';
+import { EmailAggregationService } from './EmailAggregationService';
 
 export class GrupoService {
   private static grupoRepository = AppDataSource.getRepository(Grupo);
@@ -50,7 +51,7 @@ export class GrupoService {
     }
 
     const participantesGrupo = await this.participanteGrupoRepository.find({
-      where: { grupo_id: grupoId },
+      where: { grupoId: grupoId },
       relations: ['participante'],
     });
 
@@ -65,7 +66,7 @@ export class GrupoService {
       // Buscar grupos onde o usuário é dono
       const gruposComoDono = await this.grupoRepository.find({
         where: { usuario_id: usuarioId },
-        relations: ['participantes', 'participantes.participante'],
+        relations: ['participantes', 'participantes.participante', 'usuario'],
         order: { data: 'DESC', id: 'DESC' },
       });
 
@@ -95,7 +96,7 @@ export class GrupoService {
           
           // Buscar grupos onde esses participantes estão
           const participantesGrupos = await this.participanteGrupoRepository.find({
-            where: { participante_id: In(participantesIds) },
+            where: { participanteId: In(participantesIds) },
             relations: ['grupo', 'grupo.participantes', 'grupo.participantes.participante'],
           });
 
@@ -112,7 +113,7 @@ export class GrupoService {
             const gruposIdsArray = Array.from(gruposIdsAdicionais);
             const gruposAdicionais = await this.grupoRepository.find({
               where: { id: In(gruposIdsArray) },
-              relations: ['participantes', 'participantes.participante'],
+              relations: ['participantes', 'participantes.participante', 'usuario'],
               order: { data: 'DESC', id: 'DESC' },
             });
             gruposComoParticipante.push(...gruposAdicionais);
@@ -165,6 +166,7 @@ export class GrupoService {
           // Fallback: buscar apenas grupos do usuário (sem colaboração)
           const gruposSemRelacoes = await this.grupoRepository.find({
             where: { usuario_id: usuarioId },
+            relations: ['usuario'],
             order: { data: 'DESC', id: 'DESC' },
           });
           
@@ -172,7 +174,7 @@ export class GrupoService {
           for (const grupo of gruposSemRelacoes) {
             try {
               grupo.participantes = await this.participanteGrupoRepository.find({
-                where: { grupo_id: grupo.id },
+                where: { grupoId: grupo.id },
                 relations: ['participante'],
               });
               // Filtrar órfãos
@@ -268,8 +270,8 @@ export class GrupoService {
       const jaEstaNaLista = data.participanteIds?.includes(participanteCriador.id);
       if (!jaEstaNaLista) {
         const participanteGrupo = this.participanteGrupoRepository.create({
-          grupo_id: grupoSalvo.id,
-          participante_id: participanteCriador.id,
+          grupoId: grupoSalvo.id,
+          participanteId: participanteCriador.id,
         });
         await this.participanteGrupoRepository.save(participanteGrupo);
       }
@@ -283,8 +285,8 @@ export class GrupoService {
           continue;
         }
         const participanteGrupo = this.participanteGrupoRepository.create({
-          grupo_id: grupoSalvo.id,
-          participante_id: participanteId,
+          grupoId: grupoSalvo.id,
+          participanteId: participanteId,
         });
         await this.participanteGrupoRepository.save(participanteGrupo);
       }
@@ -305,20 +307,123 @@ export class GrupoService {
     return await this.grupoRepository.save(grupo);
   }
 
+  /**
+   * Verifica se o usuário é organizador (dono) do grupo
+   */
+  static async isOrganizer(usuarioId: number, grupoId: number): Promise<boolean> {
+    const grupo = await this.grupoRepository.findOne({
+      where: { id: grupoId },
+      select: ['usuario_id'],
+    });
+
+    return grupo?.usuario_id === usuarioId;
+  }
+
+  /**
+   * Atualiza o status do grupo
+   */
+  static async updateStatus(
+    id: number,
+    usuarioId: number,
+    status: 'CONCLUIDO' | 'CANCELADO' | 'EM_ABERTO'
+  ): Promise<Grupo | null> {
+    // Verificar se o usuário é organizador
+    const isOrg = await this.isOrganizer(usuarioId, id);
+    if (!isOrg) {
+      throw new Error('Apenas o organizador pode atualizar o status do evento');
+    }
+
+    const grupo = await this.grupoRepository.findOne({
+      where: { id },
+    });
+
+    if (!grupo) {
+      return null;
+    }
+
+    // Validar transições permitidas
+    // Permitir reabrir eventos concluídos (CONCLUIDO -> EM_ABERTO)
+    if (grupo.status === 'CANCELADO' && status !== 'CANCELADO') {
+      throw new Error('Não é possível alterar o status de um evento cancelado');
+    }
+
+    // Para CONCLUIDO, confirmar automaticamente todos os pagamentos pendentes
+    if (status === 'CONCLUIDO' && grupo.status === 'EM_ABERTO') {
+      const { Pagamento } = await import('../entities/Pagamento');
+      const { PagamentoService } = await import('./PagamentoService');
+      const pagamentoRepository = AppDataSource.getRepository(Pagamento);
+      
+      // Buscar todos os pagamentos do grupo que ainda não foram confirmados
+      const pagamentosPendentes = await pagamentoRepository.find({
+        where: {
+          grupoId: id,
+          confirmadoEm: IsNull(),
+        },
+        relations: ['paraParticipante', 'grupoCredor'],
+      });
+
+      // Confirmar automaticamente todos os pagamentos pendentes
+      for (const pagamento of pagamentosPendentes) {
+        try {
+          if (pagamento.tipo === 'INDIVIDUAL' && pagamento.paraParticipanteId) {
+            // Para pagamentos individuais, usar o participante que deve receber
+            await PagamentoService.confirmarPagamento(
+              pagamento.id,
+              pagamento.paraParticipanteId
+            );
+          } else if (pagamento.tipo === 'ENTRE_GRUPOS' && pagamento.paraGrupoId) {
+            // Para pagamentos entre grupos, buscar um participante do grupo credor
+            const { GrupoParticipantesEvento } = await import('../entities/GrupoParticipantesEvento');
+            const { ParticipanteGrupoEvento } = await import('../entities/ParticipanteGrupoEvento');
+            const grupoParticipantesEventoRepository = AppDataSource.getRepository(GrupoParticipantesEvento);
+            const participanteGrupoEventoRepository = AppDataSource.getRepository(ParticipanteGrupoEvento);
+            
+            // Buscar um participante do grupo credor
+            const participanteGrupoCredor = await participanteGrupoEventoRepository.findOne({
+              where: {
+                grupoParticipantesEventoId: pagamento.paraGrupoId,
+              },
+            });
+            
+            if (participanteGrupoCredor && participanteGrupoCredor.participanteId) {
+              await PagamentoService.confirmarPagamento(
+                pagamento.id,
+                participanteGrupoCredor.participanteId
+              );
+            }
+          }
+        } catch (error: any) {
+          // Log do erro mas continua processando outros pagamentos
+          console.warn(`Erro ao confirmar automaticamente pagamento ${pagamento.id}:`, error.message);
+        }
+      }
+
+      // Registrar data de conclusão
+      grupo.dataConclusao = new Date();
+    } else if (status === 'EM_ABERTO' && grupo.status === 'CONCLUIDO') {
+      // Se está reabrindo um evento concluído, limpar data de conclusão
+      grupo.dataConclusao = undefined;
+    }
+
+    // Atualizar status
+    grupo.status = status;
+    return await this.grupoRepository.save(grupo);
+  }
+
   static async adicionarParticipante(grupoId: number, participanteId: number, usuarioId: number): Promise<boolean> {
     // Verificar se o grupo pertence ao usuário
     const grupo = await this.findById(grupoId, usuarioId);
     if (!grupo) return false;
 
     const existe = await this.participanteGrupoRepository.findOne({
-      where: { grupo_id: grupoId, participante_id: participanteId },
+      where: { grupoId: grupoId, participanteId: participanteId },
     });
 
     if (existe) return false;
 
     const participanteGrupo = this.participanteGrupoRepository.create({
-      grupo_id: grupoId,
-      participante_id: participanteId,
+      grupoId: grupoId,
+      participanteId: participanteId,
     });
     await this.participanteGrupoRepository.save(participanteGrupo);
 
@@ -350,10 +455,11 @@ export class GrupoService {
     participanteId: number,
     usuarioIdQueAdicionou: number
   ): Promise<void> {
-    // Buscar grupo
+    // Buscar grupo com participantes
     const grupo = await this.grupoRepository.findOne({
       where: { id: grupoId },
-      select: ['id', 'nome', 'descricao', 'data'],
+      relations: ['participantes', 'participantes.participante'],
+      select: ['id', 'nome', 'descricao', 'data', 'shareToken'],
     });
 
     if (!grupo) {
@@ -385,14 +491,53 @@ export class GrupoService {
     // Buscar quem adicionou
     const usuarioQueAdicionou = await this.usuarioRepository.findOne({
       where: { id: usuarioIdQueAdicionou },
-      select: ['nome'],
+      select: ['nome', 'id'],
     });
 
     const adicionadoPor = usuarioQueAdicionou?.nome || 'Alguém';
 
-    // Obter link de compartilhamento
+    // Calcular total de despesas
+    const despesas = await this.despesaRepository.find({
+      where: { grupo_id: grupoId },
+    });
+    const totalDespesas = despesas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
+
+    // Só enviar email de inclusão se houver pelo menos uma despesa com valor > 0
+    const temDespesaComValor = despesas.some(d => Number(d.valorTotal || 0) > 0);
+    if (!temDespesaComValor) {
+      console.log(`[GrupoService] Email de inclusão não enviado para ${email} - evento ${grupoId} ainda não tem despesas com valor`);
+      return;
+    }
+
+    // Contar participantes
+    const numeroParticipantes = grupo.participantes?.length || 0;
+
+    // Obter ou gerar link público do evento
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const linkEvento = `${frontendUrl}/eventos/${grupoId}`;
+    let linkEventoPublico: string | null = null;
+    
+    try {
+      // Tentar obter token existente
+      let shareToken = grupo.shareToken;
+      
+      // Se não existe, gerar um novo
+      if (!shareToken) {
+        try {
+          shareToken = await this.gerarShareToken(grupoId, usuarioIdQueAdicionou);
+        } catch (err) {
+          console.warn(`Não foi possível gerar share token para grupo ${grupoId}:`, err);
+        }
+      }
+      
+      if (shareToken) {
+        linkEventoPublico = `${frontendUrl}/evento/${shareToken}`;
+      }
+    } catch (err) {
+      console.warn(`Erro ao obter/gerar link público para grupo ${grupoId}:`, err);
+    }
+
+    // Link de cadastro com referral (referenciando o evento)
+    const linkCadastro = `${frontendUrl}/cadastro?ref=evento_${grupoId}_${usuarioIdQueAdicionou}`;
 
     // Formatar data do evento
     const formatDate = (date: Date | string | undefined): string | undefined => {
@@ -405,17 +550,31 @@ export class GrupoService {
       }).format(d);
     };
 
+    // Formatar valor monetário
+    const formatCurrency = (value: number): string => {
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      }).format(value);
+    };
+
     try {
-      await EmailQueueService.adicionarEmailInclusaoEvento({
+      // Usar sistema de agregação para evitar spam de emails
+      await EmailAggregationService.adicionarNotificacao({
         destinatario: email,
-        nomeDestinatario: participante.nome,
-        eventoNome: grupo.nome,
-        eventoId: grupo.id,
-        eventoDescricao: grupo.descricao || undefined,
-        eventoData: formatDate(grupo.data),
-        adicionadoPor,
-        linkEvento,
+        usuarioId: participante.usuario_id,
+        eventoId: grupoId,
+        tipoNotificacao: 'inclusao-evento',
+        dados: {
+          eventoNome: grupo.nome,
+          eventoId: grupoId,
+          nomeDestinatario: participante.nome,
+          linkEvento: linkEventoPublico || `${frontendUrl}/eventos/${grupoId}`,
+          linkEventoPublico: linkEventoPublico || undefined,
+          criadoPor: adicionadoPor,
+        },
       });
+      console.log(`[GrupoService] Notificação de inclusão adicionada para agregação: ${email}`);
     } catch (err) {
       console.error(`Erro ao adicionar notificação de inclusão em evento para ${email}:`, err);
       throw err;
@@ -429,8 +588,8 @@ export class GrupoService {
 
     // Remover participante do evento
     const result = await this.participanteGrupoRepository.delete({
-      grupo_id: grupoId,
-      participante_id: participanteId,
+      grupoId: grupoId,
+      participanteId: participanteId,
     });
     
     if ((result.affected ?? 0) > 0) {
@@ -440,14 +599,14 @@ export class GrupoService {
       
       // Buscar todos os sub-grupos do evento
       const subGrupos = await grupoParticipantesRepository.find({
-        where: { grupo_id: grupoId },
+        where: { grupoId: grupoId },
       });
       
       // Remover o participante de cada sub-grupo
       for (const subGrupo of subGrupos) {
         await participanteGrupoEventoRepository.delete({
-          grupo_participantes_evento_id: subGrupo.id,
-          participante_id: participanteId,
+          grupoParticipantesEventoId: subGrupo.id,
+          participanteId: participanteId,
         });
       }
       
@@ -490,13 +649,13 @@ export class GrupoService {
 
     // Verificar participantes diretos
     const participantesDiretos = await this.participanteGrupoRepository.count({
-      where: { grupo_id: id },
+      where: { grupoId: id },
     });
 
     // Verificar sub-grupos (GrupoParticipantesEvento)
     const grupoParticipantesRepository = AppDataSource.getRepository(GrupoParticipantesEvento);
     const subGrupos = await grupoParticipantesRepository.find({
-      where: { grupo_id: id },
+      where: { grupoId: id },
       relations: ['participantes'],
     });
     const numSubGrupos = subGrupos.length;
@@ -535,7 +694,7 @@ export class GrupoService {
     const grupo = await this.findById(id, usuarioId);
     if (!grupo) return null;
 
-    const participanteIds = (grupo.participantes || []).map((p) => p.participante_id);
+    const participanteIds = (grupo.participantes || []).map((p) => p.participanteId);
     const nomeCopia = `${grupo.nome} (cópia)`;
 
     const novo = await this.create({
@@ -604,8 +763,8 @@ export class GrupoService {
       const jaEstaNaLista = data.participanteIds?.includes(participanteCriador.id);
       if (!jaEstaNaLista) {
         const participanteGrupo = this.participanteGrupoRepository.create({
-          grupo_id: grupoSalvo.id,
-          participante_id: participanteCriador.id,
+          grupoId: grupoSalvo.id,
+          participanteId: participanteCriador.id,
         });
         await this.participanteGrupoRepository.save(participanteGrupo);
       }
@@ -619,8 +778,8 @@ export class GrupoService {
           continue;
         }
         const participanteGrupo = this.participanteGrupoRepository.create({
-          grupo_id: grupoSalvo.id,
-          participante_id: participanteId,
+          grupoId: grupoSalvo.id,
+          participanteId: participanteId,
         });
         await this.participanteGrupoRepository.save(participanteGrupo);
       }
@@ -632,9 +791,9 @@ export class GrupoService {
     
     // Preparar participações para as despesas placeholder (se houver participantes)
     const participacoesPlaceholder = participantesDoEvento
-      .filter(pg => pg.participante_id)
+      .filter(pg => pg.participanteId)
       .map(pg => ({
-        participante_id: pg.participante_id,
+        participante_id: pg.participanteId,
         valorDevePagar: 0, // Será recalculado quando um valor for definido
       }));
 

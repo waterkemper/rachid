@@ -2,4 +2,6 @@
 exported_*.sql
 *.backup
 *.dump
-
+node_modules/
+npm-debug.log*
+yarn-error.log*

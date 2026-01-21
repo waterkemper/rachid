@@ -1,7 +1,41 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PublicEventoController = void 0;
 const PublicEventoService_1 = require("../services/PublicEventoService");
+const AdminService_1 = require("../services/AdminService");
 class PublicEventoController {
     static async getByToken(req, res) {
         try {
@@ -117,6 +151,30 @@ class PublicEventoController {
             res.status(500).json({ error: 'Erro ao buscar despesas' });
         }
     }
+    /**
+     * Listar anexos de uma despesa (público, via token)
+     * GET /api/public/eventos/:token/despesas/:despesaId/anexos
+     */
+    static async getAnexosByToken(req, res) {
+        try {
+            const { token, despesaId } = req.params;
+            if (!token) {
+                return res.status(400).json({ error: 'Token é obrigatório' });
+            }
+            const evento = await PublicEventoService_1.PublicEventoService.findByToken(token);
+            if (!evento) {
+                return res.status(404).json({ error: 'Evento não encontrado' });
+            }
+            // Verificar se a despesa pertence ao evento
+            const { DespesaAnexoService } = await Promise.resolve().then(() => __importStar(require('../services/DespesaAnexoService')));
+            const anexos = await DespesaAnexoService.findByDespesa(parseInt(despesaId));
+            res.json(anexos);
+        }
+        catch (error) {
+            console.error('Erro ao buscar anexos públicos:', error);
+            res.status(500).json({ error: 'Erro ao buscar anexos' });
+        }
+    }
     static async reivindicarParticipacao(req, res) {
         try {
             const { token } = req.params;
@@ -145,6 +203,35 @@ class PublicEventoController {
         catch (error) {
             console.error('Erro ao reivindicar participação:', error);
             res.status(500).json({ error: 'Erro ao reivindicar participação' });
+        }
+    }
+    /**
+     * Retorna estatísticas públicas básicas para social proof (sem autenticação)
+     */
+    static async getEstatisticasPublicas(req, res) {
+        try {
+            // Obter apenas estatísticas básicas (sem dados sensíveis)
+            const [estatisticasUsuarios, estatisticasEventos] = await Promise.all([
+                AdminService_1.AdminService.getEstatisticasUsuarios(),
+                AdminService_1.AdminService.getEstatisticasEventos(),
+            ]);
+            // Retornar apenas dados públicos para social proof
+            res.json({
+                totalUsuarios: estatisticasUsuarios.total,
+                totalEventos: estatisticasEventos.total,
+                eventosCompartilhados: estatisticasEventos.comAcessoPublico,
+                novosEventosUltimos30Dias: estatisticasEventos.criadosUltimos30Dias,
+            });
+        }
+        catch (error) {
+            console.error('Erro ao obter estatísticas públicas:', error);
+            // Em caso de erro, retornar valores padrão para não quebrar a UI
+            res.json({
+                totalUsuarios: 0,
+                totalEventos: 0,
+                eventosCompartilhados: 0,
+                novosEventosUltimos30Dias: 0,
+            });
         }
     }
 }

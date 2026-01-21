@@ -75,13 +75,28 @@ app.listen(PORT, () => {
         console.log('✅ Database connected successfully');
         // Inicializar EmailQueueService após conectar ao banco
         try {
+            console.log('🔄 Inicializando EmailQueueService...');
             await EmailQueueService_1.EmailQueueService.initialize();
+            console.log('🔄 Iniciando workers de email...');
             await EmailQueueService_1.EmailQueueService.iniciarWorker();
-            console.log('✅ Email queue service initialized');
+            console.log('✅ Email queue service initialized and workers started');
+            // Agendar job diário de reativação
+            console.log('🔄 Agendando job diário de reativação...');
+            await EmailQueueService_1.EmailQueueService.agendarJobReativacao();
+            console.log('✅ Job diário de reativação agendado');
+            // Agendar job de agregação de emails (a cada minuto)
+            console.log('🔄 Agendando job de agregação de emails...');
+            await EmailQueueService_1.EmailQueueService.agendarJobAgregacaoEmails();
+            console.log('✅ Job de agregação de emails agendado');
+            // Agendar job diário de verificação de vencimento próximo
+            console.log('🔄 Agendando job de verificação de vencimento próximo...');
+            await EmailQueueService_1.EmailQueueService.agendarJobVencimentoProximo();
+            console.log('✅ Job de verificação de vencimento próximo agendado');
         }
         catch (error) {
             console.error('❌ Error initializing email queue service:', error);
             console.error('Email notifications will not work, but server will continue running');
+            console.error('Stack trace:', error.stack);
         }
     })
         .catch((error) => {

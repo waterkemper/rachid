@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PublicEventoService = void 0;
 const data_source_1 = require("../database/data-source");
@@ -70,7 +103,7 @@ class PublicEventoService {
             relations: ['pagador', 'participacoes', 'participacoes.participante'],
         });
         // Obter IDs dos participantes do evento
-        const participanteIds = (grupo.participantes || []).map((pg) => pg.participante_id);
+        const participanteIds = (grupo.participantes || []).map((pg) => pg.participanteId);
         // Buscar participantes do evento
         const participantes = await participanteRepository.find({
             where: participanteIds.map((id) => ({ id })),
@@ -126,7 +159,7 @@ class PublicEventoService {
             throw new Error('Grupo não encontrado');
         }
         const gruposParticipantes = await grupoParticipantesRepository.find({
-            where: { grupo_id: grupoId },
+            where: { grupoId: grupoId },
             relations: ['participantes', 'participantes.participante'],
         });
         const despesas = await despesaRepository.find({
@@ -137,12 +170,12 @@ class PublicEventoService {
         const participantesEmGrupos = new Set();
         gruposParticipantes.forEach((gp) => {
             gp.participantes.forEach((p) => {
-                participantesEmGrupos.add(p.participante_id);
+                participantesEmGrupos.add(p.participanteId);
             });
         });
         // Identificar participantes do evento que não estão em nenhum grupo
         const participantesSolitarios = grupo.participantes
-            .filter((pg) => !participantesEmGrupos.has(pg.participante_id))
+            .filter((pg) => !participantesEmGrupos.has(pg.participanteId))
             .map((pg) => pg.participante);
         const saldosGrupos = [];
         // Calcular saldos para grupos reais
@@ -158,7 +191,7 @@ class PublicEventoService {
                 totalDeve: 0,
                 saldo: 0,
             };
-            const participantesIds = grupoParticipantes.participantes.map((p) => p.participante_id);
+            const participantesIds = grupoParticipantes.participantes.map((p) => p.participanteId);
             despesas.forEach((despesa) => {
                 // Ignorar despesas sem pagador (placeholders)
                 if (!despesa.participante_pagador_id) {
@@ -250,7 +283,7 @@ class PublicEventoService {
                     // Atualizar participações em despesas
                     await queryRunner.manager.update(ParticipacaoDespesa_1.ParticipacaoDespesa, { participante_id: participante.id }, { participante_id: participanteExistente.id });
                     // Atualizar referências em participantes_grupos
-                    await queryRunner.manager.update(ParticipanteGrupo_1.ParticipanteGrupo, { participante_id: participante.id }, { participante_id: participanteExistente.id });
+                    await queryRunner.manager.update(ParticipanteGrupo_1.ParticipanteGrupo, { participanteId: participante.id }, { participanteId: participanteExistente.id });
                     // Deletar o participante antigo
                     await queryRunner.manager.delete(Participante_1.Participante, { id: participante.id });
                     transferidos++;
@@ -294,25 +327,49 @@ class PublicEventoService {
             where: Array.from(participanteIds).map(id => ({ id })),
         });
         const participantesMap = new Map(participantes.map(p => [p.id, p]));
-        // Garantir que as relações estão preenchidas
-        return despesas.map(despesa => ({
-            id: despesa.id,
-            descricao: despesa.descricao,
-            valorTotal: Number(despesa.valorTotal),
-            data: despesa.data,
-            pagador: despesa.pagador ? {
-                id: despesa.pagador.id,
-                nome: despesa.pagador.nome,
-            } : null,
-            participacoes: (despesa.participacoes || []).map(participacao => ({
-                participante_id: participacao.participante_id,
-                participante: participantesMap.get(participacao.participante_id) ? {
-                    id: participacao.participante_id,
-                    nome: participantesMap.get(participacao.participante_id).nome,
+        // Buscar anexos para cada despesa
+        const { DespesaAnexo } = await Promise.resolve().then(() => __importStar(require('../entities/DespesaAnexo')));
+        const anexoRepository = data_source_1.AppDataSource.getRepository(DespesaAnexo);
+        const despesasComAnexos = await Promise.all(despesas.map(async (despesa) => {
+            const anexos = await anexoRepository.find({
+                where: { despesa_id: despesa.id },
+                order: { criadoEm: 'DESC' },
+            });
+            return {
+                id: despesa.id,
+                descricao: despesa.descricao,
+                valorTotal: Number(despesa.valorTotal),
+                data: despesa.data,
+                pagador: despesa.pagador ? {
+                    id: despesa.pagador.id,
+                    nome: despesa.pagador.nome,
                 } : null,
-                valorDevePagar: Number(participacao.valorDevePagar),
-            })),
+                participacoes: (despesa.participacoes || []).map(participacao => ({
+                    participante_id: participacao.participante_id,
+                    participante: participantesMap.get(participacao.participante_id) ? {
+                        id: participacao.participante_id,
+                        nome: participantesMap.get(participacao.participante_id).nome,
+                    } : null,
+                    valorDevePagar: Number(participacao.valorDevePagar),
+                })),
+                anexos: anexos.map(anexo => ({
+                    id: anexo.id,
+                    despesa_id: anexo.despesa_id,
+                    nome_original: anexo.nome_original,
+                    nome_arquivo: anexo.nome_arquivo,
+                    tipo_mime: anexo.tipo_mime,
+                    tamanho_original: anexo.tamanho_original,
+                    tamanho_otimizado: anexo.tamanho_otimizado,
+                    largura: anexo.largura,
+                    altura: anexo.altura,
+                    otimizado: anexo.otimizado,
+                    url_s3: anexo.url_s3,
+                    url_cloudfront: anexo.url_cloudfront,
+                    criado_em: anexo.criadoEm.toISOString(),
+                })),
+            };
         }));
+        return despesasComAnexos;
     }
 }
 exports.PublicEventoService = PublicEventoService;

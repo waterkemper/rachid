@@ -13,3 +13,7 @@ mobile/*.mobileprovision
 mobile/*.orig.*
 mobile/web-build/
 mobile/.DS_Store
+
+node_modules/
+npm-debug.log*
+yarn-error.log*

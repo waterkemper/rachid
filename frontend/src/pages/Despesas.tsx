@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { usePageFocus } from '../hooks/usePageFocus';
 import { despesaApi, grupoApi, participanteApi, grupoParticipantesApi } from '../services/api';
-import { Despesa, Grupo, Participante } from '../types';
+import { Despesa, DespesaAnexo, Grupo, Participante } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from '../components/Modal';
-import { FaPlus, FaEdit, FaTrash, FaChartBar, FaUsers, FaShare, FaLock } from 'react-icons/fa';
+import FileUpload from '../components/FileUpload';
+import { FeatureGate } from '../components/FeatureGate';
+import { FaPlus, FaEdit, FaTrash, FaChartBar, FaUsers, FaShare, FaLock, FaPaperclip, FaDownload, FaImage, FaFilePdf, FaFile } from 'react-icons/fa';
+import ShareButtons from '../components/ShareButtons';
 import './Despesas.css';
 
 const Despesas: React.FC = () => {
@@ -34,6 +36,11 @@ const Despesas: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [loadingShareLink, setLoadingShareLink] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [anexos, setAnexos] = useState<DespesaAnexo[]>([]);
+  const [uploadingAnexos, setUploadingAnexos] = useState(false);
 
   // Função helper para verificar se usuário pode editar uma despesa
   const canEditDespesa = useCallback((despesa: Despesa): boolean => {
@@ -92,12 +99,44 @@ const Despesas: React.FC = () => {
     }
   };
 
+  const loadShareLink = async (eventoId: number) => {
+    try {
+      setLoadingShareLink(true);
+      let linkData = await grupoApi.obterLink(eventoId);
+      if (!linkData.link) {
+        linkData = await grupoApi.gerarLink(eventoId);
+      }
+      if (linkData.link) {
+        const frontendUrl = window.location.origin;
+        // Extrair token do link ou usar o link completo
+        const tokenMatch = linkData.link.match(/\/evento\/([^\/]+)$/);
+        if (tokenMatch) {
+          setShareLink(`${frontendUrl}/evento/${tokenMatch[1]}`);
+        } else {
+          setShareLink(linkData.link);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao carregar link de compartilhamento:', err);
+      setShareLink(null);
+    } finally {
+      setLoadingShareLink(false);
+    }
+  };
+
   const loadDespesas = useCallback(async () => {
     try {
       const grupoId = filtroGrupo === '' ? undefined : filtroGrupo;
       // Sempre buscar dados frescos do servidor (sem cache)
       const data = await despesaApi.getAll(grupoId);
       setDespesas(data);
+      
+      // Carregar link de compartilhamento se houver evento selecionado
+      if (grupoId) {
+        loadShareLink(grupoId);
+      } else {
+        setShareLink(null);
+      }
     } catch (err) {
       setError('Erro ao carregar despesas');
     }
@@ -107,10 +146,8 @@ const Despesas: React.FC = () => {
     loadDespesas();
   }, [loadDespesas]);
 
-  // Recarregar dados quando a página voltar ao foco
-  usePageFocus(loadDespesas, [filtroGrupo]);
 
-  const loadParticipantesDoEvento = async (eventoId: number, incluirPagadorAtual?: number) => {
+  const loadParticipantesDoEvento = async (eventoId: number, incluirPagadorAtual?: number, participantesAdicionais?: Participante[]): Promise<Participante[]> => {
     try {
       const evento = await grupoApi.getById(eventoId);
       
@@ -131,40 +168,96 @@ const Despesas: React.FC = () => {
       }
       
       if (evento.participantes && evento.participantes.length > 0) {
-        const participantesIds = evento.participantes.map(p => p.participante_id);
-        let participantesFiltrados = participantes.filter(p => participantesIds.includes(p.id));
+        // IMPORTANTE: Extrair participantes diretamente do evento que já vem com os objetos completos
+        // Não filtrar pelo estado global 'participantes' que pode não ter todos os participantes do evento
+        let participantesFiltrados: Participante[] = evento.participantes
+          .map(pg => pg.participante)
+          .filter((p): p is Participante => p !== null && p !== undefined);
         
         // Se estiver editando e o pagador atual não estiver na lista, incluir ele também
-        if (incluirPagadorAtual && !participantesIds.includes(incluirPagadorAtual)) {
-          const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
-          if (pagadorAtual) {
-            participantesFiltrados = [...participantesFiltrados, pagadorAtual];
+        if (incluirPagadorAtual) {
+          const pagadorJaNaLista = participantesFiltrados.some(p => p.id === incluirPagadorAtual);
+          if (!pagadorJaNaLista) {
+            // Tentar encontrar o pagador no estado global primeiro
+            let pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
+            // Se não encontrar no estado global, pode estar nas participações da despesa
+            if (!pagadorAtual && participantesAdicionais) {
+              pagadorAtual = participantesAdicionais.find(p => p.id === incluirPagadorAtual);
+            }
+            if (pagadorAtual) {
+              participantesFiltrados = [...participantesFiltrados, pagadorAtual];
+            }
+          }
+        }
+        
+        // Se houver participantes adicionais (ex: de uma despesa sendo editada), incluí-los
+        // Isso garante que participantes que não estão mais no evento mas estão na despesa sejam exibidos
+        if (participantesAdicionais && participantesAdicionais.length > 0) {
+          const idsExistentes = new Set(participantesFiltrados.map(p => p.id));
+          const novosParticipantes = participantesAdicionais.filter(p => !idsExistentes.has(p.id));
+          if (novosParticipantes.length > 0) {
+            participantesFiltrados = [...participantesFiltrados, ...novosParticipantes];
           }
         }
         
         setParticipantesDoEvento(participantesFiltrados);
+        return participantesFiltrados;
       } else {
         // Se não houver participantes no evento mas houver um pagador atual, incluir ele
+        let participantesFiltrados: Participante[] = [];
         if (incluirPagadorAtual) {
           const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
-          setParticipantesDoEvento(pagadorAtual ? [pagadorAtual] : []);
-        } else {
-          // Mesmo sem participantes no evento, permitir que o usuário veja o campo
-          // O backend vai validar se pode criar/editar
-          setParticipantesDoEvento([]);
+          if (pagadorAtual) {
+            participantesFiltrados = [pagadorAtual];
+          }
         }
+        setParticipantesDoEvento(participantesFiltrados);
+        return participantesFiltrados;
       }
     } catch (err) {
       console.error('Erro ao carregar participantes do evento:', err);
       // Em caso de erro, ainda permitir que o campo seja exibido (pode ser problema de permissão temporário)
       // Se houver um pagador atual, incluir ele
+      let participantesFiltrados: Participante[] = [];
       if (incluirPagadorAtual) {
         const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
-        setParticipantesDoEvento(pagadorAtual ? [pagadorAtual] : []);
-      } else {
-        setParticipantesDoEvento([]);
+        if (pagadorAtual) {
+          participantesFiltrados = [pagadorAtual];
+        }
       }
+      setParticipantesDoEvento(participantesFiltrados);
       setParticipanteSubgrupoMap(new Map());
+      return participantesFiltrados;
+    }
+  };
+
+  const formatValue = (value: string | number): string => {
+    if (!value && value !== 0) return '';
+    const numValue = typeof value === 'string' ? parseFloat(value.replace(',', '.')) : value;
+    if (isNaN(numValue)) return '';
+    return numValue.toFixed(2).replace('.', ',');
+  };
+
+  const parseValue = (value: string): string => {
+    // Remove tudo exceto números, vírgula e ponto
+    let cleaned = value.replace(/[^\d,.-]/g, '');
+    // Se tiver vírgula, assume que é o separador decimal brasileiro
+    if (cleaned.includes(',')) {
+      // Remove pontos (milhares) e mantém apenas a vírgula decimal
+      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+    }
+    // Se não tiver vírgula mas tiver ponto, mantém o ponto
+    // Se não tiver nenhum, retorna como está (será tratado como inteiro)
+    return cleaned;
+  };
+
+  const loadAnexos = async (despesaId: number) => {
+    try {
+      const anexosData = await despesaApi.listAnexos(despesaId);
+      setAnexos(anexosData);
+    } catch (error) {
+      console.error('Erro ao carregar anexos:', error);
+      setAnexos([]);
     }
   };
 
@@ -174,16 +267,40 @@ const Despesas: React.FC = () => {
       setFormData({
         grupo_id: despesa.grupo_id,
         descricao: despesa.descricao,
-        valorTotal: despesa.valorTotal.toString(),
+        valorTotal: formatValue(despesa.valorTotal),
         participante_pagador_id: despesa.participante_pagador_id || 0,
         data: despesa.data.split('T')[0],
       });
-      // Carregar participantes do evento da despesa sendo editada
-      // Incluir o pagador atual caso ele não esteja mais no evento
-      await loadParticipantesDoEvento(despesa.grupo_id, despesa.participante_pagador_id);
       // Carregar participantes já selecionados da despesa
       const participantesIds = despesa.participacoes?.map(p => p.participante_id) || [];
       setParticipantesSelecionados(participantesIds);
+      
+      // IMPORTANTE: Extrair participantes das participacoes da despesa
+      // Isso garante que todos os participantes selecionados sejam visíveis, mesmo que não estejam mais no evento
+      const participantesDasParticipacoes: Participante[] = [];
+      if (despesa.participacoes && despesa.participacoes.length > 0) {
+        for (const participacao of despesa.participacoes) {
+          // Tentar pegar do objeto participacao.participante (se o backend enviou)
+          if (participacao.participante) {
+            participantesDasParticipacoes.push(participacao.participante);
+          } else {
+            // Se não tiver o objeto completo, buscar do estado global de participantes
+            const participanteEncontrado = participantes.find(p => p.id === participacao.participante_id);
+            if (participanteEncontrado) {
+              participantesDasParticipacoes.push(participanteEncontrado);
+            }
+          }
+        }
+      }
+      
+      // Carregar participantes do evento da despesa sendo editada
+      // Incluir o pagador atual caso ele não esteja mais no evento
+      // E incluir participantes das participacoes da despesa
+      await loadParticipantesDoEvento(despesa.grupo_id, despesa.participante_pagador_id, participantesDasParticipacoes);
+      
+      // Carregar anexos da despesa
+      await loadAnexos(despesa.id);
+      
       setParticipantesExpandido(true); // Expandir ao editar
     } else {
       setEditingDespesa(null);
@@ -197,20 +314,17 @@ const Despesas: React.FC = () => {
       });
       // Carregar participantes do evento selecionado (ou do filtro)
       if (grupoId > 0) {
-        await loadParticipantesDoEvento(grupoId);
+        const participantesCarregados = await loadParticipantesDoEvento(grupoId);
         // Por padrão, selecionar todos os participantes do evento ao criar
-        const evento = await grupoApi.getById(grupoId);
-        if (evento.participantes) {
-          const participantesIds = evento.participantes.map(p => p.participante_id);
-          const participantesFiltrados = participantes.filter(p => participantesIds.includes(p.id));
-          setParticipantesSelecionados(participantesFiltrados.map(p => p.id));
-        }
+        setParticipantesSelecionados(participantesCarregados.map(p => p.id));
       } else {
         setParticipantesDoEvento([]);
         setParticipantesSelecionados([]);
       }
+      setAnexos([]);
       setParticipantesExpandido(false); // Colapsado por padrão ao criar
     }
+    setSelectedFiles([]);
     setIsModalOpen(true);
   };
 
@@ -221,6 +335,8 @@ const Despesas: React.FC = () => {
     setParticipantesSelecionados([]);
     setParticipantesExpandido(false);
     setParticipanteSubgrupoMap(new Map());
+    setSelectedFiles([]);
+    setAnexos([]);
     setFormData({
       grupo_id: 0,
       descricao: '',
@@ -228,6 +344,63 @@ const Despesas: React.FC = () => {
       participante_pagador_id: 0,
       data: new Date().toISOString().split('T')[0],
     });
+  };
+
+  const handleUploadAnexos = async (despesaId: number) => {
+    if (selectedFiles.length === 0) return;
+
+    try {
+      setUploadingAnexos(true);
+      setError(null);
+
+      for (const file of selectedFiles) {
+        await despesaApi.uploadAnexo(despesaId, file);
+      }
+
+      // Recarregar anexos
+      await loadAnexos(despesaId);
+      setSelectedFiles([]);
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.error || 'Erro ao fazer upload de anexos';
+      setError(errorMessage);
+      
+      if (err?.response?.status === 402) {
+        // Erro de plano PRO necessário
+        setError('Upload de anexos disponível apenas para plano PRO. Faça upgrade para continuar.');
+      }
+    } finally {
+      setUploadingAnexos(false);
+    }
+  };
+
+  const handleDeleteAnexo = async (despesaId: number, anexoId: number) => {
+    if (!window.confirm('Tem certeza que deseja excluir este anexo?')) {
+      return;
+    }
+
+    try {
+      await despesaApi.deleteAnexo(despesaId, anexoId);
+      await loadAnexos(despesaId);
+    } catch (error) {
+      console.error('Erro ao deletar anexo:', error);
+      setError('Erro ao deletar anexo');
+    }
+  };
+
+  const getFileIcon = (mimeType: string) => {
+    if (mimeType.startsWith('image/')) {
+      return <FaImage />;
+    }
+    if (mimeType === 'application/pdf') {
+      return <FaFilePdf />;
+    }
+    return <FaFile />;
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(1) + ' MB';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -362,6 +535,17 @@ const Despesas: React.FC = () => {
               <button className="btn btn-secondary" onClick={() => navigate(`/convidar-amigos/${filtroGrupo}`)}>
                 <FaShare /> <span>Convidar amigos</span>
               </button>
+              {shareLink && !loadingShareLink && filtroGrupo && (
+                <ShareButtons
+                  shareUrl={shareLink}
+                  shareText={`Confira as despesas do evento "${grupos.find(g => g.id === filtroGrupo)?.nome || 'Evento'}" no Rachid`}
+                  eventName={grupos.find(g => g.id === filtroGrupo)?.nome || 'Evento'}
+                  showQRCode={true}
+                  showEmail={true}
+                  showWhatsApp={true}
+                  showCopy={true}
+                />
+              )}
             </>
           )}
           <button className="btn btn-primary" onClick={() => handleOpenModal()}>
@@ -556,14 +740,9 @@ const Despesas: React.FC = () => {
                 setFormData({ ...formData, grupo_id: grupoId, participante_pagador_id: 0 });
                 // Carregar participantes do evento selecionado
                 if (grupoId > 0) {
-                  await loadParticipantesDoEvento(grupoId);
+                  const participantesCarregados = await loadParticipantesDoEvento(grupoId);
                   // Por padrão, selecionar todos os participantes do evento
-                  const evento = await grupoApi.getById(grupoId);
-                  if (evento.participantes) {
-                    const participantesIds = evento.participantes.map(p => p.participante_id);
-                    const participantesFiltrados = participantes.filter(p => participantesIds.includes(p.id));
-                    setParticipantesSelecionados(participantesFiltrados.map(p => p.id));
-                  }
+                  setParticipantesSelecionados(participantesCarregados.map(p => p.id));
                 } else {
                   setParticipantesDoEvento([]);
                   setParticipantesSelecionados([]);
@@ -591,11 +770,38 @@ const Despesas: React.FC = () => {
           <div className="form-group">
             <label>Valor Total *</label>
             <input
-              type="number"
-              step="0.01"
-              min="0"
+              type="text"
+              inputMode="decimal"
+              className="valor-despesa-input"
               value={formData.valorTotal}
-              onChange={(e) => setFormData({ ...formData, valorTotal: e.target.value })}
+              onChange={(e) => {
+                // Permite digitação livre, apenas remove caracteres inválidos
+                let value = e.target.value;
+                // Permite números, vírgula e ponto
+                value = value.replace(/[^\d,.-]/g, '');
+                // Limita a uma vírgula ou ponto decimal
+                const parts = value.split(/[,.]/);
+                if (parts.length > 2) {
+                  // Se tiver mais de um separador, manter apenas o primeiro
+                  value = parts[0] + (parts[1] ? ',' + parts.slice(1).join('') : '');
+                }
+                setFormData({ ...formData, valorTotal: value });
+              }}
+              onBlur={(e) => {
+                // Garantir formatação com 2 casas decimais ao sair do campo
+                const parsed = parseValue(e.target.value);
+                if (parsed && parsed !== '-' && parsed !== '') {
+                  const numValue = parseFloat(parsed);
+                  if (!isNaN(numValue) && numValue >= 0) {
+                    setFormData({ ...formData, valorTotal: formatValue(numValue) });
+                  } else {
+                    setFormData({ ...formData, valorTotal: '' });
+                  }
+                } else if (parsed === '' || parsed === '-') {
+                  setFormData({ ...formData, valorTotal: '' });
+                }
+              }}
+              placeholder="0,00"
               required
             />
           </div>
@@ -657,6 +863,166 @@ const Despesas: React.FC = () => {
               </p>
             )}
           </div>
+
+          {/* Seção de Anexos - Logo após "Quem Pagou" */}
+          <div className="form-group">
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FaPaperclip /> Anexos (Cupons, Recibos, etc.)
+            </label>
+            
+            <FeatureGate feature="receipt_upload_enabled">
+              
+              {/* Anexos existentes */}
+              {editingDespesa && anexos.length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '8px' }}>
+                    Anexos existentes ({anexos.length}):
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '12px' }}>
+                    {anexos.map((anexo) => (
+                      <div key={anexo.id} style={{ position: 'relative', border: '1px solid rgba(148, 163, 184, 0.20)', borderRadius: '8px', overflow: 'hidden' }}>
+                        {anexo.tipo_mime.startsWith('image/') ? (
+                          <div style={{ position: 'relative', width: '100%', aspectRatio: 1 }}>
+                            <img 
+                              src={anexo.url_cloudfront} 
+                              alt={anexo.nome_original}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              onError={(e) => {
+                                // Fallback para URL S3 se CloudFront falhar
+                                (e.target as HTMLImageElement).src = anexo.url_s3;
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAnexo(editingDespesa.id, anexo.id)}
+                              style={{
+                                position: 'absolute',
+                                top: '4px',
+                                right: '4px',
+                                background: 'rgba(239, 68, 68, 0.9)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '50%',
+                                width: '24px',
+                                height: '24px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '12px',
+                              }}
+                              title="Deletar anexo"
+                            >
+                              <FaTrash />
+                            </button>
+                            <a
+                              href={anexo.url_cloudfront}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                position: 'absolute',
+                                bottom: '4px',
+                                left: '4px',
+                                background: 'rgba(0, 0, 0, 0.6)',
+                                color: 'white',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                textDecoration: 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                              title="Abrir em nova aba"
+                            >
+                              <FaDownload />
+                            </a>
+                          </div>
+                        ) : (
+                          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ fontSize: '24px', color: '#6366f1' }}>
+                              {getFileIcon(anexo.tipo_mime)}
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'rgba(226, 232, 240, 0.9)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+                              {anexo.nome_original}
+                            </div>
+                            <div style={{ fontSize: '10px', color: 'rgba(226, 232, 240, 0.6)' }}>
+                              {formatFileSize(anexo.tamanho_otimizado || anexo.tamanho_original)}
+                            </div>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              <a
+                                href={anexo.url_cloudfront}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  background: '#6366f1',
+                                  color: 'white',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  textDecoration: 'none',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                }}
+                                title="Download"
+                              >
+                                <FaDownload />
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAnexo(editingDespesa.id, anexo.id)}
+                                style={{
+                                  background: '#ef4444',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '4px 8px',
+                                  cursor: 'pointer',
+                                  fontSize: '11px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                }}
+                                title="Deletar"
+                              >
+                                <FaTrash />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Upload de novos anexos */}
+              <FileUpload
+                files={selectedFiles}
+                onFilesChange={setSelectedFiles}
+                disabled={!editingDespesa || uploadingAnexos}
+              />
+
+              {editingDespesa && selectedFiles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleUploadAnexos(editingDespesa.id)}
+                  className="btn btn-secondary"
+                  disabled={uploadingAnexos}
+                  style={{ marginTop: '12px' }}
+                >
+                  {uploadingAnexos ? 'Enviando...' : `Enviar ${selectedFiles.length} arquivo(s)`}
+                </button>
+              )}
+
+              {!editingDespesa && (
+                <p style={{ fontSize: '12px', color: 'rgba(226, 232, 240, 0.6)', marginTop: '8px' }}>
+                  Salve a despesa primeiro para adicionar anexos
+                </p>
+              )}
+            </FeatureGate>
+          </div>
+
           <div className="form-group">
             <label>Data *</label>
             <input
@@ -789,6 +1155,7 @@ const Despesas: React.FC = () => {
               </div>
             )}
           </div>
+
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
             <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
               Cancelar

@@ -267,3 +267,14 @@
   line-height: 1.2;
 }
 
+/* Esconder spinners do input number */
+.valor-despesa-input::-webkit-outer-spin-button,
+.valor-despesa-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.valor-despesa-input[type=number] {
+  -moz-appearance: textfield;
+}
+

@@ -102,7 +102,7 @@ async function requireGroupMember(req, res, next) {
         }
         // Buscar participantes do grupo
         const participantesGrupo = await participanteGrupoRepository.find({
-            where: { grupo_id: grupoId },
+            where: { grupoId },
             relations: ['participante'],
         });
         // Verificar se algum participante tem email que corresponde ao email do usuário

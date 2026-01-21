@@ -42,8 +42,16 @@ class AuthController {
             if (!usuario) {
                 return res.status(404).json({ error: 'Usuário não encontrado' });
             }
+            // Gerar código de referral do usuário
+            const referralCode = await AuthService_1.AuthService.obterReferralCode(usuarioId);
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+            const referralLink = `${frontendUrl}/cadastro?ref=${referralCode}`;
             const { senha: _, ...usuarioSemSenha } = usuario;
-            res.json({ usuario: usuarioSemSenha });
+            res.json({
+                usuario: usuarioSemSenha,
+                referralCode,
+                referralLink,
+            });
         }
         catch (error) {
             console.error('Erro ao obter usuário:', error);
@@ -52,7 +60,7 @@ class AuthController {
     }
     static async createUser(req, res) {
         try {
-            const { email, senha, nome, ddd, telefone } = req.body;
+            const { email, senha, nome, ddd, telefone, referralCode } = req.body;
             if (!email || !senha || !nome) {
                 return res.status(400).json({ error: 'Email, senha e nome são obrigatórios' });
             }
@@ -61,7 +69,14 @@ class AuthController {
             if (usuarioExistente) {
                 return res.status(400).json({ error: 'Email já cadastrado' });
             }
-            const usuario = await AuthService_1.AuthService.createUsuario({ email, senha, nome, ddd, telefone });
+            const usuario = await AuthService_1.AuthService.createUsuario({
+                email,
+                senha,
+                nome,
+                ddd,
+                telefone,
+                referralCode: referralCode || undefined
+            });
             const { senha: _, ...usuarioSemSenha } = usuario;
             res.status(201).json({ usuario: usuarioSemSenha });
         }
@@ -176,6 +191,66 @@ class AuthController {
                 return res.status(400).json({ error: error.message });
             }
             res.status(500).json({ error: 'Erro ao atualizar usuário' });
+        }
+    }
+    /**
+     * Obtém preferências de email do usuário
+     * GET /api/auth/email-preferences
+     */
+    static async getEmailPreferences(req, res) {
+        try {
+            const usuarioId = req.usuarioId;
+            if (!usuarioId) {
+                return res.status(401).json({ error: 'Não autenticado' });
+            }
+            const usuario = await AuthService_1.AuthService.findById(usuarioId);
+            if (!usuario) {
+                return res.status(404).json({ error: 'Usuário não encontrado' });
+            }
+            res.json({
+                receberEmails: usuario.receberEmails ?? true,
+                emailOptOutData: usuario.emailOptOutData,
+                emailOptOutReason: usuario.emailOptOutReason,
+            });
+        }
+        catch (error) {
+            console.error('Erro ao obter preferências de email:', error);
+            res.status(500).json({ error: 'Erro ao obter preferências de email' });
+        }
+    }
+    /**
+     * Atualiza preferências de email do usuário (opt-in/opt-out)
+     * PUT /api/auth/email-preferences
+     */
+    static async updateEmailPreferences(req, res) {
+        try {
+            const usuarioId = req.usuarioId;
+            if (!usuarioId) {
+                return res.status(401).json({ error: 'Não autenticado' });
+            }
+            const { receberEmails, emailOptOutReason } = req.body;
+            if (typeof receberEmails !== 'boolean') {
+                return res.status(400).json({ error: 'receberEmails deve ser um booleano (true/false)' });
+            }
+            const usuarioAtualizado = await AuthService_1.AuthService.updateEmailPreferences(usuarioId, {
+                receberEmails,
+                emailOptOutReason,
+            });
+            if (!usuarioAtualizado) {
+                return res.status(404).json({ error: 'Usuário não encontrado' });
+            }
+            res.json({
+                message: receberEmails
+                    ? 'Preferências de email atualizadas: você voltou a receber emails do sistema'
+                    : 'Preferências de email atualizadas: você optou por não receber mais emails do sistema',
+                receberEmails: usuarioAtualizado.receberEmails,
+                emailOptOutData: usuarioAtualizado.emailOptOutData,
+                emailOptOutReason: usuarioAtualizado.emailOptOutReason,
+            });
+        }
+        catch (error) {
+            console.error('Erro ao atualizar preferências de email:', error);
+            res.status(500).json({ error: 'Erro ao atualizar preferências de email' });
         }
     }
 }

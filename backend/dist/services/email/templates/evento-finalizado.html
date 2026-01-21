@@ -1,0 +1,32 @@
+<h2 style="color: #333333; margin-top: 0;">🎊 Evento Finalizado! 🎉</h2>
+
+<p>Olá <strong>{{nomeDestinatario}}</strong>,</p>
+
+<p>O evento <strong>"{{eventoNome}}"</strong> foi concluído com sucesso!</p>
+
+<div style="background-color: #f8f9fa; padding: 20px; border-radius: 6px; margin: 20px 0;">
+  <h3 style="color: #667eea; margin-top: 0; font-size: 18px;">Resumo Final</h3>
+  <p style="margin: 8px 0; font-size: 16px;"><strong>Nome:</strong> {{eventoNome}}</p>
+  {{eventoData}}
+  <p style="margin: 8px 0; font-size: 16px;"><strong>Total gasto:</strong> <span style="font-size: 18px; font-weight: bold; color: #667eea;">{{totalDespesas}}</span></p>
+  <p style="margin: 8px 0; font-size: 16px;"><strong>Participantes:</strong> {{numeroParticipantes}}</p>
+  <p style="margin: 8px 0; font-size: 14px; color: #555;"><strong>Organizador:</strong> {{organizadorNome}}</p>
+  <p style="margin: 12px 0 0 0; padding-top: 12px; border-top: 1px solid #dee2e6; font-weight: 600; color: #28a745;">✅ Todos os pagamentos foram acertados!</p>
+</div>
+
+<div style="background-color: #e7f3ff; padding: 20px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #667eea;">
+  <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 18px;">💡 Compartilhe com seus amigos!</h3>
+  <p style="margin: 0 0 16px 0; font-size: 14px; color: #666;">
+    Mostre como o Rachid facilita a organização de eventos e divisão de contas!
+  </p>
+  {{linkEventoPublico}}
+  <p style="margin: 12px 0 0 0; padding-top: 12px; border-top: 1px solid #dee2e6; font-size: 13px; color: #555;">
+    Qualquer pessoa pode visualizar o evento sem criar conta usando o link acima.
+  </p>
+</div>
+
+{{ctaCadastro}}
+
+<p class="text-muted" style="margin-top: 30px; color: #6c757d; font-size: 14px;">
+  Obrigado por usar o Rachid! Esperamos que tenha sido útil para organizar suas despesas. 🚀
+</p>

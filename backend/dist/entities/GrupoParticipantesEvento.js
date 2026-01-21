@@ -26,9 +26,9 @@ __decorate([
     __metadata("design:type", Grupo_1.Grupo)
 ], GrupoParticipantesEvento.prototype, "grupo", void 0);
 __decorate([
-    (0, typeorm_1.Column)('integer'),
+    (0, typeorm_1.Column)('integer', { name: 'grupo_id' }),
     __metadata("design:type", Number)
-], GrupoParticipantesEvento.prototype, "grupo_id", void 0);
+], GrupoParticipantesEvento.prototype, "grupoId", void 0);
 __decorate([
     (0, typeorm_1.Column)('varchar'),
     __metadata("design:type", String)

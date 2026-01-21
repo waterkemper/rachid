@@ -10,7 +10,8 @@ const ParticipanteGrupo_1 = require("../entities/ParticipanteGrupo");
 const Usuario_1 = require("../entities/Usuario");
 const DespesaHistoricoService_1 = require("./DespesaHistoricoService");
 const Participante_1 = require("../entities/Participante");
-const EmailQueueService_1 = require("./EmailQueueService");
+const NotificationService_1 = require("./NotificationService");
+const EmailAggregationService_1 = require("./EmailAggregationService");
 class DespesaService {
     static async findAll(usuarioId, grupoId) {
         // Buscar despesas onde o usuário é dono OU é membro do grupo
@@ -79,10 +80,11 @@ class DespesaService {
             return false;
         }
         const participantesGrupo = await this.participanteGrupoRepository.find({
-            where: { grupo_id: grupoId },
+            where: { grupoId: grupoId },
             relations: ['participante'],
         });
-        return participantesGrupo.some((pg) => pg.participante?.email?.toLowerCase() === usuario.email.toLowerCase());
+        const emailUsuarioNormalizado = usuario.email.trim().toLowerCase();
+        return participantesGrupo.some((pg) => pg.participante?.email?.trim().toLowerCase() === emailUsuarioNormalizado);
     }
     /**
      * Verifica se um usuário pode editar uma despesa
@@ -161,11 +163,11 @@ class DespesaService {
                 }
                 const participantesGrupo = (grupo.participantes || []);
                 // Filtrar participantes válidos (não nulos)
-                const participantesValidos = participantesGrupo.filter(pg => pg.participante_id);
+                const participantesValidos = participantesGrupo.filter(pg => pg.participanteId);
                 for (const pg of participantesValidos) {
                     const participacao = this.participacaoRepository.create({
                         despesa_id: despesaSalva.id,
-                        participante_id: pg.participante_id,
+                        participante_id: pg.participanteId,
                         valorDevePagar: 0,
                     });
                     await this.participacaoRepository.save(participacao);
@@ -180,9 +182,10 @@ class DespesaService {
         if (!despesaCompleta) {
             throw new Error('Erro ao criar despesa');
         }
-        // Notificar participantes sobre nova despesa (não bloquear se falhar)
+        // Notificar participantes sobre nova despesa (já inclui info de saldo)
+        // Não chama notificarMudancasSaldo separadamente pois o saldo é incluído na notificação da despesa
         try {
-            await this.notificarNovaDespesa(despesaCompleta, data.grupo_id);
+            await this.notificarNovaDespesa(despesaCompleta, data.grupo_id, data.usuario_id);
         }
         catch (err) {
             console.error('[DespesaService.create] Erro ao adicionar notificações à fila:', err);
@@ -191,9 +194,9 @@ class DespesaService {
         return despesaCompleta;
     }
     /**
-     * Notifica participantes sobre nova despesa
+     * Notifica participantes sobre nova despesa (inclui saldo atualizado)
      */
-    static async notificarNovaDespesa(despesa, grupoId) {
+    static async notificarNovaDespesa(despesa, grupoId, usuarioId) {
         // Buscar grupo e participantes
         const grupo = await this.grupoRepository.findOne({
             where: { id: grupoId },
@@ -212,22 +215,23 @@ class DespesaService {
         }
         // Buscar pagador
         const pagador = despesa.pagador;
-        const pagadorNome = pagador?.nome || 'Desconhecido';
-        // Calcular valor por pessoa
-        const valorPorPessoa = despesa.valorTotal / participacoes.length;
         // Obter link de compartilhamento
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const linkEvento = `${frontendUrl}/eventos/${grupoId}`;
-        // Formatar data
-        const formatDate = (date) => {
-            const d = typeof date === 'string' ? new Date(date) : date;
-            return new Intl.DateTimeFormat('pt-BR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-            }).format(d);
+        // Formatar valor
+        const formatCurrency = (valor) => {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
         };
-        // Adicionar jobs na fila para cada participante (exceto o pagador, se aplicável)
+        // Calcular saldos atuais para incluir na notificação
+        let saldosMap = new Map();
+        try {
+            const saldos = await NotificationService_1.NotificationService.calcularSaldosAtuais(grupoId, usuarioId);
+            saldos.forEach(s => saldosMap.set(s.participanteId, s.saldo));
+        }
+        catch (err) {
+            console.warn('[DespesaService.notificarNovaDespesa] Erro ao calcular saldos:', err);
+        }
+        // Adicionar notificações ao sistema de agregação para cada participante
         for (const participacao of participacoes) {
             const participante = participacao.participante;
             if (!participante)
@@ -240,18 +244,29 @@ class DespesaService {
             if (!email) {
                 continue; // Pular se não tiver email
             }
+            // Obter saldo do participante
+            const saldo = saldosMap.get(participante.id);
+            const saldoAtual = saldo !== undefined ? formatCurrency(saldo) : undefined;
+            const direcao = saldo !== undefined ? (saldo > 0 ? 'aumentou' : saldo < 0 ? 'diminuiu' : undefined) : undefined;
             try {
-                await EmailQueueService_1.EmailQueueService.adicionarEmailNovaDespesa({
+                // Usar sistema de agregação - inclui despesa + saldo na mesma notificação
+                await EmailAggregationService_1.EmailAggregationService.adicionarNotificacao({
                     destinatario: email,
-                    nomeDestinatario: participante.nome,
-                    eventoNome: grupo.nome,
-                    eventoId: grupo.id,
-                    despesaDescricao: despesa.descricao,
-                    despesaValorTotal: despesa.valorTotal,
-                    despesaData: formatDate(despesa.data),
-                    valorPorPessoa,
-                    pagadorNome,
-                    linkEvento,
+                    usuarioId: participante.usuario_id,
+                    eventoId: grupoId,
+                    tipoNotificacao: 'resumo-evento',
+                    dados: {
+                        eventoNome: grupo.nome,
+                        eventoId: grupoId,
+                        nomeDestinatario: participante.nome,
+                        despesaId: despesa.id,
+                        despesaDescricao: despesa.descricao,
+                        despesaValorTotal: formatCurrency(despesa.valorTotal),
+                        linkEvento,
+                        // Incluir saldo na mesma notificação
+                        saldoAtual,
+                        direcao,
+                    },
                 });
             }
             catch (err) {
@@ -269,7 +284,10 @@ class DespesaService {
         const despesa = await this.findById(id);
         if (!despesa)
             return null;
-        const valorTotalFoiAlterado = data.valorTotal !== undefined && data.valorTotal !== despesa.valorTotal;
+        // Converter valores para números para comparação correta (evita comparar string com number)
+        const novoValorTotal = data.valorTotal !== undefined ? Number(data.valorTotal) : undefined;
+        const valorTotalAtual = Number(despesa.valorTotal);
+        const valorTotalFoiAlterado = novoValorTotal !== undefined && novoValorTotal !== valorTotalAtual;
         // Preparar dados para atualização e histórico
         const updateData = {};
         const historicoAlteracoes = [];
@@ -281,12 +299,12 @@ class DespesaService {
                 valor_novo: data.descricao,
             });
         }
-        if (data.valorTotal !== undefined && data.valorTotal !== despesa.valorTotal) {
-            updateData.valorTotal = data.valorTotal;
+        if (novoValorTotal !== undefined && novoValorTotal !== valorTotalAtual) {
+            updateData.valorTotal = novoValorTotal;
             historicoAlteracoes.push({
                 campo_alterado: 'valorTotal',
-                valor_anterior: despesa.valorTotal.toString(),
-                valor_novo: data.valorTotal.toString(),
+                valor_anterior: valorTotalAtual.toString(),
+                valor_novo: novoValorTotal.toString(),
             });
         }
         if (data.participante_pagador_id !== undefined && data.participante_pagador_id !== null) {
@@ -337,7 +355,7 @@ class DespesaService {
             });
             if (grupo && grupo.participantes && grupo.participantes.length > 0) {
                 const participantesGrupo = (grupo.participantes || []);
-                const participantesValidos = participantesGrupo.filter(pg => pg.participante_id);
+                const participantesValidos = participantesGrupo.filter(pg => pg.participanteId);
                 if (participantesValidos.length > 0) {
                     const queryRunner = data_source_1.AppDataSource.createQueryRunner();
                     await queryRunner.connect();
@@ -347,7 +365,7 @@ class DespesaService {
                         for (const pg of participantesValidos) {
                             const participacao = queryRunner.manager.create(ParticipacaoDespesa_1.ParticipacaoDespesa, {
                                 despesa_id: id,
-                                participante_id: pg.participante_id,
+                                participante_id: pg.participanteId,
                                 valorDevePagar: 0,
                             });
                             await queryRunner.manager.save(participacao);
@@ -416,9 +434,13 @@ class DespesaService {
         if (!despesaAtualizada) {
             return null;
         }
-        // Notificar participantes sobre despesa editada (não bloquear se falhar)
+        // Notificar participantes sobre despesa editada (já inclui info de saldo)
+        // Não chama notificarMudancasSaldo separadamente pois o saldo é incluído na notificação da despesa
         try {
-            await this.notificarDespesaEditada(despesaAtualizada, historicoAlteracoes);
+            if (historicoAlteracoes.length > 0) {
+                console.log(`[DespesaService.update] Notificando ${historicoAlteracoes.length} mudança(s) na despesa ${id}`);
+                await this.notificarDespesaEditada(despesaAtualizada, historicoAlteracoes, usuarioId);
+            }
         }
         catch (err) {
             console.error('[DespesaService.update] Erro ao adicionar notificações à fila:', err);
@@ -427,9 +449,9 @@ class DespesaService {
         return despesaAtualizada;
     }
     /**
-     * Notifica participantes sobre despesa editada
+     * Notifica participantes sobre despesa editada (inclui saldo atualizado)
      */
-    static async notificarDespesaEditada(despesa, mudancas) {
+    static async notificarDespesaEditada(despesa, mudancas, usuarioId) {
         if (!mudancas || mudancas.length === 0) {
             return; // Não notificar se não houver mudanças
         }
@@ -469,42 +491,66 @@ class DespesaService {
         // Obter link
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const linkEvento = `${frontendUrl}/eventos/${grupo.id}`;
-        // Formatar data
-        const formatDate = (date) => {
-            const d = typeof date === 'string' ? new Date(date) : date;
-            return new Intl.DateTimeFormat('pt-BR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-            }).format(d);
+        // Formatar valor
+        const formatCurrency = (valor) => {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
         };
-        // Adicionar jobs na fila para cada participante
+        // Calcular saldos atuais para incluir na notificação
+        let saldosMap = new Map();
+        try {
+            const saldos = await NotificationService_1.NotificationService.calcularSaldosAtuais(grupo.id, usuarioId);
+            saldos.forEach(s => saldosMap.set(s.participanteId, s.saldo));
+        }
+        catch (err) {
+            console.warn('[DespesaService.notificarDespesaEditada] Erro ao calcular saldos:', err);
+        }
+        // Usar sistema de agregação para cada participante
+        let notificacoesEnviadas = 0;
+        let notificacoesFalhadas = 0;
         for (const participacao of participacoes) {
             const participante = participacao.participante;
             if (!participante)
                 continue;
             const email = await this.obterEmailParticipante(participante.id);
             if (!email) {
+                console.log(`[DespesaService.notificarDespesaEditada] Participante ${participante.nome} (ID: ${participante.id}) não tem email cadastrado`);
                 continue; // Pular se não tiver email
             }
+            // Obter saldo do participante
+            const saldo = saldosMap.get(participante.id);
+            const saldoAtual = saldo !== undefined ? formatCurrency(saldo) : undefined;
+            const direcao = saldo !== undefined ? (saldo > 0 ? 'aumentou' : saldo < 0 ? 'diminuiu' : undefined) : undefined;
             try {
-                await EmailQueueService_1.EmailQueueService.adicionarEmailDespesaEditada({
+                // Usar sistema de agregação - inclui despesa + saldo na mesma notificação
+                await EmailAggregationService_1.EmailAggregationService.adicionarNotificacao({
                     destinatario: email,
-                    nomeDestinatario: participante.nome,
-                    eventoNome: grupo.nome,
+                    usuarioId: participante.usuario_id,
                     eventoId: grupo.id,
-                    despesaDescricao: despesa.descricao,
-                    despesaValorTotal: despesa.valorTotal,
-                    despesaData: formatDate(despesa.data),
-                    mudancas: mudancasFormatadas,
-                    linkEvento,
+                    tipoNotificacao: 'resumo-evento',
+                    dados: {
+                        eventoNome: grupo.nome,
+                        eventoId: grupo.id,
+                        nomeDestinatario: participante.nome,
+                        despesaId: despesa.id,
+                        despesaDescricao: despesa.descricao,
+                        despesaValorTotal: formatCurrency(despesa.valorTotal),
+                        mudancas: mudancasFormatadas,
+                        // Incluir saldo na mesma notificação
+                        saldoAtual,
+                        direcao,
+                        linkEvento,
+                    },
                 });
+                notificacoesEnviadas++;
+                console.log(`[DespesaService.notificarDespesaEditada] ✅ Notificação adicionada para agregação: ${participante.nome} (${email})`);
             }
             catch (err) {
-                console.error(`Erro ao adicionar notificação para ${email}:`, err);
+                notificacoesFalhadas++;
+                console.error(`[DespesaService.notificarDespesaEditada] ❌ Erro ao adicionar notificação para ${participante.nome} (${email}):`, err);
                 // Continuar com outros participantes
             }
         }
+        console.log(`[DespesaService.notificarDespesaEditada] Resumo: ${notificacoesEnviadas} agregadas, ${notificacoesFalhadas} falhadas`);
     }
     /**
      * Registra histórico de alterações em uma despesa
@@ -557,8 +603,8 @@ class DespesaService {
         }
         // Obter IDs de todos os participantes do evento
         const participantesIds = grupo.participantes
-            .filter(pg => pg.participante_id)
-            .map(pg => pg.participante_id);
+            .filter(pg => pg.participanteId)
+            .map(pg => pg.participanteId);
         // Para cada despesa, garantir que todos os participantes tenham participação
         // MAS apenas se a despesa NÃO tiver pagador definido (despesas com pagador já estão "fechadas")
         for (const despesa of despesas) {

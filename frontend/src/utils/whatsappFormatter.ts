@@ -9,6 +9,41 @@ import {
 } from '../types';
 
 /**
+ * Verifica se uma despesa é placeholder (zerada ou sem participantes válidos)
+ * Despesas placeholder são criadas a partir de templates e não foram editadas/preenchidas
+ */
+export const isDespesaPlaceholder = (despesa: Despesa): boolean => {
+  // Se não tem pagador definido, é placeholder (despesas de template não têm pagador até serem editadas)
+  if (!despesa.participante_pagador_id) {
+    return true;
+  }
+  
+  // Se tem valor zero, é placeholder
+  if (!despesa.valorTotal || despesa.valorTotal === 0) {
+    return true;
+  }
+  
+  // Se tem participações mas todas estão zeradas, é placeholder
+  if (despesa.participacoes && despesa.participacoes.length > 0) {
+    const temParticipacaoValida = despesa.participacoes.some(
+      p => p.valorDevePagar && p.valorDevePagar > 0
+    );
+    if (!temParticipacaoValida) {
+      return true;
+    }
+  }
+  
+  return false;
+};
+
+/**
+ * Filtra despesas placeholder de um array de despesas
+ */
+export const filtrarDespesasPlaceholder = (despesas: Despesa[]): Despesa[] => {
+  return despesas.filter(d => !isDespesaPlaceholder(d));
+};
+
+/**
  * Formata um valor monetário para exibição
  */
 const formatCurrency = (value: number): string => {
@@ -72,10 +107,20 @@ const encontrarParticipantesComPix = (
     return [];
   }
 
-  const participantesIds = subgrupo.participantes.map(p => p.participante_id);
-  const participantesComPix = participantes.filter(p => 
-    participantesIds.includes(p.id) && p.chavePix && p.chavePix.trim() !== ''
-  );
+  // Coletar participantes com PIX, tentando usar p.participante primeiro
+  const participantesComPix: Participante[] = [];
+  subgrupo.participantes.forEach(p => {
+    // Tentar usar participante diretamente (se backend enviou)
+    let participante = p.participante;
+    // Se não tiver, buscar no array de participantes
+    if (!participante) {
+      const participanteId = p.participante_id;
+      participante = participantes.find(part => part.id === participanteId);
+    }
+    if (participante && participante.chavePix && participante.chavePix.trim() !== '') {
+      participantesComPix.push(participante);
+    }
+  });
   
   return participantesComPix;
 };
@@ -91,237 +136,53 @@ const encontrarParticipantePorNome = (
 };
 
 /**
- * Gera a seção de saldos dos participantes
+ * Gera a seção de saldos dos participantes (não usado atualmente - mantido para referência)
  */
-const gerarSaldosParticipantes = (
-  saldos: SaldoParticipante[],
-  saldosGrupos: SaldoGrupo[]
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _gerarSaldosParticipantes = (
+  _saldos: SaldoParticipante[],
+  _saldosGrupos: SaldoGrupo[]
 ): string => {
-  if (saldos.length === 0 && saldosGrupos.length === 0) {
-    return '';
-  }
-
-  let saldosTexto = '\n💰 *Saldos dos Participantes:*\n\n';
-
-  // Se houver grupos, organizar por grupo
-  if (saldosGrupos.length > 0) {
-    // Criar mapa de participanteId -> grupoId
-    const participanteParaGrupo = new Map<number, { grupoId: number; grupoNome: string }>();
-    
-    saldosGrupos.forEach(grupo => {
-      grupo.participantes.forEach(participante => {
-        participanteParaGrupo.set(participante.participanteId, {
-          grupoId: grupo.grupoId,
-          grupoNome: grupo.grupoNome
-        });
-      });
-    });
-
-    // Organizar saldos por grupo
-    const saldosPorGrupo = new Map<number, SaldoParticipante[]>();
-    const saldosSemGrupo: SaldoParticipante[] = [];
-
-    saldos.forEach(saldo => {
-      const grupoInfo = participanteParaGrupo.get(saldo.participanteId);
-      if (grupoInfo) {
-        if (!saldosPorGrupo.has(grupoInfo.grupoId)) {
-          saldosPorGrupo.set(grupoInfo.grupoId, []);
-        }
-        saldosPorGrupo.get(grupoInfo.grupoId)!.push(saldo);
-      } else {
-        saldosSemGrupo.push(saldo);
-      }
-    });
-
-    // Exibir grupos ordenados
-    saldosGrupos.forEach(grupo => {
-      const saldosDoGrupo = saldosPorGrupo.get(grupo.grupoId);
-      if (saldosDoGrupo && saldosDoGrupo.length > 0) {
-        const participantesNomes = grupo.participantes.map(p => p.participanteNome).join(', ');
-        saldosTexto += `👥 *${grupo.grupoNome}*\n`;
-        saldosTexto += `   Membros: ${participantesNomes}\n`;
-        saldosTexto += `   Total Pagou: ${formatCurrency(grupo.totalPagou)}\n`;
-        saldosTexto += `   Total Deve: ${formatCurrency(grupo.totalDeve)}\n`;
-        saldosTexto += `   Saldo: *${formatCurrency(grupo.saldo)}*\n`;
-        if (grupo.saldo > 0) {
-          saldosTexto += `   (recebe)\n`;
-        } else if (grupo.saldo < 0) {
-          saldosTexto += `   (deve pagar)\n`;
-        }
-        saldosTexto += '\n';
-      }
-    });
-
-    // Exibir participantes sem grupo
-    if (saldosSemGrupo.length > 0) {
-      if (saldosPorGrupo.size > 0) {
-        saldosTexto += '👤 *Sem Grupo:*\n\n';
-      }
-      saldosSemGrupo.forEach(saldo => {
-        saldosTexto += `• *${saldo.participanteNome}*\n`;
-        saldosTexto += `  Pagou: ${formatCurrency(saldo.totalPagou)} | Deve: ${formatCurrency(saldo.totalDeve)}\n`;
-        saldosTexto += `  Saldo: *${formatCurrency(saldo.saldo)}*\n`;
-        if (saldo.saldo > 0) {
-          saldosTexto += `  (recebe)\n`;
-        } else if (saldo.saldo < 0) {
-          saldosTexto += `  (deve pagar)\n`;
-        }
-        saldosTexto += '\n';
-      });
-    }
-  } else {
-    // Sem grupos, exibir todos os participantes individualmente
-    saldos.forEach(saldo => {
-      saldosTexto += `• *${saldo.participanteNome}*\n`;
-      saldosTexto += `  Pagou: ${formatCurrency(saldo.totalPagou)} | Deve: ${formatCurrency(saldo.totalDeve)}\n`;
-      saldosTexto += `  Saldo: *${formatCurrency(saldo.saldo)}*\n`;
-      if (saldo.saldo > 0) {
-        saldosTexto += `  (recebe)\n`;
-      } else if (saldo.saldo < 0) {
-        saldosTexto += `  (deve pagar)\n`;
-      }
-      saldosTexto += '\n';
-    });
-  }
-
-  return saldosTexto;
+  // Esta função está desabilitada - não usada no formato atual
+  return '';
 };
 
 /**
- * Gera o detalhamento das despesas
+ * Gera o detalhamento das despesas (não usado atualmente - mantido para referência)
  */
-const gerarDetalhamento = (
-  despesas: Despesa[],
-  subgrupos: GrupoParticipantesEvento[],
-  participantes: Participante[]
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _gerarDetalhamento = (
+  _despesas: Despesa[],
+  _subgrupos: GrupoParticipantesEvento[],
+  _participantes: Participante[]
 ): string => {
-  if (despesas.length === 0) {
-    return '';
-  }
-
-  let detalhamento = '\n📋 *Detalhamento:*\n\n';
-  
-  despesas.forEach((despesa, index) => {
-    const pagadorNome = despesa.pagador?.nome || 'Desconhecido';
-    const valorTotal = formatCurrency(despesa.valorTotal);
-    const dataFormatada = formatDate(despesa.data);
-    const descricaoLimpa = (despesa.descricao || '').trim();
-    
-    detalhamento += `*${descricaoLimpa}* - ${valorTotal}\n`;
-    detalhamento += `  Data: ${dataFormatada}\n`;
-    detalhamento += `  Pagou: *${pagadorNome.trim()}*\n`;
-    
-    if (despesa.participacoes && despesa.participacoes.length > 0) {
-      const participantesNomes: string[] = [];
-      despesa.participacoes.forEach(participacao => {
-        // Tentar usar a relação participante primeiro (se vier do backend)
-        if (participacao.participante && participacao.participante.nome) {
-          participantesNomes.push(participacao.participante.nome.trim());
-        } else {
-          // Fallback: buscar na lista de participantes
-          const participante = participantes.find(p => p.id === participacao.participante_id);
-          if (participante) {
-            participantesNomes.push(participante.nome.trim());
-          } else {
-            // Se não encontrar, usar o ID como fallback
-            participantesNomes.push(`Participante ${participacao.participante_id}`);
-          }
-        }
-      });
-      
-      if (participantesNomes.length > 0) {
-        detalhamento += `  Dividido entre: ${participantesNomes.join(', ')}\n`;
-        const valorPorPessoa = despesa.valorTotal / despesa.participacoes.length;
-        detalhamento += `  Valor por pessoa: *${formatCurrency(valorPorPessoa)}*\n`;
-      }
-    }
-    
-    if (index < despesas.length - 1) {
-      detalhamento += '\n';
-    }
-  });
-  
-  return detalhamento;
+  // Esta função está desabilitada - não usada no formato atual
+  return '';
 };
 
 /**
- * Gera informações de PIX para participantes individuais
+ * Gera informações de PIX para participantes individuais (não usado atualmente - mantido para referência)
  */
-const gerarPixParticipantes = (
-  sugestoes: SugestaoPagamento[],
-  participantes: Participante[]
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _gerarPixParticipantes = (
+  _sugestoes: SugestaoPagamento[],
+  _participantes: Participante[]
 ): string => {
-  const recebedores = new Set<string>();
-  sugestoes.forEach(sugestao => {
-    recebedores.add(sugestao.para);
-  });
-
-  const participantesComPix: Array<{ nome: string; pix: string }> = [];
-  recebedores.forEach(nome => {
-    const participante = encontrarParticipantePorNome(nome, participantes);
-    if (participante && participante.chavePix && participante.chavePix.trim() !== '') {
-      participantesComPix.push({ nome: participante.nome, pix: participante.chavePix });
-    }
-  });
-
-  if (participantesComPix.length === 0) {
-    return '';
-  }
-
-  let pixInfo = '\n💳 *PIX para recebimento:*\n';
-  participantesComPix.forEach(({ nome, pix }) => {
-    pixInfo += `• *${nome.trim()}*: ${pix.trim()}\n`;
-  });
-
-  return pixInfo;
+  // Esta função está desabilitada - não usada no formato atual
+  return '';
 };
 
 /**
- * Gera informações de PIX para subgrupos
+ * Gera informações de PIX para subgrupos (não usado atualmente - mantido para referência)
  */
-const gerarPixSubgrupos = (
-  sugestoes: SugestaoPagamento[],
-  subgrupos: GrupoParticipantesEvento[],
-  participantes: Participante[]
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _gerarPixSubgrupos = (
+  _sugestoes: SugestaoPagamento[],
+  _subgrupos: GrupoParticipantesEvento[],
+  _participantes: Participante[]
 ): string => {
-  const recebedores = new Set<string>();
-  sugestoes.forEach(sugestao => {
-    if (sugestao.para) {
-      recebedores.add(sugestao.para.trim());
-    }
-  });
-
-  let pixInfo = '';
-  const gruposProcessados = new Set<string>();
-  
-  recebedores.forEach(grupoNome => {
-    const participantesComPix = encontrarParticipantesComPix(grupoNome, subgrupos, participantes);
-    
-    if (participantesComPix.length > 0) {
-      const grupoKey = grupoNome.toLowerCase();
-      if (!gruposProcessados.has(grupoKey)) {
-        pixInfo += `\n👥 *Membros do grupo "${grupoNome.trim()}" com PIX:*\n`;
-        participantesComPix.forEach(participante => {
-          if (participante.chavePix) {
-            pixInfo += `• *${participante.nome.trim()}*: ${participante.chavePix.trim()}\n`;
-          }
-        });
-        gruposProcessados.add(grupoKey);
-      }
-    } else {
-      const participanteIndividual = encontrarParticipantePorNome(grupoNome, participantes);
-      if (participanteIndividual && participanteIndividual.chavePix && participanteIndividual.chavePix.trim() !== '') {
-        if (!pixInfo.includes(`*${participanteIndividual.nome.trim()}*`)) {
-          if (!pixInfo) {
-            pixInfo += '\n💳 *PIX para recebimento:*\n';
-          }
-          pixInfo += `• *${participanteIndividual.nome.trim()}*: ${participanteIndividual.chavePix.trim()}\n`;
-        }
-      }
-    }
-  });
-
-  return pixInfo;
+  // Esta função está desabilitada - não usada no formato atual
+  return '';
 };
 
 /**
@@ -356,12 +217,15 @@ export const formatarSugestoesPagamentoIndividual = (
   sugestoes: SugestaoPagamento[],
   despesas: Despesa[],
   participantes: Participante[],
-  saldos: SaldoParticipante[],
-  saldosGrupos: SaldoGrupo[],
+  _saldos: SaldoParticipante[],
+  _saldosGrupos: SaldoGrupo[],
   link?: string
 ): string => {
+  // Filtrar despesas placeholder antes de calcular total
+  const despesasValidas = filtrarDespesasPlaceholder(despesas);
+  
   // Calcular total de despesas
-  const totalDespesas = despesas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
+  const totalDespesas = despesasValidas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
   const totalFormatado = formatCurrency(totalDespesas);
 
   if (sugestoes.length === 0) {
@@ -410,12 +274,15 @@ export const formatarSugestoesPagamentoSubgrupos = (
   despesas: Despesa[],
   subgrupos: GrupoParticipantesEvento[],
   participantes: Participante[],
-  saldos: SaldoParticipante[],
-  saldosGrupos: SaldoGrupo[],
+  _saldos: SaldoParticipante[],
+  _saldosGrupos: SaldoGrupo[],
   link?: string
 ): string => {
+  // Filtrar despesas placeholder antes de calcular total
+  const despesasValidas = filtrarDespesasPlaceholder(despesas);
+  
   // Calcular total de despesas
-  const totalDespesas = despesas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
+  const totalDespesas = despesasValidas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
   const totalFormatado = formatCurrency(totalDespesas);
 
   if (sugestoes.length === 0) {
@@ -466,38 +333,70 @@ export const formatarSugestoesPagamento = (
   saldos: SaldoParticipante[],
   saldosGrupos: SaldoGrupo[],
   subgrupos?: GrupoParticipantesEvento[],
-  link?: string
+  link?: string,
+  numeroParticipantes?: number,
+  totalDespesas?: number,
+  _nomeOrganizador?: string
 ): string => {
   const temSubgrupos = subgrupos && subgrupos.length > 0;
   
+  let mensagemFormatada: string;
+  
+  // IMPORTANTE: Se houver subgrupos, SEMPRE usar formatação de subgrupos
+  // As sugestões passadas já são as corretas (entre grupos se há subgrupos, individuais se não há)
   if (temSubgrupos) {
-    const nomesGrupos = new Set(subgrupos.map(sg => sg.nome));
-    const sugestoesEntreGrupos = sugestoes.some(s => 
-      nomesGrupos.has(s.de) || nomesGrupos.has(s.para)
+    // Quando há subgrupos, usar formatação de subgrupos (que inclui PIX)
+    mensagemFormatada = formatarSugestoesPagamentoSubgrupos(
+      evento,
+      sugestoes,
+      despesas,
+      subgrupos,
+      participantes,
+      saldos,
+      saldosGrupos,
+      link
     );
-    
-    if (sugestoesEntreGrupos) {
-      return formatarSugestoesPagamentoSubgrupos(
-        evento,
-        sugestoes,
-        despesas,
-        subgrupos,
-        participantes,
-        saldos,
-        saldosGrupos,
-        link
-      );
-    }
+  } else {
+    // Quando não há subgrupos, usar formatação individual (que também inclui PIX)
+    mensagemFormatada = formatarSugestoesPagamentoIndividual(
+      evento,
+      sugestoes,
+      despesas,
+      participantes,
+      saldos,
+      saldosGrupos,
+      link
+    );
   }
 
-  return formatarSugestoesPagamentoIndividual(
-    evento,
-    sugestoes,
-    despesas,
-    participantes,
-    saldos,
-    saldosGrupos,
-    link
-  );
+  // Adicionar header mais atraente e call-to-action conforme plano
+  const frontendUrl = window.location.origin;
+  const totalFormatado = totalDespesas ? formatCurrency(totalDespesas) : '';
+  const participantesTexto = numeroParticipantes ? `${numeroParticipantes}` : '';
+  
+  let header = '🎉 *Olha só o resultado do nosso evento!*\n\n';
+  header += `📊 *${evento.nome.trim()}*\n`;
+  if (totalFormatado) {
+    header += `💰 Total: ${totalFormatado}\n`;
+  }
+  if (participantesTexto) {
+    header += `👥 ${participantesTexto} ${numeroParticipantes === 1 ? 'participante' : 'participantes'}\n`;
+  }
+  header += '\n';
+
+  // Call-to-action no final
+  let cta = '\n💡 *Use o Rachid para organizar seus eventos também!*\n';
+  if (link) {
+    cta += `👉 ${link}\n`;
+    cta += 'Dá pra ver o resumo e seus saldos sem criar conta.\n\n';
+  }
+  
+  // Link de cadastro com referral (referenciando o evento)
+  const linkCadastro = `${frontendUrl}/cadastro?ref=share_${evento.id}`;
+  cta += `🚀 *Crie sua conta gratuita:*\n`;
+  cta += `${linkCadastro}\n`;
+  cta += 'É grátis e sem complicação!\n';
+
+  return header + mensagemFormatada + cta;
 };
 

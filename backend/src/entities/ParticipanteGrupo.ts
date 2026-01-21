@@ -11,14 +11,14 @@ export class ParticipanteGrupo {
   @JoinColumn({ name: 'participante_id' })
   participante!: Participante;
 
-  @Column('integer')
-  participante_id!: number;
+  @Column('integer', { name: 'participante_id' })
+  participanteId!: number;
 
   @ManyToOne(() => Grupo, grupo => grupo.participantes)
   @JoinColumn({ name: 'grupo_id' })
   grupo!: Grupo;
 
-  @Column('integer')
-  grupo_id!: number;
+  @Column('integer', { name: 'grupo_id' })
+  grupoId!: number;
 }
 

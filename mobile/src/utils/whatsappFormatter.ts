@@ -9,6 +9,41 @@ import {
 } from '../../shared/types';
 
 /**
+ * Verifica se uma despesa é placeholder (zerada ou sem participantes válidos)
+ * Despesas placeholder são criadas a partir de templates e não foram editadas/preenchidas
+ */
+export const isDespesaPlaceholder = (despesa: Despesa): boolean => {
+  // Se não tem pagador definido, é placeholder (despesas de template não têm pagador até serem editadas)
+  if (!despesa.participante_pagador_id) {
+    return true;
+  }
+  
+  // Se tem valor zero, é placeholder
+  if (!despesa.valorTotal || despesa.valorTotal === 0) {
+    return true;
+  }
+  
+  // Se tem participações mas todas estão zeradas, é placeholder
+  if (despesa.participacoes && despesa.participacoes.length > 0) {
+    const temParticipacaoValida = despesa.participacoes.some(
+      (p: any) => p.valorDevePagar && p.valorDevePagar > 0
+    );
+    if (!temParticipacaoValida) {
+      return true;
+    }
+  }
+  
+  return false;
+};
+
+/**
+ * Filtra despesas placeholder de um array de despesas
+ */
+export const filtrarDespesasPlaceholder = (despesas: Despesa[]): Despesa[] => {
+  return despesas.filter(d => !isDespesaPlaceholder(d));
+};
+
+/**
  * Formata um valor monetário para exibição
  */
 const formatCurrency = (value: number): string => {
@@ -354,8 +389,11 @@ export const formatarSugestoesPagamentoIndividual = (
   saldosGrupos: SaldoGrupo[],
   link?: string
 ): string => {
+  // Filtrar despesas placeholder antes de calcular total
+  const despesasValidas = filtrarDespesasPlaceholder(despesas);
+  
   // Calcular total de despesas
-  const totalDespesas = despesas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
+  const totalDespesas = despesasValidas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
   const totalFormatado = formatCurrency(totalDespesas);
 
   if (sugestoes.length === 0) {
@@ -408,8 +446,11 @@ export const formatarSugestoesPagamentoSubgrupos = (
   saldosGrupos: SaldoGrupo[],
   link?: string
 ): string => {
+  // Filtrar despesas placeholder antes de calcular total
+  const despesasValidas = filtrarDespesasPlaceholder(despesas);
+  
   // Calcular total de despesas
-  const totalDespesas = despesas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
+  const totalDespesas = despesasValidas.reduce((sum, d) => sum + Number(d.valorTotal || 0), 0);
   const totalFormatado = formatCurrency(totalDespesas);
 
   if (sugestoes.length === 0) {

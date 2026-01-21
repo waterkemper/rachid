@@ -30,7 +30,7 @@ export class DespesaHistorico {
   @Column('text', { nullable: true })
   valor_novo?: string;
 
-  @CreateDateColumn({ name: 'criadoEm' })
+  @CreateDateColumn({ name: 'criadoem' })
   criadoEm!: Date;
 }
 
