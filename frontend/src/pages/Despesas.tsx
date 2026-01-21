@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { despesaApi, grupoApi, participanteApi, grupoParticipantesApi } from '../services/api';
+import { despesaApi, grupoApi, participanteApi, grupoParticipantesApi, featureApi } from '../services/api';
 import { Despesa, DespesaAnexo, Grupo, Participante } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from '../components/Modal';
-import FileUpload from '../components/FileUpload';
-import { FeatureGate } from '../components/FeatureGate';
-import { FaPlus, FaEdit, FaTrash, FaChartBar, FaUsers, FaShare, FaLock, FaPaperclip, FaDownload, FaImage, FaFilePdf, FaFile } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaChartBar, FaUsers, FaShare, FaLock, FaPaperclip, FaDownload, FaImage, FaFilePdf, FaFile, FaCamera, FaTimes } from 'react-icons/fa';
 import ShareButtons from '../components/ShareButtons';
 import './Despesas.css';
 
@@ -41,6 +39,8 @@ const Despesas: React.FC = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [anexos, setAnexos] = useState<DespesaAnexo[]>([]);
   const [uploadingAnexos, setUploadingAnexos] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // Função helper para verificar se usuário pode editar uma despesa
   const canEditDespesa = useCallback((despesa: Despesa): boolean => {
@@ -403,11 +403,68 @@ const Despesas: React.FC = () => {
     return (bytes / 1024 / 1024).toFixed(1) + ' MB';
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+    const validFiles: File[] = [];
+    const errors: string[] = [];
+
+    files.forEach(file => {
+      // Validar tamanho
+      if (file.size > MAX_FILE_SIZE) {
+        errors.push(`${file.name}: Arquivo muito grande. Máximo: 5 MB`);
+        return;
+      }
+
+      // Validar tipo
+      const validTypes = [
+        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      ];
+
+      if (!validTypes.includes(file.type)) {
+        errors.push(`${file.name}: Tipo de arquivo não permitido`);
+        return;
+      }
+
+      validFiles.push(file);
+    });
+
+    if (errors.length > 0) {
+      setError(errors.join('\n'));
+      setTimeout(() => setError(null), 5000);
+    }
+
+    if (validFiles.length > 0) {
+      setSelectedFiles(prev => [...prev, ...validFiles]);
+    }
+
+    // Limpar o input para permitir selecionar o mesmo arquivo novamente
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (saving) {
       return; // Prevenir múltiplos cliques
+    }
+
+    if (!formData.grupo_id || formData.grupo_id === 0) {
+      setError('Selecione um evento no topo da tela antes de criar uma despesa');
+      return;
     }
 
     if (participantesSelecionados.length === 0) {
@@ -486,6 +543,14 @@ const Despesas: React.FC = () => {
       currency: 'BRL',
     }).format(value);
   };
+
+  // Calcular valor por participante
+  const valorPorParticipante = useMemo(() => {
+    if (participantesSelecionados.length === 0) return 0;
+    const valorTotal = Number(String(formData.valorTotal).replace(',', '.'));
+    if (isNaN(valorTotal) || valorTotal <= 0) return 0;
+    return valorTotal / participantesSelecionados.length;
+  }, [formData.valorTotal, participantesSelecionados.length]);
 
   const formatDate = (dateString: string) => {
     // Se a data já está no formato YYYY-MM-DD (sem hora), usar diretamente sem conversão de timezone
@@ -733,30 +798,31 @@ const Despesas: React.FC = () => {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Evento *</label>
-            <select
-              value={formData.grupo_id}
-              onChange={async (e) => {
-                const grupoId = Number(e.target.value);
-                setFormData({ ...formData, grupo_id: grupoId, participante_pagador_id: 0 });
-                // Carregar participantes do evento selecionado
-                if (grupoId > 0) {
-                  const participantesCarregados = await loadParticipantesDoEvento(grupoId);
-                  // Por padrão, selecionar todos os participantes do evento
-                  setParticipantesSelecionados(participantesCarregados.map(p => p.id));
-                } else {
-                  setParticipantesDoEvento([]);
-                  setParticipantesSelecionados([]);
-                }
-              }}
-              required
-            >
-              <option value="">Selecione um evento</option>
-              {grupos.map((grupo) => (
-                <option key={grupo.id} value={grupo.id}>
-                  {grupo.nome}
-                </option>
-              ))}
-            </select>
+            {formData.grupo_id > 0 ? (
+              <div style={{
+                padding: '10px 14px',
+                background: 'rgba(99, 102, 241, 0.08)',
+                border: '1px solid rgba(99, 102, 241, 0.2)',
+                borderRadius: '8px',
+                color: 'rgba(226, 232, 240, 0.9)',
+                fontSize: '14px',
+                fontWeight: '500'
+              }}>
+                {grupos.find(g => g.id === formData.grupo_id)?.nome || 'Evento não encontrado'}
+              </div>
+            ) : (
+              <div style={{
+                padding: '10px 14px',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                borderRadius: '8px',
+                color: 'rgba(239, 68, 68, 0.9)',
+                fontSize: '14px',
+                fontWeight: '500'
+              }}>
+                Selecione um evento no topo da tela antes de criar uma despesa
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label>Descrição *</label>
@@ -769,41 +835,130 @@ const Despesas: React.FC = () => {
           </div>
           <div className="form-group">
             <label>Valor Total *</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              className="valor-despesa-input"
-              value={formData.valorTotal}
-              onChange={(e) => {
-                // Permite digitação livre, apenas remove caracteres inválidos
-                let value = e.target.value;
-                // Permite números, vírgula e ponto
-                value = value.replace(/[^\d,.-]/g, '');
-                // Limita a uma vírgula ou ponto decimal
-                const parts = value.split(/[,.]/);
-                if (parts.length > 2) {
-                  // Se tiver mais de um separador, manter apenas o primeiro
-                  value = parts[0] + (parts[1] ? ',' + parts.slice(1).join('') : '');
-                }
-                setFormData({ ...formData, valorTotal: value });
-              }}
-              onBlur={(e) => {
-                // Garantir formatação com 2 casas decimais ao sair do campo
-                const parsed = parseValue(e.target.value);
-                if (parsed && parsed !== '-' && parsed !== '') {
-                  const numValue = parseFloat(parsed);
-                  if (!isNaN(numValue) && numValue >= 0) {
-                    setFormData({ ...formData, valorTotal: formatValue(numValue) });
-                  } else {
+            <div style={{ 
+              display: 'flex', 
+              gap: '12px', 
+              alignItems: 'flex-start',
+              flexWrap: 'wrap'
+            }}>
+              <input
+                type="text"
+                inputMode="decimal"
+                className="valor-despesa-input"
+                style={{ maxWidth: '200px', flex: '0 0 auto' }}
+                value={formData.valorTotal}
+                onChange={(e) => {
+                  // Permite digitação livre, apenas remove caracteres inválidos
+                  let value = e.target.value;
+                  // Permite números, vírgula e ponto
+                  value = value.replace(/[^\d,.-]/g, '');
+                  // Limita a uma vírgula ou ponto decimal
+                  const parts = value.split(/[,.]/);
+                  if (parts.length > 2) {
+                    // Se tiver mais de um separador, manter apenas o primeiro
+                    value = parts[0] + (parts[1] ? ',' + parts.slice(1).join('') : '');
+                  }
+                  setFormData({ ...formData, valorTotal: value });
+                }}
+                onBlur={(e) => {
+                  // Garantir formatação com 2 casas decimais ao sair do campo
+                  const parsed = parseValue(e.target.value);
+                  if (parsed && parsed !== '-' && parsed !== '') {
+                    const numValue = parseFloat(parsed);
+                    if (!isNaN(numValue) && numValue >= 0) {
+                      setFormData({ ...formData, valorTotal: formatValue(numValue) });
+                    } else {
+                      setFormData({ ...formData, valorTotal: '' });
+                    }
+                  } else if (parsed === '' || parsed === '-') {
                     setFormData({ ...formData, valorTotal: '' });
                   }
-                } else if (parsed === '' || parsed === '-') {
-                  setFormData({ ...formData, valorTotal: '' });
-                }
-              }}
-              placeholder="0,00"
-              required
-            />
+                }}
+                placeholder="0,00"
+                required
+              />
+              {/* Botão de anexos ao lado do Valor Total */}
+              <div style={{ 
+                flex: '1 1 auto', 
+                minWidth: '200px',
+                maxWidth: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
+                  disabled={!editingDespesa || uploadingAnexos}
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!editingDespesa) {
+                      return;
+                    }
+                    
+                    // Verificar se tem acesso premium
+                    try {
+                      const result = await featureApi.check('receipt_upload_enabled');
+                      if (result.hasAccess) {
+                        // Tem acesso, abrir seletor de arquivos
+                        fileInputRef.current?.click();
+                      } else {
+                        // Não tem acesso, mostrar modal de upgrade
+                        setShowUpgradeModal(true);
+                      }
+                    } catch (error) {
+                      console.error('Erro ao verificar acesso:', error);
+                      // Em caso de erro, tentar abrir mesmo assim (backend vai validar)
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  disabled={!editingDespesa || uploadingAnexos}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px',
+                    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                    border: '1px solid rgba(99, 102, 241, 0.3)',
+                    borderRadius: '8px',
+                    color: '#6366f1',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: editingDespesa && !uploadingAnexos ? 'pointer' : 'not-allowed',
+                    transition: 'all 0.2s',
+                    opacity: editingDespesa && !uploadingAnexos ? 1 : 0.5,
+                  }}
+                  onMouseEnter={(e) => {
+                      if (editingDespesa && !uploadingAnexos) {
+                        e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.15)';
+                        e.currentTarget.style.borderColor = '#6366f1';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (editingDespesa && !uploadingAnexos) {
+                        e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.08)';
+                        e.currentTarget.style.borderColor = 'rgba(99, 102, 241, 0.3)';
+                      }
+                    }}
+                >
+                  <FaCamera style={{ fontSize: '18px' }} />
+                  <span>Adicionar comprovantes</span>
+                </button>
+                {!editingDespesa && (
+                  <p style={{ fontSize: '12px', color: 'rgba(226, 232, 240, 0.6)', marginTop: '0', textAlign: 'center' }}>
+                    Salve a despesa primeiro para adicionar anexos
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
           <div className="form-group">
             <label>Quem Pagou *</label>
@@ -864,98 +1019,65 @@ const Despesas: React.FC = () => {
             )}
           </div>
 
-          {/* Seção de Anexos - Logo após "Quem Pagou" */}
-          <div className="form-group">
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <FaPaperclip /> Anexos (Cupons, Recibos, etc.)
-            </label>
-            
-            <FeatureGate feature="receipt_upload_enabled">
+          {/* Seção de Anexos - Anexos existentes e arquivos selecionados */}
+          {(editingDespesa && anexos.length > 0) || selectedFiles.length > 0 ? (
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FaPaperclip /> Anexos (Cupons, Recibos, etc.)
+              </label>
               
               {/* Anexos existentes */}
               {editingDespesa && anexos.length > 0 && (
                 <div style={{ marginBottom: '16px' }}>
-                  <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '8px' }}>
-                    Anexos existentes ({anexos.length}):
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '12px' }}>
-                    {anexos.map((anexo) => (
-                      <div key={anexo.id} style={{ position: 'relative', border: '1px solid rgba(148, 163, 184, 0.20)', borderRadius: '8px', overflow: 'hidden' }}>
-                        {anexo.tipo_mime.startsWith('image/') ? (
-                          <div style={{ position: 'relative', width: '100%', aspectRatio: 1 }}>
-                            <img 
-                              src={anexo.url_cloudfront} 
-                              alt={anexo.nome_original}
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                              onError={(e) => {
-                                // Fallback para URL S3 se CloudFront falhar
-                                (e.target as HTMLImageElement).src = anexo.url_s3;
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteAnexo(editingDespesa.id, anexo.id)}
-                              style={{
-                                position: 'absolute',
-                                top: '4px',
-                                right: '4px',
-                                background: 'rgba(239, 68, 68, 0.9)',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '50%',
-                                width: '24px',
-                                height: '24px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '12px',
-                              }}
-                              title="Deletar anexo"
-                            >
-                              <FaTrash />
-                            </button>
-                            <a
-                              href={anexo.url_cloudfront}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                position: 'absolute',
-                                bottom: '4px',
-                                left: '4px',
-                                background: 'rgba(0, 0, 0, 0.6)',
-                                color: 'white',
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                fontSize: '11px',
-                                textDecoration: 'none',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                              }}
-                              title="Abrir em nova aba"
-                            >
-                              <FaDownload />
-                            </a>
-                          </div>
-                        ) : (
-                          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                            <div style={{ fontSize: '24px', color: '#6366f1' }}>
-                              {getFileIcon(anexo.tipo_mime)}
-                            </div>
-                            <div style={{ fontSize: '11px', color: 'rgba(226, 232, 240, 0.9)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
-                              {anexo.nome_original}
-                            </div>
-                            <div style={{ fontSize: '10px', color: 'rgba(226, 232, 240, 0.6)' }}>
-                              {formatFileSize(anexo.tamanho_otimizado || anexo.tamanho_original)}
-                            </div>
-                            <div style={{ display: 'flex', gap: '4px' }}>
+                    <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '8px' }}>
+                      Anexos existentes ({anexos.length}):
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '12px' }}>
+                      {anexos.map((anexo) => (
+                        <div key={anexo.id} style={{ position: 'relative', border: '1px solid rgba(148, 163, 184, 0.20)', borderRadius: '8px', overflow: 'hidden' }}>
+                          {anexo.tipo_mime.startsWith('image/') ? (
+                            <div style={{ position: 'relative', width: '100%', aspectRatio: 1 }}>
+                              <img 
+                                src={anexo.url_cloudfront} 
+                                alt={anexo.nome_original}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={(e) => {
+                                  // Fallback para URL S3 se CloudFront falhar
+                                  (e.target as HTMLImageElement).src = anexo.url_s3;
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAnexo(editingDespesa.id, anexo.id)}
+                                style={{
+                                  position: 'absolute',
+                                  top: '4px',
+                                  right: '4px',
+                                  background: 'rgba(239, 68, 68, 0.9)',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '50%',
+                                  width: '24px',
+                                  height: '24px',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '12px',
+                                }}
+                                title="Deletar anexo"
+                              >
+                                <FaTrash />
+                              </button>
                               <a
                                 href={anexo.url_cloudfront}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={{
-                                  background: '#6366f1',
+                                  position: 'absolute',
+                                  bottom: '4px',
+                                  left: '4px',
+                                  background: 'rgba(0, 0, 0, 0.6)',
                                   color: 'white',
                                   padding: '4px 8px',
                                   borderRadius: '4px',
@@ -965,63 +1087,153 @@ const Despesas: React.FC = () => {
                                   alignItems: 'center',
                                   gap: '4px',
                                 }}
-                                title="Download"
+                                title="Abrir em nova aba"
                               >
                                 <FaDownload />
                               </a>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteAnexo(editingDespesa.id, anexo.id)}
-                                style={{
-                                  background: '#ef4444',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  padding: '4px 8px',
-                                  cursor: 'pointer',
-                                  fontSize: '11px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                }}
-                                title="Deletar"
-                              >
-                                <FaTrash />
-                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ fontSize: '24px', color: '#6366f1' }}>
+                                {getFileIcon(anexo.tipo_mime)}
+                              </div>
+                              <div style={{ fontSize: '11px', color: 'rgba(226, 232, 240, 0.9)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+                                {anexo.nome_original}
+                              </div>
+                              <div style={{ fontSize: '10px', color: 'rgba(226, 232, 240, 0.6)' }}>
+                                {formatFileSize(anexo.tamanho_otimizado || anexo.tamanho_original)}
+                              </div>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <a
+                                  href={anexo.url_cloudfront}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    background: '#6366f1',
+                                    color: 'white',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    textDecoration: 'none',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                  }}
+                                  title="Download"
+                                >
+                                  <FaDownload />
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAnexo(editingDespesa.id, anexo.id)}
+                                  style={{
+                                    background: '#ef4444',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    padding: '4px 8px',
+                                    cursor: 'pointer',
+                                    fontSize: '11px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                  }}
+                                  title="Deletar"
+                                >
+                                  <FaTrash />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* Lista de arquivos selecionados */}
+              {selectedFiles.length > 0 && (
+                <div style={{ marginTop: selectedFiles.length > 0 && editingDespesa && anexos.length > 0 ? '16px' : '0' }}>
+                  <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '8px' }}>
+                    Arquivos selecionados ({selectedFiles.length}):
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {selectedFiles.map((file, index) => {
+                      const isImage = file.type.startsWith('image/');
+                      const previewUrl = isImage ? URL.createObjectURL(file) : null;
+                      return (
+                        <div
+                          key={index}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '8px',
+                            backgroundColor: 'rgba(2, 6, 23, 0.3)',
+                            borderRadius: '8px',
+                            border: '1px solid rgba(148, 163, 184, 0.2)',
+                          }}
+                        >
+                          {previewUrl ? (
+                            <img
+                              src={previewUrl}
+                              alt={file.name}
+                              style={{
+                                width: '40px',
+                                height: '40px',
+                                objectFit: 'cover',
+                                borderRadius: '4px',
+                              }}
+                            />
+                          ) : (
+                            <div style={{ fontSize: '24px', color: '#6366f1' }}>
+                              {getFileIcon(file.type)}
+                            </div>
+                          )}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.9)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {file.name}
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'rgba(226, 232, 240, 0.6)' }}>
+                              {formatFileSize(file.size)}
                             </div>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          <button
+                            type="button"
+                            onClick={() => removeFile(index)}
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.2)',
+                              border: '1px solid rgba(239, 68, 68, 0.4)',
+                              borderRadius: '4px',
+                              padding: '6px 8px',
+                              cursor: 'pointer',
+                              color: '#ef4444',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                            title="Remover arquivo"
+                          >
+                            <FaTimes />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
+                  {editingDespesa && (
+                    <button
+                      type="button"
+                      onClick={() => handleUploadAnexos(editingDespesa.id)}
+                      className="btn btn-secondary"
+                      disabled={uploadingAnexos}
+                      style={{ marginTop: '12px', width: '100%' }}
+                    >
+                      {uploadingAnexos ? 'Enviando...' : `Enviar ${selectedFiles.length} arquivo(s)`}
+                    </button>
+                  )}
                 </div>
               )}
-
-              {/* Upload de novos anexos */}
-              <FileUpload
-                files={selectedFiles}
-                onFilesChange={setSelectedFiles}
-                disabled={!editingDespesa || uploadingAnexos}
-              />
-
-              {editingDespesa && selectedFiles.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => handleUploadAnexos(editingDespesa.id)}
-                  className="btn btn-secondary"
-                  disabled={uploadingAnexos}
-                  style={{ marginTop: '12px' }}
-                >
-                  {uploadingAnexos ? 'Enviando...' : `Enviar ${selectedFiles.length} arquivo(s)`}
-                </button>
-              )}
-
-              {!editingDespesa && (
-                <p style={{ fontSize: '12px', color: 'rgba(226, 232, 240, 0.6)', marginTop: '8px' }}>
-                  Salve a despesa primeiro para adicionar anexos
-                </p>
-              )}
-            </FeatureGate>
-          </div>
+            </div>
+          ) : null}
 
           <div className="form-group">
             <label>Data *</label>
@@ -1080,6 +1292,11 @@ const Despesas: React.FC = () => {
                 marginBottom: '10px' 
               }}>
                 ({participantesSelecionados.length} selecionado{participantesSelecionados.length !== 1 ? 's' : ''})
+                {valorPorParticipante > 0 && (
+                  <span style={{ marginLeft: '8px', color: 'rgba(34, 197, 94, 0.9)', fontWeight: '600' }}>
+                    • {formatCurrency(valorPorParticipante)} por participante
+                  </span>
+                )}
               </div>
             )}
             {participantesExpandido && (
@@ -1128,10 +1345,20 @@ const Despesas: React.FC = () => {
                           }
                         }}
                       />
-                      <span style={{ color: 'rgba(226, 232, 240, 0.92)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {participante.nome}
+                      <span style={{ color: 'rgba(226, 232, 240, 0.92)', display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                        <span>{participante.nome}</span>
                         {nomeSubgrupo && (
                           <span className="badge-subgrupo-despesa">{nomeSubgrupo}</span>
+                        )}
+                        {isSelected && valorPorParticipante > 0 && (
+                          <span style={{ 
+                            marginLeft: 'auto', 
+                            fontSize: '12px', 
+                            color: 'rgba(34, 197, 94, 0.9)', 
+                            fontWeight: '600' 
+                          }}>
+                            {formatCurrency(valorPorParticipante)}
+                          </span>
                         )}
                       </span>
                     </label>
@@ -1170,6 +1397,146 @@ const Despesas: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Modal de upgrade premium */}
+      {showUpgradeModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            padding: '20px',
+          }}
+          onClick={() => setShowUpgradeModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: 'rgba(15, 23, 42, 0.98)',
+              border: '1px solid rgba(148, 163, 184, 0.2)',
+              borderRadius: '12px',
+              padding: '24px',
+              maxWidth: '450px',
+              width: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div style={{
+                fontSize: '48px',
+                marginBottom: '12px',
+                color: '#6366f1',
+              }}>
+                <FaPaperclip />
+              </div>
+              <h3 style={{
+                color: 'rgba(255, 255, 255, 0.95)',
+                fontSize: '20px',
+                fontWeight: '600',
+                marginBottom: '8px',
+              }}>
+                Recurso Premium
+              </h3>
+              <p style={{
+                color: 'rgba(226, 232, 240, 0.8)',
+                fontSize: '14px',
+                lineHeight: '1.6',
+              }}>
+                Este recurso está disponível apenas no plano PRO.
+              </p>
+            </div>
+
+            <div style={{
+              backgroundColor: 'rgba(99, 102, 241, 0.1)',
+              border: '1px solid rgba(99, 102, 241, 0.2)',
+              borderRadius: '8px',
+              padding: '16px',
+              marginBottom: '20px',
+            }}>
+              <p style={{
+                color: 'rgba(255, 255, 255, 0.9)',
+                fontSize: '14px',
+                lineHeight: '1.6',
+                margin: 0,
+              }}>
+                Você será redirecionado para a página de planos para fazer upgrade e desbloquear o recurso de anexar cupons fiscais, recibos e documentos.
+              </p>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+            }}>
+              <button
+                type="button"
+                onClick={() => setShowUpgradeModal(false)}
+                style={{
+                  flex: 1,
+                  padding: '12px 20px',
+                  backgroundColor: 'rgba(148, 163, 184, 0.1)',
+                  border: '1px solid rgba(148, 163, 184, 0.2)',
+                  borderRadius: '8px',
+                  color: 'rgba(226, 232, 240, 0.9)',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(148, 163, 184, 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(148, 163, 184, 0.1)';
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = '/precos';
+                }}
+                style={{
+                  flex: 1,
+                  padding: '12px 20px',
+                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 30%, #3b82f6 60%, #22c55e 100%)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textAlign: 'center',
+                  boxShadow: '0 10px 30px rgba(99, 102, 241, 0.35)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.filter = 'brightness(1.1)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.boxShadow = '0 12px 35px rgba(99, 102, 241, 0.45)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.filter = 'none';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 10px 30px rgba(99, 102, 241, 0.35)';
+                }}
+              >
+                Ir para Planos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
