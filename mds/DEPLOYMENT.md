@@ -21,7 +21,12 @@ This guide covers deploying the Rachid application to an EC2 instance using Dock
    - `orachid.com.br` → EC2 instance IP
    - `api.orachid.com.br` → EC2 instance IP
 3. GitHub repository with GitHub Actions enabled
-4. Environment variables and secrets configured
+4. External services configured:
+   - **SendGrid** account for emails
+   - **PayPal** Business account for subscriptions
+   - **AWS** account for S3 file storage
+   - **Google OAuth** credentials for login
+5. Environment variables and secrets configured (see `SELF_HOSTING_CHECKLIST.md` for complete list)
 
 ## Initial Setup on EC2
 

@@ -22,6 +22,13 @@ RUN npm run build
 # Production stage
 FROM node:18-alpine
 
+# Install dependencies for sharp (image processing library)
+# Sharp has pre-built binaries, but vips may be needed for some operations
+RUN apk add --no-cache \
+    vips-dev \
+    vips \
+    || true  # vips is optional, sharp can work without it
+
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001

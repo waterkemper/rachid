@@ -211,6 +211,9 @@ const ParticipanteFormModal: React.FC<ParticipanteFormModalProps> = ({
             autoFocus={!participante}
             required
           />
+          <small style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+            * Campo obrigatório
+          </small>
         </div>
         <div className="form-group">
           <label>Email</label>
@@ -220,6 +223,9 @@ const ParticipanteFormModal: React.FC<ParticipanteFormModalProps> = ({
             onChange={(e) => handleEmailChange(e.target.value)}
             placeholder="email@exemplo.com"
           />
+          <small style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+            Se preenchido, o participante receberá novidades por email
+          </small>
         </div>
         <div className="form-group">
           <label>Telefone</label>
@@ -267,6 +273,9 @@ const ParticipanteFormModal: React.FC<ParticipanteFormModalProps> = ({
             }}
             placeholder={participante ? "CPF, e-mail, telefone ou chave aleatória" : "Chave PIX"}
           />
+          <small style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+            Se preenchida, a chave PIX será incluída na mensagem ao enviar os resultados do evento
+          </small>
         </div>
         <div className="form-group">
           <label style={{ marginBottom: '10px', display: 'block' }}>Tipo de Chave PIX:</label>
