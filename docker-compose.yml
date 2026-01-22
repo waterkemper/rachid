@@ -9,7 +9,6 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-      - backend/.env
     environment:
       # Server Configuration
       NODE_ENV: ${NODE_ENV:-production}
