@@ -7,6 +7,9 @@ services:
       dockerfile: Dockerfile
     container_name: rachid_backend
     restart: unless-stopped
+    env_file:
+      - .env
+      - backend/.env
     environment:
       # Server Configuration
       NODE_ENV: ${NODE_ENV:-production}
@@ -50,6 +53,12 @@ services:
       
       # Google OAuth Configuration
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      
+      # Asaas Configuration (for subscriptions and payments)
+      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
+      ASAAS_ENVIRONMENT: ${ASAAS_ENVIRONMENT:-production}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
+      MIN_INSTALLMENT_VALUE: ${MIN_INSTALLMENT_VALUE:-30}
       
       # Email Queue Cron Jobs (optional)
       REATIVACAO_CRON: ${REATIVACAO_CRON:-0 12 * * *}
