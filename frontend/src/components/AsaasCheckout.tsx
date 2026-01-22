@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { subscriptionApi } from '../services/api';
+import { subscriptionApi, configApi } from '../services/api';
 
 interface AsaasCheckoutProps {
   planType: 'MONTHLY' | 'YEARLY' | 'LIFETIME';
@@ -73,6 +73,7 @@ export const AsaasCheckout: React.FC<AsaasCheckoutProps> = ({
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [successCalled, setSuccessCalled] = useState(false);
   const [confirmSandboxLoading, setConfirmSandboxLoading] = useState(false);
+  const [asaasSandbox, setAsaasSandbox] = useState<boolean | null>(null);
 
   // Form fields for credit card
   const [cardData, setCardData] = useState({
@@ -101,6 +102,10 @@ export const AsaasCheckout: React.FC<AsaasCheckoutProps> = ({
   const [cepError, setCepError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [userCpfCnpj, setUserCpfCnpj] = useState<string>('');
+
+  useEffect(() => {
+    configApi.getConfig().then((c) => setAsaasSandbox(c.asaasSandbox)).catch(() => setAsaasSandbox(false));
+  }, []);
 
   useEffect(() => {
     loadInstallmentOptions();
@@ -617,21 +622,17 @@ export const AsaasCheckout: React.FC<AsaasCheckoutProps> = ({
 
     const now = new Date();
     const diffMs = expirationDate.getTime() - now.getTime();
-    const totalMinutes = Math.max(0, Math.floor(diffMs / 60000));
-    
-    // Formatar tempo de forma mais legível
+    let totalMinutes = Math.max(0, Math.floor(diffMs / 60000));
+
+    // PIX expira em ~15–30 min. Se o Asaas enviar data muito à frente (ex.: vencimento da cobrança),
+    // não exibir "365 dias" — tratar como incoerente e limitar a "até 30 minutos".
+    const PIX_MAX_DISPLAY_MINUTES = 30;
+    if (totalMinutes > PIX_MAX_DISPLAY_MINUTES) {
+      console.warn(`Expiração PIX muito alta (${totalMinutes} min). Exibindo "até ${PIX_MAX_DISPLAY_MINUTES} minutos".`);
+      totalMinutes = PIX_MAX_DISPLAY_MINUTES;
+    }
+
     const formatTimeRemaining = (minutes: number): string => {
-      // Se o tempo for muito alto (mais de 24 horas), pode indicar um problema
-      if (minutes > 1440) {
-        console.warn(`Tempo de expiração muito alto: ${minutes} minutos. Verificando data...`);
-        // Limitar a exibição a 24 horas máximo
-        const days = Math.floor(minutes / 1440);
-        const hours = Math.floor((minutes % 1440) / 60);
-        if (days > 0) {
-          return `${days} dia${days !== 1 ? 's' : ''} e ${hours} hora${hours !== 1 ? 's' : ''}`;
-        }
-      }
-      
       if (minutes < 60) {
         return `${minutes} minuto${minutes !== 1 ? 's' : ''}`;
       }
@@ -675,28 +676,30 @@ export const AsaasCheckout: React.FC<AsaasCheckoutProps> = ({
             <button onClick={onCancel} style={buttonSecondaryStyle}>
               Cancelar
             </button>
-            <button
-              type="button"
-              disabled={confirmSandboxLoading}
-              onClick={async () => {
-                setConfirmSandboxLoading(true);
-                try {
-                  await subscriptionApi.confirmPixSandbox();
-                  // Polling vai detectar ACTIVE e redirecionar
-                } catch (e: any) {
-                  onError(e?.response?.data?.error || e?.message || 'Erro ao simular pagamento');
-                } finally {
-                  setConfirmSandboxLoading(false);
-                }
-              }}
-              style={{
-                ...buttonSecondaryStyle,
-                borderColor: 'rgba(34, 197, 94, 0.4)',
-                color: 'rgb(134, 239, 172)',
-              }}
-            >
-              {confirmSandboxLoading ? 'Simulando…' : 'Simular pagamento (sandbox)'}
-            </button>
+            {asaasSandbox === true && (
+              <button
+                type="button"
+                disabled={confirmSandboxLoading}
+                onClick={async () => {
+                  setConfirmSandboxLoading(true);
+                  try {
+                    await subscriptionApi.confirmPixSandbox();
+                    // Polling vai detectar ACTIVE e redirecionar
+                  } catch (e: any) {
+                    onError(e?.response?.data?.error || e?.message || 'Erro ao simular pagamento');
+                  } finally {
+                    setConfirmSandboxLoading(false);
+                  }
+                }}
+                style={{
+                  ...buttonSecondaryStyle,
+                  borderColor: 'rgba(34, 197, 94, 0.4)',
+                  color: 'rgb(134, 239, 172)',
+                }}
+              >
+                {confirmSandboxLoading ? 'Simulando…' : 'Simular pagamento (sandbox)'}
+              </button>
+            )}
           </div>
           <p style={{ fontSize: '12px', color: 'rgba(226, 232, 240, 0.7)', marginTop: '4px', textAlign: 'center' }}>
             Aguardando confirmação do pagamento...

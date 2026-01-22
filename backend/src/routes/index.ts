@@ -23,9 +23,13 @@ import { AdminFeatureLimitsController } from '../controllers/AdminFeatureLimitsC
 import { AdminPlansController } from '../controllers/AdminPlansController';
 import { DespesaAnexoController } from '../controllers/DespesaAnexoController';
 import { GraficosController } from '../controllers/GraficosController';
+import { ConfigController } from '../controllers/ConfigController';
 import { requirePro } from '../middleware/requirePro';
 
 const router = Router();
+
+// Config (público – usado pelo frontend para exibir/ocultar botão sandbox)
+router.get('/config', ConfigController.getConfig);
 
 // Rotas públicas (sem autenticação)
 router.post('/auth/login', AuthController.login);

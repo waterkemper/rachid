@@ -1105,6 +1105,13 @@ export const publicApi = {
   },
 };
 
+export const configApi = {
+  getConfig: async (): Promise<{ asaasSandbox: boolean }> => {
+    const response = await api.get('/config');
+    return response.data;
+  },
+};
+
 export const templateApi = {
   getAll: async (): Promise<EventTemplate[]> => {
     const response = await api.get('/templates');

@@ -14,6 +14,7 @@ const Assinatura: React.FC = () => {
   const [error, setError] = useState('');
   const [canceling, setCanceling] = useState(false);
   const [pixQrCode, setPixQrCode] = useState<any | undefined>(undefined);
+  const [loadingQr, setLoadingQr] = useState(false);
 
   // Helper to refresh user data when subscription status changes
   const refreshUserData = async () => {
@@ -173,16 +174,81 @@ const Assinatura: React.FC = () => {
             <p style={{ color: '#856404', marginBottom: '16px' }}>
               Sua assinatura está aguardando confirmação do pagamento. Se você pagou via PIX, aguarde a confirmação. Se pagou com cartão, o pagamento deve ser processado automaticamente.
             </p>
+
+            {subscription.paymentMethod === 'PIX' && (
+              <>
+                {pixQrCode ? (
+                  <div style={{ marginBottom: '16px', padding: '16px', background: 'rgba(0,0,0,0.06)', borderRadius: '8px', textAlign: 'center' }}>
+                    <p style={{ color: '#856404', marginBottom: '12px', fontWeight: 600 }}>Escaneie o QR Code ou use o Copia e Cola</p>
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                      <QRCodeSVG value={pixQrCode.payload} size={200} />
+                    </div>
+                    <p style={{ color: '#856404', fontSize: '12px', marginBottom: '8px' }}>Ou copie e cole o código no app do seu banco:</p>
+                    <textarea
+                      readOnly
+                      value={pixQrCode.payload}
+                      style={{
+                        width: '100%',
+                        maxWidth: '100%',
+                        fontFamily: 'monospace',
+                        fontSize: '11px',
+                        padding: '8px',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(0,0,0,0.15)',
+                        resize: 'vertical',
+                        minHeight: '60px',
+                        color: '#333',
+                        background: '#fff',
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <p style={{ color: '#856404', fontSize: '14px', marginBottom: '12px' }}>
+                    {loadingQr ? 'Carregando QR Code...' : 'Clique em "Ver QR Code" para exibir o código PIX e concluir o pagamento.'}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  disabled={loadingQr}
+                  onClick={async () => {
+                    try {
+                      setLoadingQr(true);
+                      const data = await subscriptionApi.getMe();
+                      const qr = (data as any).pixQrCode;
+                      setPixQrCode(qr);
+                      if (!qr) {
+                        alert('QR Code não disponível. O pagamento pode ter expirado — crie uma nova assinatura em "Criar Nova Assinatura".');
+                      }
+                    } catch (e: any) {
+                      alert('Erro ao carregar QR Code: ' + (e?.message || 'Erro desconhecido'));
+                    } finally {
+                      setLoadingQr(false);
+                    }
+                  }}
+                  className="btn btn-secondary"
+                  style={{
+                    backgroundColor: '#856404',
+                    color: '#fff',
+                    border: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: '12px',
+                  }}
+                >
+                  {pixQrCode ? '🔄 Atualizar QR Code' : '📱 Ver QR Code'}
+                </button>
+              </>
+            )}
+
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <button
                 onClick={async () => {
                   try {
-                    // Tentar verificar status da assinatura pendente
                     await loadSubscription();
-                    
-                    // Verificar se foi ativada
                     const refreshed = await subscriptionApi.getMe();
                     if (refreshed.subscription?.status === 'APPROVAL_PENDING') {
+                      setPixQrCode((refreshed as any).pixQrCode);
                       alert('A assinatura ainda está pendente. Se você pagou via PIX, aguarde a confirmação. Se pagou com cartão e houve algum problema, entre em contato com o suporte.');
                     } else if (refreshed.subscription?.status === 'ACTIVE') {
                       alert('✅ Assinatura ativada com sucesso!');
@@ -220,7 +286,7 @@ const Assinatura: React.FC = () => {
               </a>
             </div>
             <p style={{ color: '#856404', fontSize: '12px', marginTop: '12px', marginBottom: 0 }}>
-              💡 Dica: {pixQrCode ? 'Complete o pagamento via PIX usando o QR Code. O sistema verificará automaticamente quando o pagamento for confirmado.' : 'Aguarde a confirmação do pagamento ou clique em "Verificar Status" para atualizar.'}
+              💡 Dica: {pixQrCode ? 'Complete o pagamento via PIX usando o QR Code acima. O sistema verificará automaticamente quando o pagamento for confirmado.' : 'Use "Ver QR Code" para exibir o código PIX, ou "Verificar Status" para atualizar.'}
             </p>
           </div>
         )}
