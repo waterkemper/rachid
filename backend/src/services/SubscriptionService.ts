@@ -26,6 +26,31 @@ export class SubscriptionService {
   private static readonly PIX_PAYMENT_CHECK_TTL = 15 * 1000; // 15 segundos
 
   /**
+   * Validate and clean CPF/CNPJ
+   * CPF must have 11 digits, CNPJ must have 14 digits
+   */
+  private static validateAndCleanCpfCnpj(cpfCnpj: string | undefined): string | undefined {
+    if (!cpfCnpj) {
+      return undefined;
+    }
+
+    // Remove all non-digit characters
+    const cleaned = cpfCnpj.replace(/\D/g, '');
+
+    // Validate length: CPF = 11 digits, CNPJ = 14 digits
+    if (cleaned.length !== 11 && cleaned.length !== 14) {
+      throw new Error(`CPF/CNPJ inválido. CPF deve ter 11 dígitos e CNPJ deve ter 14 dígitos. Valor fornecido: ${cleaned.length} dígitos.`);
+    }
+
+    // Basic validation: check if all digits are the same (invalid)
+    if (/^(\d)\1+$/.test(cleaned)) {
+      throw new Error('CPF/CNPJ inválido. Todos os dígitos são iguais.');
+    }
+
+    return cleaned;
+  }
+
+  /**
    * Get or create Asaas customer for user
    */
   static async getOrCreateAsaasCustomer(usuarioId: number, cpfCnpj?: string): Promise<string> {
@@ -36,12 +61,18 @@ export class SubscriptionService {
 
     // Se CPF foi fornecido e usuário não tem, atualizar no banco
     if (cpfCnpj && !usuario.cpfCnpj) {
-      usuario.cpfCnpj = cpfCnpj.replace(/\D/g, ''); // Remover formatação
+      // CPF já está validado e limpo pela função validateAndCleanCpfCnpj
+      usuario.cpfCnpj = cpfCnpj;
       await this.usuarioRepository.save(usuario);
     }
 
-    // Usar CPF do usuário ou o fornecido
-    const finalCpfCnpj = cpfCnpj?.replace(/\D/g, '') || usuario.cpfCnpj?.replace(/\D/g, '');
+    // Usar CPF do usuário ou o fornecido (já validado e limpo)
+    let finalCpfCnpj: string | undefined;
+    if (cpfCnpj) {
+      finalCpfCnpj = this.validateAndCleanCpfCnpj(cpfCnpj);
+    } else if (usuario.cpfCnpj) {
+      finalCpfCnpj = this.validateAndCleanCpfCnpj(usuario.cpfCnpj);
+    }
 
     // Build phone number
     const phone = usuario.ddd && usuario.telefone 
@@ -150,18 +181,23 @@ export class SubscriptionService {
     let cpfCnpj: string | undefined;
     if (data.paymentMethod === 'PIX') {
       // CPF pode vir do creditCardHolderInfo (se fornecido) ou userCpfCnpj
-      cpfCnpj = data.userCpfCnpj?.replace(/\D/g, '') || data.creditCardHolderInfo?.cpfCnpj?.replace(/\D/g, '');
+      const rawCpf = data.userCpfCnpj || data.creditCardHolderInfo?.cpfCnpj;
       
       // Se ainda não tem CPF, verificar se usuário tem no banco
-      if (!cpfCnpj) {
+      if (!rawCpf) {
         if (!usuario.cpfCnpj) {
           throw new Error('CPF/CNPJ é obrigatório para pagamentos PIX. Por favor, informe seu CPF/CNPJ.');
         }
-        cpfCnpj = usuario.cpfCnpj.replace(/\D/g, '');
+        cpfCnpj = this.validateAndCleanCpfCnpj(usuario.cpfCnpj);
+      } else {
+        cpfCnpj = this.validateAndCleanCpfCnpj(rawCpf);
       }
-    } else if (data.creditCardHolderInfo?.cpfCnpj) {
-      // Para cartão, usar CPF do titular
-      cpfCnpj = data.creditCardHolderInfo.cpfCnpj.replace(/\D/g, '');
+    } else if (data.paymentMethod === 'CREDIT_CARD') {
+      // Para cartão, CPF do titular é obrigatório
+      if (!data.creditCardHolderInfo?.cpfCnpj) {
+        throw new Error('CPF/CNPJ do titular do cartão é obrigatório para pagamento com cartão de crédito.');
+      }
+      cpfCnpj = this.validateAndCleanCpfCnpj(data.creditCardHolderInfo.cpfCnpj);
     }
 
     // Get or create Asaas customer (com CPF se disponível)
@@ -182,6 +218,15 @@ export class SubscriptionService {
       nextDueDate = now.toISOString().split('T')[0];
     }
 
+    // Prepare creditCardHolderInfo with cleaned CPF if provided
+    let creditCardHolderInfo = data.creditCardHolderInfo;
+    if (creditCardHolderInfo && creditCardHolderInfo.cpfCnpj) {
+      creditCardHolderInfo = {
+        ...creditCardHolderInfo,
+        cpfCnpj: this.validateAndCleanCpfCnpj(creditCardHolderInfo.cpfCnpj)!,
+      };
+    }
+
     // Create subscription in Asaas
     const asaasSubscription = await AsaasService.createSubscription({
       customer: asaasCustomerId,
@@ -191,7 +236,7 @@ export class SubscriptionService {
       nextDueDate,
       description: `Assinatura ${plan.name}`,
       creditCard: data.creditCard,
-      creditCardHolderInfo: data.creditCardHolderInfo,
+      creditCardHolderInfo,
     });
 
     // Calculate period dates: periodEnd = end of first paid cycle (after trial if any)
@@ -357,18 +402,23 @@ export class SubscriptionService {
     let cpfCnpj: string | undefined;
     if (data.paymentMethod === 'PIX') {
       // CPF pode vir do creditCardHolderInfo (se fornecido) ou userCpfCnpj
-      cpfCnpj = data.userCpfCnpj?.replace(/\D/g, '') || data.creditCardHolderInfo?.cpfCnpj?.replace(/\D/g, '');
+      const rawCpf = data.userCpfCnpj || data.creditCardHolderInfo?.cpfCnpj;
       
       // Se ainda não tem CPF, verificar se usuário tem no banco
-      if (!cpfCnpj) {
+      if (!rawCpf) {
         if (!usuario.cpfCnpj) {
           throw new Error('CPF/CNPJ é obrigatório para pagamentos PIX. Por favor, informe seu CPF/CNPJ.');
         }
-        cpfCnpj = usuario.cpfCnpj.replace(/\D/g, '');
+        cpfCnpj = this.validateAndCleanCpfCnpj(usuario.cpfCnpj);
+      } else {
+        cpfCnpj = this.validateAndCleanCpfCnpj(rawCpf);
       }
-    } else if (data.creditCardHolderInfo?.cpfCnpj) {
-      // Para cartão, usar CPF do titular
-      cpfCnpj = data.creditCardHolderInfo.cpfCnpj.replace(/\D/g, '');
+    } else if (data.paymentMethod === 'CREDIT_CARD') {
+      // Para cartão, CPF do titular é obrigatório
+      if (!data.creditCardHolderInfo?.cpfCnpj) {
+        throw new Error('CPF/CNPJ do titular do cartão é obrigatório para pagamento com cartão de crédito.');
+      }
+      cpfCnpj = this.validateAndCleanCpfCnpj(data.creditCardHolderInfo.cpfCnpj);
     }
 
     // Get or create Asaas customer (com CPF se disponível)
@@ -387,6 +437,15 @@ export class SubscriptionService {
       }
     }
 
+    // Prepare creditCardHolderInfo with cleaned CPF if provided
+    let creditCardHolderInfo = data.creditCardHolderInfo;
+    if (creditCardHolderInfo && creditCardHolderInfo.cpfCnpj) {
+      creditCardHolderInfo = {
+        ...creditCardHolderInfo,
+        cpfCnpj: this.validateAndCleanCpfCnpj(creditCardHolderInfo.cpfCnpj)!,
+      };
+    }
+
     // Create payment in Asaas
     const asaasPayment = await AsaasService.createPayment({
       customer: asaasCustomerId,
@@ -399,7 +458,7 @@ export class SubscriptionService {
         ? parseFloat((totalValue / data.installmentCount).toFixed(2))
         : undefined,
       creditCard: data.creditCard,
-      creditCardHolderInfo: data.creditCardHolderInfo,
+      creditCardHolderInfo,
     });
 
     // Determine status
