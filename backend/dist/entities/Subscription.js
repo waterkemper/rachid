@@ -31,13 +31,25 @@ __decorate([
     __metadata("design:type", Number)
 ], Subscription.prototype, "usuarioId", void 0);
 __decorate([
-    (0, typeorm_1.Column)('varchar', { nullable: true, unique: true, name: 'paypal_subscription_id' }),
+    (0, typeorm_1.Column)('varchar', { nullable: true, unique: true, name: 'asaas_subscription_id' }),
     __metadata("design:type", String)
-], Subscription.prototype, "paypalSubscriptionId", void 0);
+], Subscription.prototype, "asaasSubscriptionId", void 0);
 __decorate([
-    (0, typeorm_1.Column)('varchar', { nullable: true, name: 'paypal_payer_id' }),
+    (0, typeorm_1.Column)('varchar', { nullable: true, name: 'asaas_customer_id' }),
     __metadata("design:type", String)
-], Subscription.prototype, "paypalPayerId", void 0);
+], Subscription.prototype, "asaasCustomerId", void 0);
+__decorate([
+    (0, typeorm_1.Column)('varchar', { nullable: true, name: 'asaas_payment_id' }),
+    __metadata("design:type", String)
+], Subscription.prototype, "asaasPaymentId", void 0);
+__decorate([
+    (0, typeorm_1.Column)('varchar', { nullable: true, name: 'payment_method' }),
+    __metadata("design:type", String)
+], Subscription.prototype, "paymentMethod", void 0);
+__decorate([
+    (0, typeorm_1.Column)('integer', { nullable: true, name: 'installment_count' }),
+    __metadata("design:type", Number)
+], Subscription.prototype, "installmentCount", void 0);
 __decorate([
     (0, typeorm_1.Column)({ type: 'varchar', length: 20, name: 'plan_type' }),
     __metadata("design:type", String)

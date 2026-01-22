@@ -18,11 +18,20 @@ export class Subscription {
   @Column('integer', { name: 'usuario_id' })
   usuarioId!: number;
 
-  @Column('varchar', { nullable: true, unique: true, name: 'paypal_subscription_id' })
-  paypalSubscriptionId?: string;
+  @Column('varchar', { nullable: true, unique: true, name: 'asaas_subscription_id' })
+  asaasSubscriptionId?: string;
 
-  @Column('varchar', { nullable: true, name: 'paypal_payer_id' })
-  paypalPayerId?: string;
+  @Column('varchar', { nullable: true, name: 'asaas_customer_id' })
+  asaasCustomerId?: string;
+
+  @Column('varchar', { nullable: true, name: 'asaas_payment_id' })
+  asaasPaymentId?: string;
+
+  @Column('varchar', { nullable: true, name: 'payment_method' })
+  paymentMethod?: 'PIX' | 'CREDIT_CARD';
+
+  @Column('integer', { nullable: true, name: 'installment_count' })
+  installmentCount?: number;
 
   @Column({ type: 'varchar', length: 20, name: 'plan_type' })
   planType!: PlanType;

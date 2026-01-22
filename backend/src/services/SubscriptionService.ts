@@ -4,7 +4,7 @@ import { SubscriptionHistory, EventType } from '../entities/SubscriptionHistory'
 import { SubscriptionFeature, FeatureKey } from '../entities/SubscriptionFeature';
 import { Usuario } from '../entities/Usuario';
 import { Plan } from '../entities/Plan';
-import { PayPalService } from './PayPalService';
+import { AsaasService } from './AsaasService';
 import { EmailService } from './EmailService';
 import { Email } from '../entities/Email';
 
@@ -16,76 +16,170 @@ export class SubscriptionService {
   private static planRepository = AppDataSource.getRepository(Plan);
   
   // Cache for last sync time per subscription to prevent excessive API calls
-  // Format: { paypalSubscriptionId: timestamp }
+  // Format: { asaasSubscriptionId: timestamp }
   private static lastSyncCache: Map<string, number> = new Map();
   private static readonly SYNC_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+  // Cache para checagem do status do pagamento PIX (evitar getPaymentStatus a cada poll)
+  // Formato: { asaasPaymentId: { lastCheck: number; status: string } }
+  private static pixPaymentCheckCache: Map<string, { lastCheck: number; status: string }> = new Map();
+  private static readonly PIX_PAYMENT_CHECK_TTL = 15 * 1000; // 15 segundos
+
+  /**
+   * Get or create Asaas customer for user
+   */
+  static async getOrCreateAsaasCustomer(usuarioId: number, cpfCnpj?: string): Promise<string> {
+    const usuario = await this.usuarioRepository.findOne({ where: { id: usuarioId } });
+    if (!usuario) {
+      throw new Error('User not found');
+    }
+
+    // Se CPF foi fornecido e usuário não tem, atualizar no banco
+    if (cpfCnpj && !usuario.cpfCnpj) {
+      usuario.cpfCnpj = cpfCnpj.replace(/\D/g, ''); // Remover formatação
+      await this.usuarioRepository.save(usuario);
+    }
+
+    // Usar CPF do usuário ou o fornecido
+    const finalCpfCnpj = cpfCnpj?.replace(/\D/g, '') || usuario.cpfCnpj?.replace(/\D/g, '');
+
+    // Build phone number
+    const phone = usuario.ddd && usuario.telefone 
+      ? `${usuario.ddd}${usuario.telefone.replace(/\D/g, '')}`
+      : undefined;
+
+    // Create customer in Asaas
+    const customer = await AsaasService.createCustomer({
+      name: usuario.nome,
+      email: usuario.email,
+      mobilePhone: phone,
+      cpfCnpj: finalCpfCnpj,
+      externalReference: usuarioId.toString(),
+    });
+
+    return customer.id;
+  }
+
   /**
    * Create a new subscription
+   * Returns checkout data for PIX or processes card payment
    */
   static async createSubscription(data: {
     usuarioId: number;
     planType: PlanType;
-    returnUrl: string;
-    cancelUrl: string;
-  }): Promise<{ subscriptionId: number; approvalUrl: string; paypalSubscriptionId: string }> {
+    paymentMethod: 'PIX' | 'CREDIT_CARD';
+    creditCard?: {
+      holderName: string;
+      number: string;
+      expiryMonth: string;
+      expiryYear: string;
+      ccv: string;
+    };
+    creditCardHolderInfo?: {
+      name: string;
+      email: string;
+      cpfCnpj: string;
+      postalCode: string;
+      addressNumber: string;
+      addressComplement?: string;
+      phone?: string;
+      mobilePhone?: string;
+    };
+    userCpfCnpj?: string; // CPF/CNPJ do usuário para PIX
+  }): Promise<{ 
+    subscriptionId: number; 
+    asaasSubscriptionId: string;
+    pixQrCode?: { encodedImage: string; payload: string; expirationDate: string };
+    status: 'PENDING' | 'CONFIRMED';
+  }> {
     const usuario = await this.usuarioRepository.findOne({ where: { id: data.usuarioId } });
     if (!usuario) {
       throw new Error('User not found');
     }
 
-    // Check if user already has an active subscription
+    if (!['MONTHLY', 'YEARLY'].includes(data.planType)) {
+      throw new Error('Plan type must be MONTHLY or YEARLY for subscriptions');
+    }
+
+    // Check if user already has an active subscription (only for new subscriptions)
+    // Allow upgrading/downgrading if needed, but prevent duplicate active subscriptions
     const existingActiveSubscription = await this.subscriptionRepository.findOne({
       where: { usuarioId: data.usuarioId, status: 'ACTIVE' },
     });
 
-    if (existingActiveSubscription) {
-      throw new Error('User already has an active subscription');
+    if (existingActiveSubscription && existingActiveSubscription.status === 'ACTIVE') {
+      // Verificar se é o mesmo plano - se sim, não permitir criar outra
+      if (existingActiveSubscription.planType === data.planType) {
+        throw new Error('Você já possui uma assinatura ativa deste plano. Para alterar, cancele a atual primeiro.');
+      }
+      // Se for plano diferente, permitir criar (será tratado como upgrade/downgrade)
+      // A assinatura anterior será cancelada automaticamente ou o usuário pode cancelar manualmente
     }
 
-    // Check for pending subscriptions that might need activation
-    const pendingSubscription = await this.subscriptionRepository.findOne({
-      where: { usuarioId: data.usuarioId, status: 'APPROVAL_PENDING' },
-      order: { createdAt: 'DESC' },
-    });
-
-    if (pendingSubscription && pendingSubscription.paypalSubscriptionId) {
-      // Try to activate the pending subscription first
-      try {
-        console.log(`[SubscriptionService] Found pending subscription ${pendingSubscription.paypalSubscriptionId}, attempting to activate...`);
-        const paypalSubscription = await PayPalService.getSubscription(pendingSubscription.paypalSubscriptionId);
-        const paypalStatus = this.mapPayPalStatus(paypalSubscription.status);
-        
-        if (paypalStatus === 'ACTIVE') {
-          console.log(`[SubscriptionService] Pending subscription is ACTIVE in PayPal, activating...`);
-          await this.activateSubscription(pendingSubscription.id, paypalSubscription.subscriber?.payer_id || '');
-          throw new Error('Pending subscription was activated. Please refresh the page.');
+    // PIX: cancelar assinaturas pendentes (mesmo usuário + mesmo plano) antes de criar nova.
+    // Evita acúmulo de cobranças "Aguardando" / "Vencidas" no Asaas quando o usuário gera QR de novo.
+    if (data.paymentMethod === 'PIX') {
+      const pendingPix = await this.subscriptionRepository.find({
+        where: {
+          usuarioId: data.usuarioId,
+          planType: data.planType,
+          status: 'APPROVAL_PENDING',
+          paymentMethod: 'PIX',
+        },
+      });
+      for (const sub of pendingPix) {
+        try {
+          await this.cancelSubscription(sub.id, true);
+          console.log(`[SubscriptionService] Cancelled pending PIX subscription ${sub.id} (Asaas: ${sub.asaasSubscriptionId || 'N/A'}) before creating new one`);
+        } catch (e: any) {
+          console.warn(`[SubscriptionService] Failed to cancel pending PIX ${sub.id}: ${e?.message || e}`);
         }
-      } catch (error: any) {
-        // If activation fails or subscription is not active, continue to create new one
-        if (error.message.includes('activated')) {
-          throw error; // Re-throw activation success message
-        }
-        console.log(`[SubscriptionService] Pending subscription cannot be activated, creating new one...`);
       }
     }
 
-    // Get PayPal plan ID based on plan type from database
-    const paypalPlanId = await this.getPayPalPlanId(data.planType);
-    if (!paypalPlanId) {
-      throw new Error(`PayPal plan ID not configured for plan type: ${data.planType}`);
+    // Get plan details
+    const plan = await this.planRepository.findOne({
+      where: { planType: data.planType, enabled: true },
+    });
+
+    if (!plan) {
+      throw new Error(`Plan ${data.planType} not found or disabled`);
     }
 
-    // Log plan ID being used (for debugging)
-    const paypalMode = process.env.PAYPAL_MODE || 'sandbox';
-    console.log(`[SubscriptionService] Creating subscription with Plan ID: ${paypalPlanId} (Mode: ${paypalMode})`);
+    // Para PIX, CPF é obrigatório. Validar antes de continuar
+    let cpfCnpj: string | undefined;
+    if (data.paymentMethod === 'PIX') {
+      // CPF pode vir do creditCardHolderInfo (se fornecido) ou userCpfCnpj
+      cpfCnpj = data.userCpfCnpj?.replace(/\D/g, '') || data.creditCardHolderInfo?.cpfCnpj?.replace(/\D/g, '');
+      
+      // Se ainda não tem CPF, verificar se usuário tem no banco
+      if (!cpfCnpj) {
+        if (!usuario.cpfCnpj) {
+          throw new Error('CPF/CNPJ é obrigatório para pagamentos PIX. Por favor, informe seu CPF/CNPJ.');
+        }
+        cpfCnpj = usuario.cpfCnpj.replace(/\D/g, '');
+      }
+    } else if (data.creditCardHolderInfo?.cpfCnpj) {
+      // Para cartão, usar CPF do titular
+      cpfCnpj = data.creditCardHolderInfo.cpfCnpj.replace(/\D/g, '');
+    }
 
-    // Create subscription in PayPal
-    const paypalResult = await PayPalService.createSubscription({
-      planId: paypalPlanId,
-      returnUrl: data.returnUrl,
-      cancelUrl: data.cancelUrl,
-      subscriberEmail: usuario.email, // Pass user email to PayPal
+    // Get or create Asaas customer (com CPF se disponível)
+    const asaasCustomerId = await this.getOrCreateAsaasCustomer(data.usuarioId, cpfCnpj);
+
+    // Calculate next due date (today)
+    const nextDueDate = new Date().toISOString().split('T')[0];
+
+    // Create subscription in Asaas
+    const asaasSubscription = await AsaasService.createSubscription({
+      customer: asaasCustomerId,
+      billingType: data.paymentMethod,
+      value: parseFloat(plan.price.toString()),
+      cycle: data.planType === 'MONTHLY' ? 'MONTHLY' : 'YEARLY',
+      nextDueDate,
+      description: `Assinatura ${plan.name}`,
+      creditCard: data.creditCard,
+      creditCardHolderInfo: data.creditCardHolderInfo,
     });
 
     // Calculate period dates
@@ -100,20 +194,46 @@ export class SubscriptionService {
       periodEnd = new Date(now);
       periodEnd.setFullYear(periodEnd.getFullYear() + 1);
     }
-    // LIFETIME has no end date
+
+    // Determine status - if CREDIT_CARD and payment processed immediately, status might be CONFIRMED
+    let status: SubscriptionStatus = 'APPROVAL_PENDING';
+    if (data.paymentMethod === 'CREDIT_CARD' && asaasSubscription.status === 'ACTIVE') {
+      status = 'ACTIVE';
+    }
 
     // Create subscription in database
     const subscription = this.subscriptionRepository.create({
       usuarioId: data.usuarioId,
-      paypalSubscriptionId: paypalResult.id,
+      asaasSubscriptionId: asaasSubscription.id,
+      asaasCustomerId,
       planType: data.planType,
-      status: 'APPROVAL_PENDING',
+      paymentMethod: data.paymentMethod,
+      status,
       currentPeriodStart: periodStart,
       currentPeriodEnd: periodEnd,
       cancelAtPeriodEnd: false,
     });
 
     const savedSubscription = await this.subscriptionRepository.save(subscription);
+
+    // Get PIX QR Code if payment method is PIX
+    let pixQrCode;
+    if (data.paymentMethod === 'PIX') {
+      try {
+        // Get first payment from subscription to get QR Code
+        const payments = await AsaasService.getSubscriptionPayments(asaasSubscription.id);
+        if (payments?.data && payments.data.length > 0) {
+          const firstPayment = payments.data[0];
+          if (firstPayment.id) {
+            pixQrCode = await AsaasService.getPixQrCode(firstPayment.id);
+            savedSubscription.asaasPaymentId = firstPayment.id;
+            await this.subscriptionRepository.save(savedSubscription);
+          }
+        }
+      } catch (error) {
+        console.error('[SubscriptionService] Error getting PIX QR Code:', error);
+      }
+    }
 
     // Create history entry
     await this.createHistoryEntry({
@@ -126,144 +246,258 @@ export class SubscriptionService {
     usuario.subscriptionId = savedSubscription.id;
     await this.usuarioRepository.save(usuario);
 
+    // Update user plan if already active
+    if (status === 'ACTIVE') {
+      await this.updateUserPlan(savedSubscription);
+    }
+
     return {
       subscriptionId: savedSubscription.id,
-      approvalUrl: paypalResult.approvalUrl,
-      paypalSubscriptionId: paypalResult.id,
+      asaasSubscriptionId: asaasSubscription.id,
+      pixQrCode,
+      status: status === 'ACTIVE' ? 'CONFIRMED' : 'PENDING',
     };
   }
 
   /**
-   * Get subscription by PayPal subscription ID
+   * Get subscription by Asaas subscription ID
    */
-  static async getSubscriptionByPayPalId(paypalSubscriptionId: string): Promise<Subscription | null> {
+  static async getSubscriptionByAsaasId(asaasSubscriptionId: string): Promise<Subscription | null> {
     return await this.subscriptionRepository.findOne({
-      where: { paypalSubscriptionId },
+      where: { asaasSubscriptionId },
     });
   }
 
   /**
-   * Activate subscription after PayPal approval
+   * Get subscription by Asaas payment ID
    */
-  static async activateSubscription(subscriptionId: number, baToken: string): Promise<Subscription> {
+  static async getSubscriptionByAsaasPaymentId(asaasPaymentId: string): Promise<Subscription | null> {
+    return await this.subscriptionRepository.findOne({
+      where: { asaasPaymentId },
+    });
+  }
+
+  /**
+   * Create lifetime payment
+   */
+  static async createLifetimePayment(data: {
+    usuarioId: number;
+    paymentMethod: 'PIX' | 'CREDIT_CARD';
+    installmentCount?: number;
+    creditCard?: {
+      holderName: string;
+      number: string;
+      expiryMonth: string;
+      expiryYear: string;
+      ccv: string;
+    };
+    creditCardHolderInfo?: {
+      name: string;
+      email: string;
+      cpfCnpj: string;
+      postalCode: string;
+      addressNumber: string;
+      addressComplement?: string;
+      phone?: string;
+      mobilePhone?: string;
+    };
+    userCpfCnpj?: string; // CPF/CNPJ do usuário para PIX
+  }): Promise<{ 
+    subscriptionId: number;
+    asaasPaymentId: string;
+    pixQrCode?: { encodedImage: string; payload: string; expirationDate: string };
+    status: 'PENDING' | 'CONFIRMED';
+  }> {
+    const usuario = await this.usuarioRepository.findOne({ where: { id: data.usuarioId } });
+    if (!usuario) {
+      throw new Error('User not found');
+    }
+
+    // Get plan details
+    const plan = await this.planRepository.findOne({
+      where: { planType: 'LIFETIME', enabled: true },
+    });
+
+    if (!plan) {
+      throw new Error('LIFETIME plan not found or disabled');
+    }
+
+    // PIX: cancelar assinaturas LIFETIME pendentes (mesmo usuário) antes de criar nova
+    if (data.paymentMethod === 'PIX') {
+      const pendingLifetimePix = await this.subscriptionRepository.find({
+        where: {
+          usuarioId: data.usuarioId,
+          planType: 'LIFETIME',
+          status: 'APPROVAL_PENDING',
+          paymentMethod: 'PIX',
+        },
+      });
+      for (const sub of pendingLifetimePix) {
+        try {
+          await this.cancelSubscription(sub.id, true);
+          console.log(`[SubscriptionService] Cancelled pending LIFETIME PIX subscription ${sub.id} (payment ${sub.asaasPaymentId || 'N/A'}) before creating new one`);
+        } catch (e: any) {
+          console.warn(`[SubscriptionService] Failed to cancel pending LIFETIME PIX ${sub.id}: ${e?.message || e}`);
+        }
+      }
+    }
+
+    // Para PIX, CPF é obrigatório. Validar antes de continuar
+    let cpfCnpj: string | undefined;
+    if (data.paymentMethod === 'PIX') {
+      // CPF pode vir do creditCardHolderInfo (se fornecido) ou userCpfCnpj
+      cpfCnpj = data.userCpfCnpj?.replace(/\D/g, '') || data.creditCardHolderInfo?.cpfCnpj?.replace(/\D/g, '');
+      
+      // Se ainda não tem CPF, verificar se usuário tem no banco
+      if (!cpfCnpj) {
+        if (!usuario.cpfCnpj) {
+          throw new Error('CPF/CNPJ é obrigatório para pagamentos PIX. Por favor, informe seu CPF/CNPJ.');
+        }
+        cpfCnpj = usuario.cpfCnpj.replace(/\D/g, '');
+      }
+    } else if (data.creditCardHolderInfo?.cpfCnpj) {
+      // Para cartão, usar CPF do titular
+      cpfCnpj = data.creditCardHolderInfo.cpfCnpj.replace(/\D/g, '');
+    }
+
+    // Get or create Asaas customer (com CPF se disponível)
+    const asaasCustomerId = await this.getOrCreateAsaasCustomer(data.usuarioId, cpfCnpj);
+
+    const totalValue = parseFloat(plan.price.toString());
+    const dueDate = new Date().toISOString().split('T')[0];
+
+    // Validate installment if provided
+    if (data.installmentCount && data.installmentCount > 1) {
+      const minInstallmentValue = parseFloat(process.env.MIN_INSTALLMENT_VALUE || '10.00');
+      const installmentValue = parseFloat((totalValue / data.installmentCount).toFixed(2));
+      
+      if (installmentValue < minInstallmentValue) {
+        throw new Error(`Valor mínimo por parcela é R$ ${minInstallmentValue.toFixed(2)}`);
+      }
+    }
+
+    // Create payment in Asaas
+    const asaasPayment = await AsaasService.createPayment({
+      customer: asaasCustomerId,
+      billingType: data.paymentMethod,
+      value: totalValue,
+      dueDate,
+      description: `Assinatura ${plan.name}`,
+      installmentCount: data.installmentCount && data.installmentCount > 1 ? data.installmentCount : undefined,
+      installmentValue: data.installmentCount && data.installmentCount > 1 
+        ? parseFloat((totalValue / data.installmentCount).toFixed(2))
+        : undefined,
+      creditCard: data.creditCard,
+      creditCardHolderInfo: data.creditCardHolderInfo,
+    });
+
+    // Determine status
+    let status: SubscriptionStatus = 'APPROVAL_PENDING';
+    if (data.paymentMethod === 'CREDIT_CARD' && asaasPayment.status === 'CONFIRMED') {
+      status = 'ACTIVE';
+    }
+
+    // Create subscription in database
+    const now = new Date();
+    const subscription = this.subscriptionRepository.create({
+      usuarioId: data.usuarioId,
+      asaasPaymentId: asaasPayment.id,
+      asaasCustomerId,
+      planType: 'LIFETIME',
+      paymentMethod: data.paymentMethod,
+      installmentCount: data.installmentCount && data.installmentCount > 1 ? data.installmentCount : undefined,
+      status,
+      currentPeriodStart: now,
+      currentPeriodEnd: undefined, // Never expires
+      cancelAtPeriodEnd: false,
+    });
+
+    const savedSubscription = await this.subscriptionRepository.save(subscription);
+
+    // Get PIX QR Code if payment method is PIX
+    let pixQrCode;
+    if (data.paymentMethod === 'PIX') {
+      try {
+        pixQrCode = await AsaasService.getPixQrCode(asaasPayment.id);
+      } catch (error) {
+        console.error('[SubscriptionService] Error getting PIX QR Code:', error);
+      }
+    }
+
+    // Create history entry
+    await this.createHistoryEntry({
+      subscriptionId: savedSubscription.id,
+      eventType: 'created',
+      newValue: savedSubscription,
+    });
+
+    // Link subscription to user
+    usuario.subscriptionId = savedSubscription.id;
+    if (status === 'ACTIVE') {
+      usuario.plano = 'LIFETIME';
+      usuario.planoValidoAte = undefined;
+    }
+    await this.usuarioRepository.save(usuario);
+
+    // Update user plan if already active
+    if (status === 'ACTIVE') {
+      await this.updateUserPlan(savedSubscription);
+    }
+
+    return {
+      subscriptionId: savedSubscription.id,
+      asaasPaymentId: asaasPayment.id,
+      pixQrCode,
+      status: status === 'ACTIVE' ? 'CONFIRMED' : 'PENDING',
+    };
+  }
+
+  /**
+   * Get installment options for a plan type
+   */
+  static async getInstallmentOptions(planType: PlanType): Promise<Array<{ count: number; value: number; total: number }>> {
+    const plan = await this.planRepository.findOne({
+      where: { planType, enabled: true },
+    });
+
+    if (!plan) {
+      throw new Error(`Plan ${planType} not found or disabled`);
+    }
+
+    const totalValue = parseFloat(plan.price.toString());
+    const minInstallmentValue = parseFloat(process.env.MIN_INSTALLMENT_VALUE || '10.00');
+
+    return AsaasService.calculateInstallmentOptions(totalValue, minInstallmentValue, 3);
+  }
+
+  /**
+   * Activate subscription (called by webhook when payment is confirmed)
+   */
+  static async activateSubscription(subscriptionId: number): Promise<Subscription> {
     const subscription = await this.subscriptionRepository.findOne({ where: { id: subscriptionId } });
     if (!subscription) {
       throw new Error('Subscription not found');
     }
 
-    if (!subscription.paypalSubscriptionId) {
-      throw new Error('PayPal subscription ID not found');
-    }
-
-    // Get updated subscription from PayPal (should be ACTIVE after user approval)
-    const paypalSubscription = await PayPalService.getSubscription(subscription.paypalSubscriptionId);
-    
-    console.log(`[SubscriptionService] Activating subscription ${subscription.paypalSubscriptionId}, PayPal status: ${paypalSubscription.status}`);
-    console.log(`[SubscriptionService] PayPal subscription details:`, {
-      id: paypalSubscription.id,
-      status: paypalSubscription.status,
-      hasBillingInfo: !!paypalSubscription.billing_info,
-      nextBillingTime: paypalSubscription.billing_info?.next_billing_time,
-      hasSubscriber: !!paypalSubscription.subscriber,
-      payerId: paypalSubscription.subscriber?.payer_id,
-    });
-
-    // Update in database
     const oldStatus = subscription.status;
-    const paypalStatus = this.mapPayPalStatus(paypalSubscription.status);
     
-    // If PayPal says EXPIRED but we have ba_token (user just approved), this is a problem
-    // The subscription might have expired before approval, or there's a sync issue
-    if (paypalStatus === 'EXPIRED' && baToken) {
-      console.warn(`[SubscriptionService] ⚠️ PayPal subscription ${subscription.paypalSubscriptionId} is EXPIRED but user provided ba_token.`);
-      console.warn(`[SubscriptionService] This usually means the subscription expired before user could approve it.`);
-      
-        // Check if subscription was just created (within last 48 hours)
-        const hoursSinceCreation = (Date.now() - subscription.createdAt.getTime()) / (1000 * 60 * 60);
-        const minutesSinceCreation = (Date.now() - subscription.createdAt.getTime()) / (1000 * 60);
-        
-        console.log(`[SubscriptionService] Subscription was created ${hoursSinceCreation.toFixed(2)} hours ago (${minutesSinceCreation.toFixed(1)} minutes).`);
-        
-        // If subscription was created very recently (less than 1 hour), this is likely a timing issue
-        // PayPal might not have updated the status yet, or the start_time calculation was wrong
-        if (hoursSinceCreation < 1) {
-          console.warn(`[SubscriptionService] ⚠️ Subscription expired within 1 hour of creation - this is unusual.`);
-          console.warn(`[SubscriptionService] This might be a PayPal timing issue. Waiting 5 seconds and retrying...`);
-          
-          // Wait longer and retry - PayPal might need time to process
-          try {
-            await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
-            const retrySubscription = await PayPalService.getSubscription(subscription.paypalSubscriptionId);
-            const retryStatus = this.mapPayPalStatus(retrySubscription.status);
-            console.log(`[SubscriptionService] Retry check: PayPal status is now ${retryStatus}`);
-            
-            if (retryStatus === 'ACTIVE') {
-              console.log(`[SubscriptionService] ✅ Status updated to ACTIVE on retry!`);
-              subscription.status = 'ACTIVE';
-            } else {
-              // Still EXPIRED - check if it's really expired or if we need to wait more
-              console.warn(`[SubscriptionService] ⚠️ Still EXPIRED after retry. This might be a PayPal issue.`);
-              throw new Error(`Assinatura expirou no PayPal antes de ser aprovada. O tempo limite para aprovação foi excedido. Por favor, crie uma nova assinatura.`);
-            }
-          } catch (retryError: any) {
-            if (retryError.message.includes('Assinatura expirou')) {
-              throw retryError;
-            }
-            throw new Error(`Assinatura expirou no PayPal antes de ser aprovada. Status: ${paypalSubscription.status}. Por favor, crie uma nova assinatura.`);
-          }
-        } else if (hoursSinceCreation < 48) {
-          console.log(`[SubscriptionService] PayPal may have expired it because start_time passed before approval.`);
-          throw new Error(`Assinatura expirou no PayPal antes de ser aprovada. O tempo limite para aprovação foi excedido. Por favor, crie uma nova assinatura.`);
-        } else {
-          throw new Error(`Assinatura expirou no PayPal. Status: ${paypalSubscription.status}. Por favor, crie uma nova assinatura.`);
-        }
-    } else {
-      subscription.status = paypalStatus;
-    }
-    
-    // Extract payer ID from PayPal subscription if available
-    if (paypalSubscription.subscriber?.payer_id) {
-      subscription.paypalPayerId = paypalSubscription.subscriber.payer_id;
-    } else {
-      subscription.paypalPayerId = baToken; // Fallback to ba_token
-    }
-    
-    // Update period dates from PayPal if available
-    if (paypalSubscription.billing_info) {
-      if (paypalSubscription.billing_info.next_billing_time) {
-        subscription.nextBillingTime = new Date(paypalSubscription.billing_info.next_billing_time);
-      }
-      
-      // Update period end based on next billing time
-      if (subscription.nextBillingTime) {
-        subscription.currentPeriodEnd = subscription.nextBillingTime;
-        // Calculate period start based on plan type
-        if (subscription.planType === 'MONTHLY') {
-          const start = new Date(subscription.nextBillingTime);
-          start.setMonth(start.getMonth() - 1);
-          subscription.currentPeriodStart = start;
-        } else if (subscription.planType === 'YEARLY') {
-          const start = new Date(subscription.nextBillingTime);
-          start.setFullYear(start.getFullYear() - 1);
-          subscription.currentPeriodStart = start;
-        }
-      }
-    } else if (subscription.status === 'ACTIVE') {
-      // Fallback: Set next billing time based on plan type if not in PayPal response
-      const now = new Date();
-      if (subscription.planType === 'MONTHLY') {
-        const nextBilling = new Date(now);
-        nextBilling.setMonth(nextBilling.getMonth() + 1);
-        subscription.nextBillingTime = nextBilling;
-        subscription.currentPeriodEnd = nextBilling;
-        subscription.currentPeriodStart = now;
-      } else if (subscription.planType === 'YEARLY') {
-        const nextBilling = new Date(now);
-        nextBilling.setFullYear(nextBilling.getFullYear() + 1);
-        subscription.nextBillingTime = nextBilling;
-        subscription.currentPeriodEnd = nextBilling;
-        subscription.currentPeriodStart = now;
-      }
+    // Update subscription status to ACTIVE
+    subscription.status = 'ACTIVE';
+
+    // Update period dates
+    const now = new Date();
+    if (subscription.planType === 'MONTHLY') {
+      const nextBilling = new Date(now);
+      nextBilling.setMonth(nextBilling.getMonth() + 1);
+      subscription.nextBillingTime = nextBilling;
+      subscription.currentPeriodEnd = nextBilling;
+      subscription.currentPeriodStart = now;
+    } else if (subscription.planType === 'YEARLY') {
+      const nextBilling = new Date(now);
+      nextBilling.setFullYear(nextBilling.getFullYear() + 1);
+      subscription.nextBillingTime = nextBilling;
+      subscription.currentPeriodEnd = nextBilling;
+      subscription.currentPeriodStart = now;
     }
 
     const updatedSubscription = await this.subscriptionRepository.save(subscription);
@@ -293,19 +527,11 @@ export class SubscriptionService {
 
     const oldPlanType = subscription.planType;
 
-    // Update in PayPal if not lifetime
-    if (subscription.paypalSubscriptionId && subscription.planType !== 'LIFETIME') {
-      const newPaypalPlanId = await this.getPayPalPlanId(newPlanType);
-      if (newPaypalPlanId) {
-        await PayPalService.updateSubscription(subscription.paypalSubscriptionId, [
-          {
-            op: 'replace',
-            path: '/plan_id',
-            value: newPaypalPlanId,
-          },
-        ]);
-      }
-    }
+    // Update in Asaas if not lifetime
+    // Note: Asaas doesn't support changing plan type directly
+    // Would need to cancel old subscription and create new one
+    // For now, just update in database
+    // TODO: Implement proper plan change with Asaas
 
     // Update in database
     subscription.planType = newPlanType;
@@ -347,14 +573,28 @@ export class SubscriptionService {
       throw new Error('Subscription not found');
     }
 
-    if (immediately && subscription.paypalSubscriptionId) {
-      // Cancel immediately in PayPal
-      await PayPalService.cancelSubscription(subscription.paypalSubscriptionId);
+    if (immediately) {
+      // Cancel immediately in Asaas
+      if (subscription.asaasSubscriptionId) {
+        await AsaasService.cancelSubscription(subscription.asaasSubscriptionId);
+      }
+      // LIFETIME PIX: só tem asaasPaymentId (pagamento avulso), sem subscription
+      if (!subscription.asaasSubscriptionId && subscription.asaasPaymentId) {
+        try {
+          await AsaasService.cancelPayment(subscription.asaasPaymentId);
+        } catch (e: any) {
+          console.warn(`[SubscriptionService] Could not cancel Asaas payment ${subscription.asaasPaymentId}: ${e?.message || e}`);
+        }
+      }
       subscription.status = 'CANCELLED';
       subscription.canceledAt = new Date();
     } else {
       // Cancel at period end
       subscription.cancelAtPeriodEnd = true;
+      // Cancel subscription in Asaas (it will cancel after current period)
+      if (subscription.asaasSubscriptionId) {
+        await AsaasService.cancelSubscription(subscription.asaasSubscriptionId);
+      }
     }
 
     const updatedSubscription = await this.subscriptionRepository.save(subscription);
@@ -378,8 +618,9 @@ export class SubscriptionService {
       throw new Error('Subscription not found');
     }
 
-    if (subscription.paypalSubscriptionId) {
-      await PayPalService.suspendSubscription(subscription.paypalSubscriptionId);
+    // Asaas doesn't have suspend, just cancel
+    if (subscription.asaasSubscriptionId) {
+      await AsaasService.cancelSubscription(subscription.asaasSubscriptionId);
     }
 
     subscription.status = 'SUSPENDED';
@@ -406,14 +647,11 @@ export class SubscriptionService {
       throw new Error('Subscription not found');
     }
 
-    // Re-activate in PayPal if needed
-    if (subscription.paypalSubscriptionId) {
-      // PayPal doesn't have a direct "resume" API, so we update the subscription
-      const paypalSubscription = await PayPalService.getSubscription(subscription.paypalSubscriptionId);
-      subscription.status = this.mapPayPalStatus(paypalSubscription.status);
-    } else {
-      subscription.status = 'ACTIVE';
-    }
+    // Re-activate in Asaas if needed
+    // Note: Asaas doesn't have a direct "resume" API
+    // Would need to create new subscription
+    // For now, just update status in database
+    subscription.status = 'ACTIVE';
 
     subscription.cancelAtPeriodEnd = false;
     const updatedSubscription = await this.subscriptionRepository.save(subscription);
@@ -442,64 +680,79 @@ export class SubscriptionService {
       order: { createdAt: 'DESC' },
     });
 
-    // Auto-sync if subscription is pending approval or needs payer ID
-    // CRITICAL: Also sync if local is ACTIVE but PayPal might be EXPIRED (inconsistency)
-    // This ensures we always have the latest status from PayPal
-    if (subscription && subscription.paypalSubscriptionId) {
+    // Auto-sync if subscription is pending approval (for PIX payments)
+    // For Asaas, sync if status is APPROVAL_PENDING (waiting for PIX payment)
+    if (subscription && subscription.asaasSubscriptionId) {
       const now = Date.now();
-      const lastSyncTime = this.lastSyncCache.get(subscription.paypalSubscriptionId) || 0;
+      const lastSyncTime = this.lastSyncCache.get(subscription.asaasSubscriptionId) || 0;
       const timeSinceLastSync = now - lastSyncTime;
       
       // Determine if we need to sync:
-      // 1. Pending approval (always sync - might have been activated)
-      // 2. Missing payer ID (always sync - might have been activated)
-      // 3. ACTIVE but expired (always sync - needs immediate update)
-      // 4. ACTIVE but cache expired (sync only if cache TTL passed - prevents excessive calls)
+      // 1. Pending approval (always sync - might have been activated by webhook)
+      // 2. ACTIVE but expired (always sync - needs immediate update)
+      // 3. ACTIVE but cache expired (sync only if cache TTL passed - prevents excessive calls)
       const isPending = subscription.status === 'APPROVAL_PENDING';
-      const needsPayerId = !subscription.paypalPayerId && subscription.status !== 'CANCELLED';
       const isExpired = subscription.status === 'ACTIVE' && subscription.currentPeriodEnd && new Date(subscription.currentPeriodEnd) < new Date();
       const cacheExpired = subscription.status === 'ACTIVE' && timeSinceLastSync > this.SYNC_CACHE_TTL;
       
-      const needsSync = isPending || needsPayerId || isExpired || cacheExpired;
+      const needsSync = isPending || isExpired || cacheExpired;
       
       if (needsSync) {
         try {
-          console.log(`[SubscriptionService] 🔄 Auto-syncing subscription ${subscription.paypalSubscriptionId} for user ${usuarioId} (current status: ${subscription.status})`);
+          // PIX em APPROVAL_PENDING: só ativar quando o PAGAMENTO estiver pago, não o status da assinatura.
+          // No sandbox o Asaas pode retornar subscription ACTIVE antes do PIX ser pago; isso causaria
+          // redirecionamento imediato para /assinatura sem pagamento. Evitamos checando o payment.
+          // Usamos cache para não chamar getPaymentStatus a cada poll (frontend a cada 5s); com muitos
+          // usuários isso geraria excesso de chamadas ao Asaas e log repetitivo.
+          if (isPending && subscription.paymentMethod === 'PIX' && subscription.asaasPaymentId) {
+            const pid = subscription.asaasPaymentId;
+            const cached = this.pixPaymentCheckCache.get(pid);
+            const cacheValid = cached && (now - cached.lastCheck) < this.PIX_PAYMENT_CHECK_TTL;
+
+            let paid = false;
+            if (cacheValid) {
+              paid = cached!.status === 'RECEIVED' || cached!.status === 'CONFIRMED';
+              if (!paid) {
+                return subscription;
+              }
+            }
+            if (!cacheValid) {
+              const payment = await AsaasService.getPaymentStatus(pid);
+              paid = payment.status === 'RECEIVED' || payment.status === 'CONFIRMED';
+              this.pixPaymentCheckCache.set(pid, { lastCheck: now, status: payment.status });
+              if (!paid) {
+                console.log(`[SubscriptionService] ⏳ PIX pending: payment ${pid} status=${payment.status}, next check in ${this.PIX_PAYMENT_CHECK_TTL / 1000}s`);
+                return subscription;
+              }
+              this.pixPaymentCheckCache.delete(pid);
+              console.log(`[SubscriptionService] ✅ PIX payment confirmed (${payment.status}), proceeding with sync`);
+            }
+          }
+
+          console.log(`[SubscriptionService] 🔄 Auto-syncing subscription ${subscription.asaasSubscriptionId} for user ${usuarioId} (current status: ${subscription.status})`);
           
           // Update cache before making API call
-          this.lastSyncCache.set(subscription.paypalSubscriptionId, now);
+          this.lastSyncCache.set(subscription.asaasSubscriptionId, now);
           
-          const paypalSubscription = await PayPalService.getSubscription(subscription.paypalSubscriptionId);
-          const paypalStatus = this.mapPayPalStatus(paypalSubscription.status);
+          const asaasSubscription = await AsaasService.getSubscriptionStatus(subscription.asaasSubscriptionId);
+          const asaasStatus = this.mapAsaasSubscriptionStatus(asaasSubscription.status);
           
-          console.log(`[SubscriptionService] 📊 PayPal status: ${paypalSubscription.status} -> mapped to: ${paypalStatus}`);
+          console.log(`[SubscriptionService] 📊 Asaas status: ${asaasSubscription.status} -> mapped to: ${asaasStatus}`);
           
-          // CRITICAL: Always sync if PayPal shows ACTIVE but local doesn't (this fixes EXPIRED when PayPal is ACTIVE)
-          // CRITICAL: Also sync if local is ACTIVE but PayPal is EXPIRED (inconsistency fix)
-          // Also sync if status is different
-          const shouldSync = paypalStatus !== subscription.status || 
-                            (paypalStatus === 'ACTIVE' && subscription.status !== 'ACTIVE') ||
-                            (subscription.status === 'ACTIVE' && paypalStatus === 'EXPIRED'); // Catch inconsistency
-          
-          if (shouldSync) {
-            console.log(`[SubscriptionService] ✅ Status mismatch detected! Syncing from ${subscription.status} to ${paypalStatus}...`);
-            const syncedSubscription = await this.syncPayPalSubscription(subscription.paypalSubscriptionId);
+          // Sync if status is different
+          if (asaasStatus !== subscription.status) {
+            console.log(`[SubscriptionService] ✅ Status mismatch detected! Syncing from ${subscription.status} to ${asaasStatus}...`);
+            const syncedSubscription = await this.syncAsaasSubscription(subscription.asaasSubscriptionId);
             console.log(`[SubscriptionService] ✅ Subscription synced successfully! New status: ${syncedSubscription.status}`);
             
-            // If sync resulted in EXPIRED but user has payment, update user plan
+            // If sync resulted in EXPIRED, update user plan
             if (syncedSubscription.status === 'EXPIRED') {
               await this.updateUserPlan(syncedSubscription);
             }
             
             return syncedSubscription;
           } else {
-            // Status matches, but update payer ID if missing
-            if (!subscription.paypalPayerId && paypalSubscription.subscriber?.payer_id) {
-              subscription.paypalPayerId = paypalSubscription.subscriber.payer_id;
-              await this.subscriptionRepository.save(subscription);
-              console.log(`[SubscriptionService] ✅ Updated payer ID for subscription ${subscription.paypalSubscriptionId}`);
-            }
-            console.log(`[SubscriptionService] ℹ️ Status matches PayPal (${paypalStatus}), no sync needed`);
+            console.log(`[SubscriptionService] ℹ️ Status matches Asaas (${asaasStatus}), no sync needed`);
           }
         } catch (error: any) {
           // Don't fail if sync fails, just log
@@ -508,14 +761,12 @@ export class SubscriptionService {
             console.error(`[SubscriptionService] Error stack:`, error.stack);
           }
           // Remove from cache on error so we can retry next time
-          this.lastSyncCache.delete(subscription.paypalSubscriptionId);
+          this.lastSyncCache.delete(subscription.asaasSubscriptionId);
         }
       } else if (subscription.status === 'ACTIVE') {
         // Cache hit - skip sync but log for debugging
-        console.log(`[SubscriptionService] ⏭️ Skipping auto-sync for ACTIVE subscription ${subscription.paypalSubscriptionId} (cached, last sync ${Math.round(timeSinceLastSync / 1000)}s ago)`);
+        console.log(`[SubscriptionService] ⏭️ Skipping auto-sync for ACTIVE subscription ${subscription.asaasSubscriptionId} (cached, last sync ${Math.round(timeSinceLastSync / 1000)}s ago)`);
       }
-    } else if (subscription && !subscription.paypalSubscriptionId) {
-      console.log(`[SubscriptionService] ⚠️ Subscription found but no PayPal ID for user ${usuarioId}`);
     }
 
     return subscription;
@@ -600,9 +851,92 @@ export class SubscriptionService {
   }
 
   /**
-   * Sync subscription from PayPal webhook
+   * Sync subscription from Asaas webhook
+   */
+  static async syncAsaasSubscription(asaasResourceId: string, asaasEvent?: any): Promise<Subscription> {
+    // Try to find by subscription ID first
+    let subscription = await this.subscriptionRepository.findOne({
+      where: { asaasSubscriptionId: asaasResourceId },
+    });
+
+    // If not found, try payment ID (for LIFETIME)
+    if (!subscription) {
+      subscription = await this.subscriptionRepository.findOne({
+        where: { asaasPaymentId: asaasResourceId },
+      });
+    }
+
+    if (!subscription) {
+      throw new Error(`Subscription not found for Asaas ID: ${asaasResourceId}`);
+    }
+
+    const oldStatus = subscription.status;
+
+    // If we have subscription ID, sync from subscription
+    if (subscription.asaasSubscriptionId) {
+      const asaasSubscription = await AsaasService.getSubscriptionStatus(subscription.asaasSubscriptionId);
+      subscription.status = this.mapAsaasSubscriptionStatus(asaasSubscription.status);
+
+      // Update next billing time
+      if (subscription.status === 'ACTIVE' && subscription.planType !== 'LIFETIME') {
+        const nextBilling = new Date(asaasSubscription.nextDueDate);
+        subscription.nextBillingTime = nextBilling;
+        
+        // Update period dates
+        if (subscription.planType === 'MONTHLY') {
+          subscription.currentPeriodEnd = nextBilling;
+          const start = new Date(nextBilling);
+          start.setMonth(start.getMonth() - 1);
+          subscription.currentPeriodStart = start;
+        } else if (subscription.planType === 'YEARLY') {
+          subscription.currentPeriodEnd = nextBilling;
+          const start = new Date(nextBilling);
+          start.setFullYear(start.getFullYear() - 1);
+          subscription.currentPeriodStart = start;
+        }
+      }
+    }
+
+    // If payment was received, activate subscription
+    if (asaasEvent?.event === 'PAYMENT_RECEIVED') {
+      if (subscription.status !== 'ACTIVE') {
+        subscription.status = 'ACTIVE';
+      }
+    }
+
+    const updatedSubscription = await this.subscriptionRepository.save(subscription);
+
+    // Create history entry
+    await this.createHistoryEntry({
+      subscriptionId: updatedSubscription.id,
+      eventType: asaasEvent ? this.mapAsaasEventType(asaasEvent.event) : 'updated',
+      paypalEventId: asaasEvent?.id,
+      paypalResourceId: asaasResourceId,
+      oldValue: { status: oldStatus },
+      newValue: { status: updatedSubscription.status },
+      metadata: asaasEvent || { manual_sync: true },
+    });
+
+    // Detect status changes and send emails (only if event provided)
+    if (asaasEvent) {
+      await this.handleStatusChange(oldStatus, updatedSubscription, asaasEvent);
+    }
+
+    await this.updateUserPlan(updatedSubscription);
+
+    return updatedSubscription;
+  }
+
+  /**
+   * Sync subscription from PayPal webhook (DEPRECATED - kept for backward compatibility)
+   * NOTE: This method is deprecated. Use syncAsaasSubscription instead.
    */
   static async syncPayPalSubscription(paypalSubscriptionId: string, paypalEvent?: any): Promise<Subscription> {
+    // This method is deprecated and no longer supported
+    // Migrate to Asaas - use syncAsaasSubscription instead
+    throw new Error('PayPal integration is deprecated. Please use Asaas integration.');
+    
+    /* DEPRECATED CODE - PayPal no longer supported
     const subscription = await this.subscriptionRepository.findOne({
       where: { paypalSubscriptionId },
     });
@@ -806,6 +1140,7 @@ export class SubscriptionService {
     await this.updateUserPlan(updatedSubscription);
 
     return updatedSubscription;
+    */
   }
 
   /**
@@ -1079,12 +1414,53 @@ export class SubscriptionService {
   }
 
   /**
+   * Helper: Map Asaas subscription status to our status
+   */
+  private static mapAsaasSubscriptionStatus(asaasStatus: string): SubscriptionStatus {
+    const statusMap: Record<string, SubscriptionStatus> = {
+      'ACTIVE': 'ACTIVE',
+      'EXPIRED': 'EXPIRED',
+      'INACTIVE': 'CANCELLED',
+    };
+
+    return statusMap[asaasStatus.toUpperCase()] || 'APPROVAL_PENDING';
+  }
+
+  /**
+   * Helper: Map Asaas payment status to our status
+   */
+  private static mapAsaasPaymentStatus(asaasStatus: string): SubscriptionStatus {
+    const statusMap: Record<string, SubscriptionStatus> = {
+      'PENDING': 'APPROVAL_PENDING',
+      'CONFIRMED': 'ACTIVE',
+      'RECEIVED': 'ACTIVE',
+      'OVERDUE': 'EXPIRED',
+      'REFUNDED': 'CANCELLED',
+    };
+
+    return statusMap[asaasStatus.toUpperCase()] || 'APPROVAL_PENDING';
+  }
+
+  /**
+   * Helper: Map Asaas event type to our event type
+   */
+  private static mapAsaasEventType(asaasEventType: string): EventType {
+    if (asaasEventType.includes('CREATED')) return 'created';
+    if (asaasEventType.includes('RECEIVED')) return 'activated';
+    if (asaasEventType.includes('CONFIRMED')) return 'activated';
+    if (asaasEventType.includes('OVERDUE')) return 'payment_failed';
+    if (asaasEventType.includes('REFUNDED')) return 'refunded';
+    if (asaasEventType.includes('DELETED')) return 'canceled';
+    return 'updated';
+  }
+
+  /**
    * Helper: Handle status changes and send appropriate emails
    */
   private static async handleStatusChange(
     oldStatus: SubscriptionStatus,
     subscription: Subscription,
-    paypalEvent: any
+    asaasEvent: any
   ): Promise<void> {
     const newStatus = subscription.status;
 
@@ -1098,7 +1474,7 @@ export class SubscriptionService {
       const existingHistory = await this.subscriptionHistoryRepository.findOne({
         where: {
           subscriptionId: subscription.id,
-          paypalEventId: paypalEvent.id,
+          paypalEventId: asaasEvent?.id,
         },
       });
 
@@ -1110,7 +1486,7 @@ export class SubscriptionService {
       // Send emails based on status change
       if (newStatus === 'SUSPENDED') {
         // Assinatura foi suspensa (provavelmente por pagamento falho)
-        if (paypalEvent.event_type === 'PAYMENT.SALE.DENIED') {
+        if (asaasEvent?.event === 'PAYMENT_OVERDUE') {
           // Pagamento foi negado - enviar email de pagamento falho
           await EmailService.enviarEmailPagamentoFalho(
             subscription.usuarioId,

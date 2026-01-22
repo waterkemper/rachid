@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { SubscriptionService } from '../services/SubscriptionService';
-import { PayPalService } from '../services/PayPalService';
+import { AsaasService } from '../services/AsaasService';
 import { AppDataSource } from '../database/data-source';
 import { Subscription } from '../entities/Subscription';
 
@@ -54,7 +54,7 @@ export class AdminSubscriptionController {
   }
 
   /**
-   * Process refund (manual - PayPal refund should be done in PayPal Dashboard)
+   * Process refund (manual - Asaas refund should be done in Asaas Dashboard)
    * POST /api/admin/subscriptions/:id/refund
    */
   static async refund(req: AuthRequest, res: Response) {
@@ -71,7 +71,7 @@ export class AdminSubscriptionController {
       await SubscriptionService.cancelSubscription(id, true);
 
       res.json({
-        message: 'Reembolso processado (assinatura cancelada). Reembolso deve ser feito no PayPal Dashboard.',
+        message: 'Reembolso processado (assinatura cancelada). Reembolso deve ser feito no Asaas Dashboard.',
         subscription,
       });
     } catch (error: any) {
@@ -176,7 +176,7 @@ export class AdminSubscriptionController {
   }
 
   /**
-   * Sync subscription with PayPal (manual sync)
+   * Sync subscription with Asaas (manual sync)
    * POST /api/admin/subscriptions/:id/sync
    */
   static async sync(req: AuthRequest, res: Response) {
@@ -189,15 +189,15 @@ export class AdminSubscriptionController {
         return res.status(404).json({ error: 'Assinatura não encontrada' });
       }
 
-      if (!subscription.paypalSubscriptionId) {
-        return res.status(400).json({ error: 'Assinatura não tem PayPal Subscription ID' });
+      if (!subscription.asaasSubscriptionId) {
+        return res.status(400).json({ error: 'Assinatura não tem Asaas Subscription ID' });
       }
 
-      // Sync with PayPal
-      const syncedSubscription = await SubscriptionService.syncPayPalSubscription(subscription.paypalSubscriptionId);
+      // Sync with Asaas
+      const syncedSubscription = await SubscriptionService.syncAsaasSubscription(subscription.asaasSubscriptionId);
 
       res.json({
-        message: 'Assinatura sincronizada com PayPal',
+        message: 'Assinatura sincronizada com Asaas',
         subscription: syncedSubscription,
       });
     } catch (error: any) {
@@ -222,26 +222,22 @@ export class AdminSubscriptionController {
         order: { createdAt: 'DESC' },
       });
 
-      if (pendingSubscription && pendingSubscription.paypalSubscriptionId) {
+      if (pendingSubscription && pendingSubscription.asaasSubscriptionId) {
         try {
-          // Try to activate pending subscription
-          const paypalSubscription = await PayPalService.getSubscription(pendingSubscription.paypalSubscriptionId);
-          // Use reflection to access private method (or make it public)
-          const paypalStatus = (SubscriptionService as any).mapPayPalStatus(paypalSubscription.status);
+          // Try to sync and activate pending subscription
+          const asaasSubscription = await AsaasService.getSubscriptionStatus(pendingSubscription.asaasSubscriptionId);
           
-          if (paypalStatus === 'ACTIVE') {
-            const activated = await SubscriptionService.activateSubscription(
-              pendingSubscription.id,
-              paypalSubscription.subscriber?.payer_id || ''
-            );
+          if (asaasSubscription.status === 'ACTIVE') {
+            // Sync subscription status - this will activate it if payment is confirmed
+            const synced = await SubscriptionService.syncAsaasSubscription(pendingSubscription.asaasSubscriptionId);
             return res.json({
               message: 'Assinatura pendente foi ativada com sucesso',
-              subscription: activated,
+              subscription: synced,
             });
           } else {
             return res.status(400).json({
-              error: `Assinatura pendente está com status ${paypalStatus} no PayPal, não pode ser ativada`,
-              paypalStatus,
+              error: `Assinatura pendente está com status ${asaasSubscription.status} no Asaas, não pode ser ativada`,
+              asaasStatus: asaasSubscription.status,
             });
           }
         } catch (error: any) {
@@ -268,20 +264,11 @@ export class AdminSubscriptionController {
             }
           }
 
-          // Create new subscription
-          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-          const result = await SubscriptionService.createSubscription({
-            usuarioId: userId,
-            planType: planType as any,
-            returnUrl: `${frontendUrl}/assinatura?subscription_id={id}&ba_token={token}`,
-            cancelUrl: `${frontendUrl}/assinatura?canceled=true`,
-          });
-
-          return res.json({
-            message: 'Nova assinatura criada com sucesso',
-            subscriptionId: result.subscriptionId,
-            approvalUrl: result.approvalUrl,
-            paypalSubscriptionId: result.paypalSubscriptionId,
+          // Create new subscription (requires payment method - default to PIX for admin)
+          // Note: Admin should specify paymentMethod and userCpfCnpj if needed
+          return res.status(400).json({
+            error: 'Para criar uma nova assinatura, use o endpoint de criação normal com paymentMethod e dados necessários',
+            suggestion: 'Asaas requer paymentMethod (PIX ou CREDIT_CARD) e CPF/CNPJ para PIX',
           });
         } catch (error: any) {
           return res.status(400).json({
@@ -323,7 +310,7 @@ export class AdminSubscriptionController {
       for (const expired of expiredSubscriptions) {
         try {
           await SubscriptionService.cancelSubscription(expired.id, true);
-          console.log(`[AdminSubscriptionController] ✅ Canceled expired subscription ${expired.id} (${expired.paypalSubscriptionId})`);
+          console.log(`[AdminSubscriptionController] ✅ Canceled expired subscription ${expired.id} (${expired.asaasSubscriptionId || 'N/A'})`);
         } catch (error: any) {
           console.warn(`[AdminSubscriptionController] ⚠️ Could not cancel expired subscription ${expired.id}: ${error.message}`);
         }
@@ -345,22 +332,13 @@ export class AdminSubscriptionController {
         }
       }
 
-      // Create new subscription
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      const result = await SubscriptionService.createSubscription({
-        usuarioId: userId,
-        planType: planType as any,
-        returnUrl: `${frontendUrl}/assinatura?subscription_id={id}&ba_token={token}`,
-        cancelUrl: `${frontendUrl}/assinatura?canceled=true`,
-      });
-
+      // Note: Creating new subscription requires payment method and CPF for PIX
+      // This endpoint should be used with proper payment data
       res.json({
-        message: 'Assinaturas expiradas canceladas e nova assinatura criada com sucesso',
+        message: 'Assinaturas expiradas canceladas com sucesso',
         canceledCount: expiredSubscriptions.length,
-        subscriptionId: result.subscriptionId,
-        approvalUrl: result.approvalUrl,
-        paypalSubscriptionId: result.paypalSubscriptionId,
-        instructions: 'Envie o usuário para a URL de aprovação (approvalUrl) para completar a assinatura no PayPal',
+        note: 'Para criar uma nova assinatura, use o endpoint de criação normal com paymentMethod e dados necessários',
+        instructions: 'Asaas requer paymentMethod (PIX ou CREDIT_CARD) e CPF/CNPJ para PIX. Use o endpoint POST /api/subscriptions',
       });
     } catch (error: any) {
       console.error('Erro ao recriar assinatura para usuário:', error);

@@ -33,6 +33,9 @@ export class Usuario {
   @Column('varchar', { nullable: true })
   telefone?: string;
 
+  @Column('varchar', { nullable: true, name: 'cpf_cnpj' })
+  cpfCnpj?: string;
+
   @Column('varchar', { nullable: true, name: 'chavepix' })
   chavePix?: string;
 
