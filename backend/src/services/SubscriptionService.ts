@@ -949,6 +949,8 @@ export class SubscriptionService {
    * Sync subscription from Asaas webhook
    */
   static async syncAsaasSubscription(asaasResourceId: string, asaasEvent?: any): Promise<Subscription> {
+    console.log(`[SubscriptionService] Syncing subscription for Asaas ID: ${asaasResourceId}`);
+    
     // Try to find by subscription ID first
     let subscription = await this.subscriptionRepository.findOne({
       where: { asaasSubscriptionId: asaasResourceId },
@@ -962,8 +964,11 @@ export class SubscriptionService {
     }
 
     if (!subscription) {
+      console.warn(`[SubscriptionService] Subscription not found for Asaas ID: ${asaasResourceId}. Event: ${asaasEvent?.event || 'N/A'}`);
       throw new Error(`Subscription not found for Asaas ID: ${asaasResourceId}`);
     }
+    
+    console.log(`[SubscriptionService] Found subscription ${subscription.id} for Asaas ID: ${asaasResourceId}`);
 
     const oldStatus = subscription.status;
 

@@ -37,7 +37,8 @@ app.use(cookieParser());
 // The webhook controller validates the request internally using AsaasService.verifyWebhook
 app.post('/subscriptions/webhook', (req, res) => {
   console.log('[Webhook] Received webhook request at /subscriptions/webhook');
-  console.log('[Webhook] Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('[Webhook] Event type:', req.body?.event);
+  console.log('[Webhook] Resource ID:', req.body?.payment?.subscription || req.body?.payment?.id || req.body?.subscription?.id);
   SubscriptionController.webhook(req as any, res);
 });
 
