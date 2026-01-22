@@ -167,8 +167,20 @@ export class SubscriptionService {
     // Get or create Asaas customer (com CPF se disponível)
     const asaasCustomerId = await this.getOrCreateAsaasCustomer(data.usuarioId, cpfCnpj);
 
-    // Calculate next due date (today)
-    const nextDueDate = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const trialDays = Math.max(0, Number(plan.trialDays) || 0);
+
+    // Trial: push first charge to nextDueDate = today + trialDays (Asaas has no trial field)
+    let nextDueDate: string;
+    let trialEnd: Date | undefined;
+    if (trialDays > 0) {
+      const due = new Date(now);
+      due.setDate(due.getDate() + trialDays);
+      nextDueDate = due.toISOString().split('T')[0];
+      trialEnd = due;
+    } else {
+      nextDueDate = now.toISOString().split('T')[0];
+    }
 
     // Create subscription in Asaas
     const asaasSubscription = await AsaasService.createSubscription({
@@ -182,18 +194,16 @@ export class SubscriptionService {
       creditCardHolderInfo: data.creditCardHolderInfo,
     });
 
-    // Calculate period dates
-    const now = new Date();
+    // Calculate period dates: periodEnd = end of first paid cycle (after trial if any)
     const periodStart = now;
     let periodEnd: Date | undefined;
-
+    const cycleEnd = trialEnd ? new Date(trialEnd) : new Date(now);
     if (data.planType === 'MONTHLY') {
-      periodEnd = new Date(now);
-      periodEnd.setMonth(periodEnd.getMonth() + 1);
-    } else if (data.planType === 'YEARLY') {
-      periodEnd = new Date(now);
-      periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+      cycleEnd.setMonth(cycleEnd.getMonth() + 1);
+    } else {
+      cycleEnd.setFullYear(cycleEnd.getFullYear() + 1);
     }
+    periodEnd = cycleEnd;
 
     // Determine status - if CREDIT_CARD and payment processed immediately, status might be CONFIRMED
     let status: SubscriptionStatus = 'APPROVAL_PENDING';
@@ -211,6 +221,7 @@ export class SubscriptionService {
       status,
       currentPeriodStart: periodStart,
       currentPeriodEnd: periodEnd,
+      trialEnd: trialEnd || undefined,
       cancelAtPeriodEnd: false,
     });
 

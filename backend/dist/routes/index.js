@@ -25,8 +25,11 @@ const AdminFeatureLimitsController_1 = require("../controllers/AdminFeatureLimit
 const AdminPlansController_1 = require("../controllers/AdminPlansController");
 const DespesaAnexoController_1 = require("../controllers/DespesaAnexoController");
 const GraficosController_1 = require("../controllers/GraficosController");
+const ConfigController_1 = require("../controllers/ConfigController");
 const requirePro_1 = require("../middleware/requirePro");
 const router = (0, express_1.Router)();
+// Config (público – usado pelo frontend para exibir/ocultar botão sandbox)
+router.get('/config', ConfigController_1.ConfigController.getConfig);
 // Rotas públicas (sem autenticação)
 router.post('/auth/login', AuthController_1.AuthController.login);
 router.post('/auth/google', AuthController_1.AuthController.googleLogin);

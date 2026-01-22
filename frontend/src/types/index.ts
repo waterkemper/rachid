@@ -142,6 +142,7 @@ export interface Subscription {
   usuarioId: number;
   paypalSubscriptionId?: string;
   paypalPayerId?: string;
+  paymentMethod?: 'PIX' | 'CREDIT_CARD';
   planType: 'MONTHLY' | 'YEARLY' | 'LIFETIME';
   status: 'APPROVAL_PENDING' | 'APPROVED' | 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED';
   currentPeriodStart: string;

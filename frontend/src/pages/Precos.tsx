@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { subscriptionApi, featureApi } from '../services/api';
 import { AsaasCheckout } from '../components/AsaasCheckout';
+import { Subscription } from '../types';
 import './Precos.css';
 
 // Função helper para formatar preço em formato brasileiro
@@ -46,11 +47,20 @@ const Precos: React.FC = () => {
   const [showCheckout, setShowCheckout] = useState(false);
   const [selectedPlanType, setSelectedPlanType] = useState<'MONTHLY' | 'YEARLY' | 'LIFETIME' | null>(null);
   const [successShown, setSuccessShown] = useState(false);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
 
   useEffect(() => {
     loadPlans();
     loadPlanLimits();
   }, []);
+
+  useEffect(() => {
+    if (usuario) {
+      subscriptionApi.getMe().then((d) => setSubscription(d.subscription)).catch(() => setSubscription(null));
+    } else {
+      setSubscription(null);
+    }
+  }, [usuario]);
 
   const loadPlans = async () => {
     try {
@@ -67,6 +77,18 @@ const Precos: React.FC = () => {
       setPlanLimits(limits);
     } catch (error) {
       console.error('Erro ao carregar limites dos planos:', error);
+    }
+  };
+
+  const isActive = subscription?.status === 'ACTIVE';
+  const currentPlan = isActive ? subscription?.planType : null;
+
+  const getPlanLabel = (t: 'MONTHLY' | 'YEARLY' | 'LIFETIME') => {
+    switch (t) {
+      case 'MONTHLY': return 'PRO Mensal';
+      case 'YEARLY': return 'PRO Anual';
+      case 'LIFETIME': return 'PRO Vitalício';
+      default: return 'Grátis';
     }
   };
 
@@ -167,6 +189,12 @@ const Precos: React.FC = () => {
         <h1>Escolha seu Plano</h1>
         <p className="subtitle">Desbloqueie recursos avançados para organizar melhor seus eventos</p>
 
+        {currentPlan && (
+          <p className="precos-upgrade-banner" style={{ marginBottom: 16 }}>
+            Você está no plano <strong>{getPlanLabel(currentPlan)}</strong>. Faça upgrade para ter mais benefícios.
+          </p>
+        )}
+
         <div className="plans-grid">
           {/* FREE Plan */}
           <div className="plan-card free">
@@ -212,7 +240,7 @@ const Precos: React.FC = () => {
               )}
             </ul>
             <button className="btn-plan" disabled>
-              Plano Atual
+              {!currentPlan ? 'Plano Atual' : 'Grátis'}
             </button>
           </div>
 
@@ -265,9 +293,9 @@ const Precos: React.FC = () => {
             <button
               className="btn-plan btn-primary"
               onClick={() => handleSubscribe('MONTHLY')}
-              disabled={loading}
+              disabled={loading || currentPlan === 'MONTHLY'}
             >
-              {loading ? 'Processando...' : 'Assinar Mensal'}
+              {loading ? 'Processando...' : currentPlan === 'MONTHLY' ? 'Plano Atual' : 'Assinar Mensal'}
             </button>
           </div>
 
@@ -281,7 +309,7 @@ const Precos: React.FC = () => {
                 <span className="period">/ano</span>
               </div>
               {plans.YEARLY?.savings && (
-                <div className="plan-savings">Economize {plans.YEARLY.savings}%</div>
+                <div className="plan-savings">Economize {plans.YEARLY.savings}</div>
               )}
             </div>
             <ul className="plan-features">
@@ -323,9 +351,9 @@ const Precos: React.FC = () => {
             <button
               className="btn-plan btn-primary"
               onClick={() => handleSubscribe('YEARLY')}
-              disabled={loading}
+              disabled={loading || currentPlan === 'YEARLY'}
             >
-              {loading ? 'Processando...' : 'Assinar Anual'}
+              {loading ? 'Processando...' : currentPlan === 'YEARLY' ? 'Plano Atual' : currentPlan === 'MONTHLY' ? 'Fazer upgrade para Anual' : 'Assinar Anual'}
             </button>
           </div>
 
@@ -396,9 +424,9 @@ const Precos: React.FC = () => {
             <button
               className="btn-plan btn-lifetime"
               onClick={handleLifetime}
-              disabled={loading}
+              disabled={loading || currentPlan === 'LIFETIME'}
             >
-              {loading ? 'Processando...' : 'Comprar Vitalício'}
+              {loading ? 'Processando...' : currentPlan === 'LIFETIME' ? 'Plano Atual' : (currentPlan === 'MONTHLY' || currentPlan === 'YEARLY') ? 'Fazer upgrade para Vitalício' : 'Comprar Vitalício'}
             </button>
           </div>
         </div>
