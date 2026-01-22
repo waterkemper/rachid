@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { subscriptionApi, featureApi } from '../services/api';
+import { AsaasCheckout } from '../components/AsaasCheckout';
 import './Precos.css';
 
 // Função helper para formatar preço em formato brasileiro
@@ -42,6 +43,9 @@ const Precos: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [promoCodeError, setPromoCodeError] = useState('');
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [selectedPlanType, setSelectedPlanType] = useState<'MONTHLY' | 'YEARLY' | 'LIFETIME' | null>(null);
+  const [successShown, setSuccessShown] = useState(false);
 
   useEffect(() => {
     loadPlans();
@@ -66,72 +70,43 @@ const Precos: React.FC = () => {
     }
   };
 
-  const handleSubscribe = async (planType: 'MONTHLY' | 'YEARLY') => {
+  const handleSubscribe = (planType: 'MONTHLY' | 'YEARLY') => {
     if (!usuario) {
       navigate('/login');
       return;
     }
+    setSelectedPlanType(planType);
+    setShowCheckout(true);
+  };
 
-    try {
-      setLoading(true);
-      // PayPal will replace {id} with subscription_id and {token} with ba_token in return URL
-      const returnUrl = `${window.location.origin}/assinatura?subscription_id={id}&ba_token={token}`;
-      const cancelUrl = `${window.location.origin}/precos?canceled=true`;
+  const handleLifetime = () => {
+    if (!usuario) {
+      navigate('/login');
+      return;
+    }
+    setSelectedPlanType('LIFETIME');
+    setShowCheckout(true);
+  };
 
-      const result = await subscriptionApi.create({
-        planType,
-        returnUrl,
-        cancelUrl,
-      });
-
-      // Store subscription ID for later activation
-      sessionStorage.setItem('pendingSubscriptionId', result.subscriptionId.toString());
-      sessionStorage.setItem('pendingPayPalSubscriptionId', result.paypalSubscriptionId);
-
-      // Redirect to PayPal approval
-      window.location.href = result.approvalUrl;
-    } catch (error: any) {
-      console.error('Erro ao criar assinatura:', error);
-      alert(error.message || 'Erro ao processar assinatura');
-      setLoading(false);
+  const handleCheckoutSuccess = () => {
+    // Evitar múltiplas chamadas e múltiplos alerts
+    if (showCheckout && !successShown) {
+      setSuccessShown(true);
+      setShowCheckout(false);
+      setSelectedPlanType(null);
+      // Navegar diretamente sem alert - a página de assinatura mostrará o status
+      navigate('/assinatura');
     }
   };
 
-  const handleLifetime = async () => {
-    if (!usuario) {
-      navigate('/login');
-      return;
-    }
+  const handleCheckoutError = (error: string) => {
+    alert(error);
+  };
 
-    try {
-      setLoading(true);
-      // PayPal returns token (order ID) and PayerID
-      const returnUrl = `${window.location.origin}/assinatura?token={token}&PayerID={PayerID}&lifetime=true`;
-      const cancelUrl = `${window.location.origin}/precos?canceled=true`;
-
-      const result = await subscriptionApi.createLifetime({
-        promoCode: promoCode || undefined,
-        returnUrl,
-        cancelUrl,
-      });
-
-      // Store order ID and promo code for capture
-      sessionStorage.setItem('pendingLifetimeOrderId', result.orderId);
-      if (promoCode) {
-        sessionStorage.setItem('pendingPromoCode', promoCode);
-      }
-
-      // Redirect to PayPal approval
-      window.location.href = result.approvalUrl;
-    } catch (error: any) {
-      console.error('Erro ao criar assinatura lifetime:', error);
-      if (error.response?.status === 400 && promoCode) {
-        setPromoCodeError('Código promocional inválido ou expirado');
-      } else {
-        alert(error.message || 'Erro ao processar assinatura lifetime');
-      }
-      setLoading(false);
-    }
+  const handleCheckoutCancel = () => {
+    setShowCheckout(false);
+    setSelectedPlanType(null);
+    setSuccessShown(false); // Reset ao cancelar
   };
 
   // This useEffect is removed - handling moved to Assinatura page
@@ -162,6 +137,29 @@ const Precos: React.FC = () => {
       alert('Erro ao processar pagamento. Por favor, entre em contato com o suporte.');
     }
   };
+
+  if (showCheckout && selectedPlanType) {
+    const amount = selectedPlanType === 'LIFETIME' 
+      ? parseFloat(plans.LIFETIME?.price?.toString() || '0')
+      : selectedPlanType === 'MONTHLY'
+      ? parseFloat(plans.MONTHLY?.price?.toString() || '0')
+      : parseFloat(plans.YEARLY?.price?.toString() || '0');
+
+    return (
+      <div className="precos-page">
+        <div className="precos-container">
+          <h1>Finalizar Pagamento</h1>
+          <AsaasCheckout
+            planType={selectedPlanType}
+            amount={amount}
+            onSuccess={handleCheckoutSuccess}
+            onError={handleCheckoutError}
+            onCancel={handleCheckoutCancel}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="precos-page">

@@ -129,6 +129,16 @@
   font-size: 14px;
 }
 
+.pending-subscription-alert h2,
+.pending-subscription-alert p,
+.pending-subscription-alert a {
+  color: #713f12 !important;
+}
+.pending-subscription-alert a.btn {
+  background-color: #713f12 !important;
+  color: #fff !important;
+}
+
 .assinatura-actions {
   display: flex;
   gap: 12px;

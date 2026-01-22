@@ -204,9 +204,13 @@ class PayPalService {
             cleanReturnUrl = `${url.origin}${url.pathname}${newParams.toString() ? '?' + newParams.toString() : ''}`;
         }
         // Build subscription payload
+        // Use a start_time that gives user enough time to approve (24 hours from now)
+        // PayPal subscriptions expire if not approved before start_time, so we give plenty of time
+        // This prevents subscription from expiring before user can complete approval
+        const startTime = new Date(Date.now() + (24 * 60 * 60 * 1000)); // 24 hours from now
         const subscription = {
             plan_id: data.planId,
-            start_time: new Date(Date.now() + 60000).toISOString(), // Start 1 minute from now
+            start_time: startTime.toISOString(),
             application_context: {
                 brand_name: 'Rachid',
                 locale: 'pt-BR',
@@ -220,6 +224,8 @@ class PayPalService {
                 cancel_url: data.cancelUrl,
             },
         };
+        console.log(`[PayPalService] Creating subscription with start_time: ${startTime.toISOString()} (${startTime.toLocaleString('pt-BR')})`);
+        console.log(`[PayPalService] ⏰ User has ${((startTime.getTime() - Date.now()) / (1000 * 60 * 60)).toFixed(1)} hours to approve before subscription expires`);
         // Add subscriber email if provided (required for sandbox, optional for live)
         if (data.subscriberEmail) {
             subscription.subscriber = {
@@ -264,6 +270,21 @@ class PayPalService {
      */
     static async getSubscription(subscriptionId) {
         return await this.makeRequest(`/v1/billing/subscriptions/${subscriptionId}`);
+    }
+    /**
+     * List transactions for a subscription
+     * Useful to check if payment was processed even if subscription is EXPIRED
+     */
+    static async getSubscriptionTransactions(subscriptionId, startTime, endTime) {
+        let url = `/v1/billing/subscriptions/${subscriptionId}/transactions`;
+        const params = new URLSearchParams();
+        if (startTime)
+            params.append('start_time', startTime);
+        if (endTime)
+            params.append('end_time', endTime);
+        if (params.toString())
+            url += `?${params.toString()}`;
+        return await this.makeRequest(url);
     }
     /**
      * Update subscription
@@ -347,12 +368,37 @@ class PayPalService {
             console.warn('PAYPAL_WEBHOOK_ID not set, skipping webhook verification');
             return true; // Allow in development
         }
-        const authAlgo = headers['paypal-auth-algo'];
-        const transmissionId = headers['paypal-transmission-id'];
-        const certUrl = headers['paypal-cert-url'];
-        const transmissionSig = headers['paypal-transmission-sig'];
-        const transmissionTime = headers['paypal-transmission-time'];
+        // Helper function to get header value (case-insensitive)
+        const getHeader = (key) => {
+            // Try exact match first
+            if (headers[key])
+                return headers[key];
+            // Try lowercase
+            const lowerKey = key.toLowerCase();
+            if (headers[lowerKey])
+                return headers[lowerKey];
+            // Try all possible case variations
+            for (const headerKey in headers) {
+                if (headerKey.toLowerCase() === lowerKey) {
+                    return headers[headerKey];
+                }
+            }
+            return undefined;
+        };
+        const authAlgo = getHeader('paypal-auth-algo');
+        const transmissionId = getHeader('paypal-transmission-id');
+        const certUrl = getHeader('paypal-cert-url');
+        const transmissionSig = getHeader('paypal-transmission-sig');
+        const transmissionTime = getHeader('paypal-transmission-time');
         if (!authAlgo || !transmissionId || !certUrl || !transmissionSig || !transmissionTime) {
+            console.warn('Missing PayPal webhook headers:', {
+                hasAuthAlgo: !!authAlgo,
+                hasTransmissionId: !!transmissionId,
+                hasCertUrl: !!certUrl,
+                hasTransmissionSig: !!transmissionSig,
+                hasTransmissionTime: !!transmissionTime,
+                availableHeaders: Object.keys(headers),
+            });
             return false;
         }
         try {
@@ -376,13 +422,26 @@ class PayPalService {
                 body: JSON.stringify(verification),
             });
             if (!response.ok) {
+                const errorText = await response.text();
+                console.error('PayPal webhook verification failed:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    error: errorText,
+                });
                 return false;
             }
             const result = await response.json();
-            return result.verification_status === 'SUCCESS';
+            const isValid = result.verification_status === 'SUCCESS';
+            if (!isValid) {
+                console.warn('PayPal webhook verification returned non-SUCCESS status:', result.verification_status);
+            }
+            return isValid;
         }
         catch (error) {
             console.error('Webhook verification error:', error);
+            if (error instanceof Error) {
+                console.error('Error details:', error.message, error.stack);
+            }
             return false;
         }
     }

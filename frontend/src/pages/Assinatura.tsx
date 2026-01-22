@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { subscriptionApi, featureApi } from '../services/api';
 import { Subscription, Usage } from '../types';
+import { QRCodeSVG } from 'qrcode.react';
 import './Assinatura.css';
 
 const Assinatura: React.FC = () => {
@@ -12,7 +13,7 @@ const Assinatura: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [canceling, setCanceling] = useState(false);
-  const [approvalUrl, setApprovalUrl] = useState<string | undefined>(undefined);
+  const [pixQrCode, setPixQrCode] = useState<any | undefined>(undefined);
 
   // Helper to refresh user data when subscription status changes
   const refreshUserData = async () => {
@@ -25,90 +26,10 @@ const Assinatura: React.FC = () => {
   };
 
   useEffect(() => {
-    // Check for PayPal return (subscription activation or lifetime capture)
-    const params = new URLSearchParams(window.location.search);
-    const paypalSubscriptionId = params.get('subscription_id'); // PayPal's subscription ID
-    const baToken = params.get('ba_token');
-    const orderToken = params.get('token'); // PayPal order ID for lifetime
-    const payerId = params.get('PayerID');
-    const isLifetime = params.get('lifetime') === 'true';
-    const isPending = params.get('pending') === 'true';
-
-    if (paypalSubscriptionId && baToken) {
-      // Subscription approval return - PayPal returns its subscription_id and ba_token
-      handleSubscriptionActivation(paypalSubscriptionId, baToken);
-    } else if (orderToken && payerId && isLifetime) {
-      // Lifetime order approval return
-      handleLifetimeCapture(orderToken);
-    } else {
-      // Normal page load
-      loadSubscription();
-    }
-
-    // Clean URL after handling
-    if (paypalSubscriptionId || orderToken || isPending) {
-      window.history.replaceState({}, document.title, '/assinatura');
-    }
+    // Normal page load - no more PayPal redirects
+    loadSubscription();
   }, []);
 
-  const handleSubscriptionActivation = async (paypalSubscriptionId: string, baToken: string) => {
-    try {
-      setLoading(true);
-      // Activate subscription using PayPal subscription ID and ba_token
-      // The backend will find our subscription by PayPal subscription ID
-      await subscriptionApi.activate({
-        subscriptionId: 0, // Not used - backend finds by PayPal ID
-        payerId: baToken,
-        subscription_id: paypalSubscriptionId, // PayPal subscription ID
-        ba_token: baToken,
-      });
-
-      // Store PayPal subscription ID for backend lookup
-      sessionStorage.removeItem('pendingSubscriptionId');
-      sessionStorage.removeItem('pendingPayPalSubscriptionId');
-      
-      // Refresh user data to update plan status
-      await refreshUserData();
-      
-      // Dispatch event to notify other pages
-      window.dispatchEvent(new CustomEvent('subscription-activated'));
-      
-      alert('Assinatura ativada com sucesso!');
-      await loadSubscription();
-    } catch (error: any) {
-      console.error('Erro ao ativar assinatura:', error);
-      setError(error.message || 'Erro ao ativar assinatura. Por favor, entre em contato com o suporte.');
-      await loadSubscription();
-    }
-  };
-
-  const handleLifetimeCapture = async (orderToken: string) => {
-    try {
-      setLoading(true);
-      const orderId = sessionStorage.getItem('pendingLifetimeOrderId') || orderToken;
-      
-      await subscriptionApi.captureLifetime({
-        orderId,
-        promoCode: sessionStorage.getItem('pendingPromoCode') || undefined,
-      });
-
-      sessionStorage.removeItem('pendingLifetimeOrderId');
-      sessionStorage.removeItem('pendingPromoCode');
-      
-      // Refresh user data to update plan status
-      await refreshUserData();
-      
-      // Dispatch event to notify other pages
-      window.dispatchEvent(new CustomEvent('subscription-activated'));
-      
-      alert('Assinatura lifetime ativada com sucesso!');
-      await loadSubscription();
-    } catch (error: any) {
-      console.error('Erro ao capturar pagamento lifetime:', error);
-      setError(error.message || 'Erro ao processar pagamento. Por favor, entre em contato com o suporte.');
-      await loadSubscription();
-    }
-  };
 
   const loadSubscription = async () => {
     try {
@@ -121,33 +42,36 @@ const Assinatura: React.FC = () => {
       setSubscription(subData.subscription);
       setUsage(subData.usage);
       setLimits(limitsData.limits);
-      // @ts-ignore - approvalUrl is returned but not in type definition
-      setApprovalUrl(subData.approvalUrl);
+      // @ts-ignore - pixQrCode is returned but not in type definition
+      setPixQrCode(subData.pixQrCode);
 
-      // If subscription is APPROVAL_PENDING, try to sync automatically
-      // This helps with localhost testing where PayPal redirect may not work
-      if (subData.subscription && subData.subscription.status === 'APPROVAL_PENDING' && subData.subscription.paypalSubscriptionId) {
-        console.log('[Assinatura] Subscription is pending, attempting auto-sync...');
-        // The backend getSubscription already auto-syncs, but we can trigger a refresh
-        // Wait a bit and reload to see if it synced
-        setTimeout(async () => {
+      // If subscription is APPROVAL_PENDING, start polling for status
+      if (subData.subscription && subData.subscription.status === 'APPROVAL_PENDING' && subData.subscription.paymentMethod === 'PIX') {
+        console.log('[Assinatura] Subscription is pending PIX payment, polling for status...');
+        // Start polling every 5 seconds
+        const pollInterval = setInterval(async () => {
           try {
             const refreshed = await subscriptionApi.getMe();
             if (refreshed.subscription?.status === 'ACTIVE') {
               setSubscription(refreshed.subscription);
               setUsage(refreshed.usage);
-              console.log('[Assinatura] Subscription auto-synced successfully!');
+              console.log('[Assinatura] Subscription activated!');
               
               // Refresh user data to update plan status
               await refreshUserData();
               
               // Dispatch event to notify other pages
               window.dispatchEvent(new CustomEvent('subscription-activated'));
+              
+              clearInterval(pollInterval);
             }
           } catch (e) {
-            // Ignore errors in auto-sync
+            // Ignore errors in polling
           }
-        }, 2000);
+        }, 5000);
+
+        // Cleanup after 10 minutes
+        setTimeout(() => clearInterval(pollInterval), 600000);
       } else if (subData.subscription && subData.subscription.status === 'ACTIVE') {
         // If subscription is now ACTIVE, refresh user data to update plan
         await refreshUserData();
@@ -247,44 +171,24 @@ const Assinatura: React.FC = () => {
           }}>
             <h2 style={{ color: '#856404', marginTop: 0 }}>⚠️ Assinatura Pendente de Aprovação</h2>
             <p style={{ color: '#856404', marginBottom: '16px' }}>
-              Sua assinatura está aguardando aprovação no PayPal. Para completar a ativação, você precisa aprovar o pagamento no PayPal.
+              Sua assinatura está aguardando confirmação do pagamento. Se você pagou via PIX, aguarde a confirmação. Se pagou com cartão, o pagamento deve ser processado automaticamente.
             </p>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              {approvalUrl && (
-                <a
-                  href={approvalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-primary"
-                  style={{ 
-                    background: 'linear-gradient(135deg, #0070ba 0%, #005ea6 50%, #004d8c 100%)',
-                    color: '#fff', 
-                    border: 'none', 
-                    textDecoration: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  ✅ Completar Aprovação no PayPal
-                </a>
-              )}
               <button
                 onClick={async () => {
                   try {
-                    // Tentar ativar a assinatura pendente (pode ter sido aprovada no PayPal)
-                    if (subscription.paypalSubscriptionId) {
-                      // Primeiro, tentar sincronizar
+                    // Tentar verificar status da assinatura pendente
+                    await loadSubscription();
+                    
+                    // Verificar se foi ativada
+                    const refreshed = await subscriptionApi.getMe();
+                    if (refreshed.subscription?.status === 'APPROVAL_PENDING') {
+                      alert('A assinatura ainda está pendente. Se você pagou via PIX, aguarde a confirmação. Se pagou com cartão e houve algum problema, entre em contato com o suporte.');
+                    } else if (refreshed.subscription?.status === 'ACTIVE') {
+                      alert('✅ Assinatura ativada com sucesso!');
                       await loadSubscription();
-                      
-                      // Se ainda estiver pendente, mostrar mensagem
-                      const refreshed = await subscriptionApi.getMe();
-                      if (refreshed.subscription?.status === 'APPROVAL_PENDING') {
-                        alert('A assinatura ainda está pendente. Por favor, complete a aprovação no PayPal ou entre em contato com o suporte.');
-                      } else if (refreshed.subscription?.status === 'ACTIVE') {
-                        alert('✅ Assinatura ativada com sucesso!');
-                        await loadSubscription();
-                      }
+                      await refreshUserData();
+                      window.dispatchEvent(new CustomEvent('subscription-activated'));
                     }
                   } catch (err: any) {
                     alert('Erro ao verificar assinatura: ' + (err.message || 'Erro desconhecido'));
@@ -316,12 +220,12 @@ const Assinatura: React.FC = () => {
               </a>
             </div>
             <p style={{ color: '#856404', fontSize: '12px', marginTop: '12px', marginBottom: 0 }}>
-              💡 Dica: {approvalUrl ? 'Clique em "Completar Aprovação no PayPal" para finalizar. Se já aprovou, clique em "Verificar Status".' : 'Se você já aprovou no PayPal, clique em "Verificar Status" para sincronizar.'}
+              💡 Dica: {pixQrCode ? 'Complete o pagamento via PIX usando o QR Code. O sistema verificará automaticamente quando o pagamento for confirmado.' : 'Aguarde a confirmação do pagamento ou clique em "Verificar Status" para atualizar.'}
             </p>
           </div>
         )}
 
-        {subscription && subscription.status === 'EXPIRED' && subscription.paypalSubscriptionId && (
+        {subscription && subscription.status === 'EXPIRED' && (
           <div className="expired-subscription-alert card" style={{
             backgroundColor: '#f8d7da',
             border: '2px solid #dc3545',
@@ -329,9 +233,9 @@ const Assinatura: React.FC = () => {
             padding: '20px',
             marginBottom: '20px',
           }}>
-            <h2 style={{ color: '#721c24', marginTop: 0 }}>🚨 Assinatura Expirada no PayPal</h2>
+            <h2 style={{ color: '#721c24', marginTop: 0 }}>🚨 Assinatura Expirada</h2>
             <p style={{ color: '#721c24', marginBottom: '16px' }}>
-              Sua assinatura expirou no PayPal antes de ser aprovada. Isso geralmente acontece quando o tempo limite para aprovação é excedido.
+              Sua assinatura expirou. Para continuar usando os recursos PRO, você precisará renovar sua assinatura.
               <br />
               <strong>Você precisará criar uma nova assinatura.</strong>
             </p>
@@ -349,7 +253,7 @@ const Assinatura: React.FC = () => {
                   justifyContent: 'center'
                 }}
               >
-                🔄 Criar Nova Assinatura
+                🔄 Renovar Assinatura
               </a>
               <button
                 onClick={async () => {
@@ -361,7 +265,7 @@ const Assinatura: React.FC = () => {
                       alert('✅ Assinatura foi reativada!');
                       await loadSubscription();
                     } else {
-                      alert('A assinatura ainda está expirada. Por favor, crie uma nova assinatura.');
+                      alert('A assinatura ainda está expirada. Por favor, renove sua assinatura.');
                     }
                   } catch (err: any) {
                     alert('Erro ao verificar assinatura: ' + (err.message || 'Erro desconhecido'));
@@ -380,9 +284,6 @@ const Assinatura: React.FC = () => {
                 🔄 Verificar Status Novamente
               </button>
             </div>
-            <p style={{ color: '#721c24', fontSize: '12px', marginTop: '12px', marginBottom: 0 }}>
-              💡 <strong>Nota:</strong> O pagamento pode ter sido processado, mas a assinatura expirou antes da aprovação. Crie uma nova assinatura para continuar usando o serviço.
-            </p>
           </div>
         )}
 

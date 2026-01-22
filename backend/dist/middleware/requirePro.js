@@ -39,13 +39,44 @@ async function requirePro(req, res, next) {
                 upgradeUrl: '/precos',
             });
         }
-        // Check if subscription is still valid
-        if (subscription.currentPeriodEnd && new Date(subscription.currentPeriodEnd) < new Date()) {
+        // Check if subscription is still valid and handle expiration
+        // First check trial end (if in trial period)
+        const now = new Date();
+        if (subscription.trialEnd && new Date(subscription.trialEnd) < now) {
+            // Trial ended - check and update status
+            await SubscriptionService_1.SubscriptionService.checkAndHandleExpiredSubscription(subscription);
+            // Reload subscription to get updated status
+            const updatedSubscription = await SubscriptionService_1.SubscriptionService.getSubscription(usuarioId);
+            if (updatedSubscription && updatedSubscription.status !== 'ACTIVE') {
+                return res.status(402).json({
+                    error: updatedSubscription.status === 'CANCELLED' ? 'Período de trial cancelado' : 'Período de trial expirado',
+                    errorCode: updatedSubscription.status === 'CANCELLED' ? 'SUBSCRIPTION_CANCELLED' : 'SUBSCRIPTION_EXPIRED',
+                    upgradeUrl: '/precos',
+                });
+            }
+        }
+        // Check regular period end (if not in trial or trial already ended)
+        if (subscription.currentPeriodEnd && new Date(subscription.currentPeriodEnd) < now) {
+            // Check and update expired subscription status
+            await SubscriptionService_1.SubscriptionService.checkAndHandleExpiredSubscription(subscription);
+            // Reload subscription to get updated status
+            const updatedSubscription = await SubscriptionService_1.SubscriptionService.getSubscription(usuarioId);
+            if (updatedSubscription && updatedSubscription.status !== 'ACTIVE') {
+                return res.status(402).json({
+                    error: updatedSubscription.status === 'CANCELLED' ? 'Assinatura cancelada' : 'Assinatura expirada',
+                    errorCode: updatedSubscription.status === 'CANCELLED' ? 'SUBSCRIPTION_CANCELLED' : 'SUBSCRIPTION_EXPIRED',
+                    upgradeUrl: '/precos',
+                });
+            }
             return res.status(402).json({
                 error: 'Assinatura expirada',
                 errorCode: 'SUBSCRIPTION_EXPIRED',
                 upgradeUrl: '/precos',
             });
+        }
+        // If in trial period, allow access until trialEnd
+        if (subscription.trialEnd && new Date(subscription.trialEnd) > now) {
+            return next(); // Allow access during trial
         }
         next();
     }

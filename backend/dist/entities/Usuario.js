@@ -51,6 +51,10 @@ __decorate([
     __metadata("design:type", String)
 ], Usuario.prototype, "telefone", void 0);
 __decorate([
+    (0, typeorm_1.Column)('varchar', { nullable: true, name: 'cpf_cnpj' }),
+    __metadata("design:type", String)
+], Usuario.prototype, "cpfCnpj", void 0);
+__decorate([
     (0, typeorm_1.Column)('varchar', { nullable: true, name: 'chavepix' }),
     __metadata("design:type", String)
 ], Usuario.prototype, "chavePix", void 0);

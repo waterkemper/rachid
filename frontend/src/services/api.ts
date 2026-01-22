@@ -937,10 +937,39 @@ export const publicEventoApi = {
 export const subscriptionApi = {
   create: async (data: {
     planType: 'MONTHLY' | 'YEARLY';
-    returnUrl: string;
-    cancelUrl: string;
-  }): Promise<{ subscriptionId: number; approvalUrl: string }> => {
+    paymentMethod: 'PIX' | 'CREDIT_CARD';
+    userCpfCnpj?: string;
+    creditCard?: {
+      holderName: string;
+      number: string;
+      expiryMonth: string;
+      expiryYear: string;
+      ccv: string;
+    };
+    creditCardHolderInfo?: {
+      name: string;
+      email: string;
+      cpfCnpj: string;
+      postalCode: string;
+      addressNumber: string;
+      addressComplement?: string;
+      phone?: string;
+      mobilePhone?: string;
+    };
+  }): Promise<{ 
+    subscriptionId: number; 
+    asaasSubscriptionId: string;
+    pixQrCode?: { encodedImage: string; payload: string; expirationDate: string };
+    status: 'PENDING' | 'CONFIRMED';
+  }> => {
     const response = await api.post('/subscriptions', data);
+    return response.data;
+  },
+
+  getInstallmentOptions: async (planType: 'MONTHLY' | 'YEARLY' | 'LIFETIME'): Promise<{
+    options: Array<{ count: number; value: number; total: number }>;
+  }> => {
+    const response = await api.get('/subscriptions/installment-options', { params: { planType } });
     return response.data;
   },
 
@@ -961,6 +990,12 @@ export const subscriptionApi = {
     usage: Usage;
   }> => {
     const response = await api.get('/subscriptions/me');
+    return response.data;
+  },
+
+  /** (Apenas sandbox) Simula confirmação do PIX da assinatura atual. */
+  confirmPixSandbox: async (): Promise<{ message: string }> => {
+    const response = await api.post('/subscriptions/confirm-pix-sandbox');
     return response.data;
   },
 
@@ -994,23 +1029,33 @@ export const subscriptionApi = {
   },
 
   createLifetime: async (data: {
-    promoCode?: string;
-    returnUrl: string;
-    cancelUrl: string;
-  }): Promise<{ orderId: string; approvalUrl: string; amount: number }> => {
-    const response = await api.post('/subscriptions/lifetime', data);
-    return response.data;
-  },
-
-  captureLifetime: async (data: {
-    orderId: string;
-    promoCode?: string;
+    paymentMethod: 'PIX' | 'CREDIT_CARD';
+    userCpfCnpj?: string;
+    installmentCount?: number;
+    creditCard?: {
+      holderName: string;
+      number: string;
+      expiryMonth: string;
+      expiryYear: string;
+      ccv: string;
+    };
+    creditCardHolderInfo?: {
+      name: string;
+      email: string;
+      cpfCnpj: string;
+      postalCode: string;
+      addressNumber: string;
+      addressComplement?: string;
+      phone?: string;
+      mobilePhone?: string;
+    };
   }): Promise<{
-    subscription: Subscription;
-    order: any;
-    message: string;
+    subscriptionId: number;
+    asaasPaymentId: string;
+    pixQrCode?: { encodedImage: string; payload: string; expirationDate: string };
+    status: 'PENDING' | 'CONFIRMED';
   }> => {
-    const response = await api.post('/subscriptions/lifetime/capture', data);
+    const response = await api.post('/subscriptions/lifetime', data);
     return response.data;
   },
 

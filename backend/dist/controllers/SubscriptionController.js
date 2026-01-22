@@ -2,36 +2,44 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SubscriptionController = void 0;
 const SubscriptionService_1 = require("../services/SubscriptionService");
-const PayPalService_1 = require("../services/PayPalService");
+const AsaasService_1 = require("../services/AsaasService");
 const FeatureService_1 = require("../services/FeatureService");
 const SubscriptionPlanService_1 = require("../services/SubscriptionPlanService");
 class SubscriptionController {
     /**
-     * Create subscription (returns PayPal approval URL)
+     * Create subscription with Asaas (PIX or Credit Card)
      * POST /api/subscriptions
      */
     static async create(req, res) {
         try {
             const usuarioId = req.usuarioId;
-            const { planType, returnUrl, cancelUrl } = req.body;
-            if (!planType || !returnUrl || !cancelUrl) {
-                return res.status(400).json({ error: 'planType, returnUrl e cancelUrl são obrigatórios' });
+            const { planType, paymentMethod, creditCard, creditCardHolderInfo, userCpfCnpj } = req.body;
+            if (!planType || !paymentMethod) {
+                return res.status(400).json({ error: 'planType e paymentMethod são obrigatórios' });
             }
             if (!['MONTHLY', 'YEARLY'].includes(planType)) {
                 return res.status(400).json({ error: 'planType deve ser MONTHLY ou YEARLY' });
             }
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-            const fullReturnUrl = returnUrl.startsWith('http') ? returnUrl : `${frontendUrl}${returnUrl}`;
-            const fullCancelUrl = cancelUrl.startsWith('http') ? cancelUrl : `${frontendUrl}${cancelUrl}`;
+            if (!['PIX', 'CREDIT_CARD'].includes(paymentMethod)) {
+                return res.status(400).json({ error: 'paymentMethod deve ser PIX ou CREDIT_CARD' });
+            }
+            // Validate credit card data if payment method is CREDIT_CARD
+            if (paymentMethod === 'CREDIT_CARD' && (!creditCard || !creditCardHolderInfo)) {
+                return res.status(400).json({ error: 'creditCard e creditCardHolderInfo são obrigatórios para pagamento com cartão' });
+            }
             const result = await SubscriptionService_1.SubscriptionService.createSubscription({
                 usuarioId,
                 planType,
-                returnUrl: fullReturnUrl,
-                cancelUrl: fullCancelUrl,
+                paymentMethod,
+                creditCard,
+                creditCardHolderInfo,
+                userCpfCnpj, // CPF do usuário para PIX
             });
             res.json({
                 subscriptionId: result.subscriptionId,
-                approvalUrl: result.approvalUrl,
+                asaasSubscriptionId: result.asaasSubscriptionId,
+                pixQrCode: result.pixQrCode,
+                status: result.status,
             });
         }
         catch (error) {
@@ -40,36 +48,48 @@ class SubscriptionController {
         }
     }
     /**
-     * Activate subscription after PayPal approval
-     * POST /api/subscriptions/activate
+     * Get installment options for a plan
+     * GET /api/subscriptions/installment-options
      */
-    static async activate(req, res) {
+    static async getInstallmentOptions(req, res) {
+        try {
+            const { planType } = req.query;
+            if (!planType || !['MONTHLY', 'YEARLY', 'LIFETIME'].includes(planType)) {
+                return res.status(400).json({ error: 'planType deve ser MONTHLY, YEARLY ou LIFETIME' });
+            }
+            const options = await SubscriptionService_1.SubscriptionService.getInstallmentOptions(planType);
+            res.json({ options });
+        }
+        catch (error) {
+            console.error('Erro ao buscar opções de parcelamento:', error);
+            res.status(500).json({ error: error.message || 'Erro ao buscar opções de parcelamento' });
+        }
+    }
+    /**
+     * (Apenas sandbox) Simular confirmação de pagamento PIX da assinatura atual.
+     * POST /api/subscriptions/confirm-pix-sandbox
+     * @see https://docs.asaas.com/reference/confirmar-pagamento
+     */
+    static async confirmPixSandbox(req, res) {
         try {
             const usuarioId = req.usuarioId;
-            const { subscriptionId, payerId, subscription_id, ba_token } = req.body;
-            const { subscription_id: subscriptionIdQuery, ba_token: baTokenQuery, PayerID, token } = req.query; // PayPal return params
-            // PayPal returns: subscription_id (PayPal subscription ID) and ba_token (billing agreement token)
-            // Priority: query params (from PayPal redirect) > body params
-            const paypalSubscriptionId = subscription_id || subscriptionIdQuery || subscriptionId || token;
-            const baToken = ba_token || baTokenQuery || payerId || PayerID;
-            if (!paypalSubscriptionId || !baToken) {
-                return res.status(400).json({ error: 'subscription_id (PayPal) e ba_token são obrigatórios' });
+            const subscription = await SubscriptionService_1.SubscriptionService.getSubscription(usuarioId);
+            if (!subscription || subscription.paymentMethod !== 'PIX' || subscription.status !== 'APPROVAL_PENDING' || !subscription.asaasPaymentId) {
+                return res.status(400).json({
+                    error: 'Nenhuma assinatura PIX pendente encontrada. Gere o QR Code PIX primeiro.',
+                });
             }
-            // Find subscription by PayPal subscription ID
-            const subscription = await SubscriptionService_1.SubscriptionService.getSubscriptionByPayPalId(paypalSubscriptionId);
-            if (!subscription || subscription.usuarioId !== usuarioId) {
-                return res.status(403).json({ error: 'Assinatura não encontrada ou não pertence ao usuário' });
-            }
-            // Activate subscription
-            const activatedSubscription = await SubscriptionService_1.SubscriptionService.activateSubscription(subscription.id, baToken);
+            await AsaasService_1.AsaasService.confirmPaymentSandbox(subscription.asaasPaymentId);
             res.json({
-                subscription: activatedSubscription,
-                message: 'Assinatura ativada com sucesso',
+                message: 'Pagamento PIX simulado com sucesso (sandbox). O polling detectará a ativação em instantes.',
             });
         }
         catch (error) {
-            console.error('Erro ao ativar assinatura:', error);
-            res.status(500).json({ error: error.message || 'Erro ao ativar assinatura' });
+            if (error.message?.includes('sandbox')) {
+                return res.status(400).json({ error: error.message });
+            }
+            console.error('Erro ao confirmar PIX sandbox:', error);
+            res.status(500).json({ error: error.message || 'Erro ao confirmar pagamento sandbox' });
         }
     }
     /**
@@ -84,26 +104,21 @@ class SubscriptionController {
             const usage = {
                 events: await FeatureService_1.FeatureService.getCurrentUsage(usuarioId, 'max_events'),
             };
-            // If subscription is pending, try to get approval URL from PayPal
-            let approvalUrl = undefined;
-            if (subscription && subscription.status === 'APPROVAL_PENDING' && subscription.paypalSubscriptionId) {
+            // Get PIX QR Code if subscription is pending PIX payment
+            let pixQrCode = undefined;
+            if (subscription && subscription.status === 'APPROVAL_PENDING' && subscription.paymentMethod === 'PIX' && subscription.asaasPaymentId) {
                 try {
-                    const paypalSubscription = await PayPalService_1.PayPalService.getSubscription(subscription.paypalSubscriptionId);
-                    // PayPal subscriptions in APPROVAL_PENDING status have approval links
-                    const approvalLink = paypalSubscription.links?.find((link) => link.rel === 'approve' || link.rel === 'approval_url');
-                    if (approvalLink) {
-                        approvalUrl = approvalLink.href;
-                    }
+                    pixQrCode = await AsaasService_1.AsaasService.getPixQrCode(subscription.asaasPaymentId);
                 }
                 catch (error) {
-                    console.warn('Could not get approval URL from PayPal:', error.message);
+                    console.warn('Could not get PIX QR Code:', error.message);
                 }
             }
             res.json({
                 subscription,
                 limits,
                 usage,
-                approvalUrl, // Include approval URL if subscription is pending
+                pixQrCode, // Include PIX QR Code if subscription is pending PIX payment
             });
         }
         catch (error) {
@@ -203,74 +218,41 @@ class SubscriptionController {
         }
     }
     /**
-     * Create lifetime order
+     * Create lifetime payment
      * POST /api/subscriptions/lifetime
      */
     static async createLifetime(req, res) {
         try {
             const usuarioId = req.usuarioId;
-            const { promoCode, returnUrl, cancelUrl } = req.body;
-            const lifetimePlan = await SubscriptionPlanService_1.SubscriptionPlanService.getPlanByType('LIFETIME');
-            if (!lifetimePlan || !lifetimePlan.enabled) {
-                return res.status(400).json({ error: 'Plano lifetime não disponível' });
+            const { paymentMethod, installmentCount, creditCard, creditCardHolderInfo, userCpfCnpj } = req.body;
+            if (!paymentMethod) {
+                return res.status(400).json({ error: 'paymentMethod é obrigatório' });
             }
-            const lifetimeAmount = parseFloat(lifetimePlan.price.toString());
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-            const fullReturnUrl = returnUrl.startsWith('http') ? returnUrl : `${frontendUrl}${returnUrl}`;
-            const fullCancelUrl = cancelUrl.startsWith('http') ? cancelUrl : `${frontendUrl}${cancelUrl}`;
-            // TODO: Validate promo code if provided
-            let finalAmount = lifetimeAmount;
-            if (promoCode) {
-                // Apply discount if promo code is valid
-                // This will be implemented when promo code system is ready
+            if (!['PIX', 'CREDIT_CARD'].includes(paymentMethod)) {
+                return res.status(400).json({ error: 'paymentMethod deve ser PIX ou CREDIT_CARD' });
             }
-            const order = await PayPalService_1.PayPalService.createOrder({
-                amount: {
-                    value: finalAmount.toFixed(2),
-                    currency_code: 'BRL',
-                },
-                description: 'Assinatura PRO Vitalício - Rachid',
-                returnUrl: fullReturnUrl,
-                cancelUrl: fullCancelUrl,
+            // Validate credit card data if payment method is CREDIT_CARD
+            if (paymentMethod === 'CREDIT_CARD' && (!creditCard || !creditCardHolderInfo)) {
+                return res.status(400).json({ error: 'creditCard e creditCardHolderInfo são obrigatórios para pagamento com cartão' });
+            }
+            const result = await SubscriptionService_1.SubscriptionService.createLifetimePayment({
+                usuarioId,
+                paymentMethod,
+                installmentCount,
+                creditCard,
+                creditCardHolderInfo,
+                userCpfCnpj, // CPF do usuário para PIX
             });
             res.json({
-                orderId: order.id,
-                approvalUrl: order.approvalUrl,
-                amount: finalAmount,
+                subscriptionId: result.subscriptionId,
+                asaasPaymentId: result.asaasPaymentId,
+                pixQrCode: result.pixQrCode,
+                status: result.status,
             });
         }
         catch (error) {
-            console.error('Erro ao criar pedido lifetime:', error);
-            res.status(500).json({ error: error.message || 'Erro ao criar pedido lifetime' });
-        }
-    }
-    /**
-     * Capture lifetime payment
-     * POST /api/subscriptions/lifetime/capture
-     */
-    static async captureLifetime(req, res) {
-        try {
-            const usuarioId = req.usuarioId;
-            const { orderId, promoCode } = req.body;
-            if (!orderId) {
-                return res.status(400).json({ error: 'orderId é obrigatório' });
-            }
-            // Capture order in PayPal
-            const capturedOrder = await PayPalService_1.PayPalService.captureOrder(orderId);
-            if (capturedOrder.status !== 'COMPLETED') {
-                return res.status(400).json({ error: 'Pagamento não foi completado' });
-            }
-            // Create lifetime subscription
-            const subscription = await SubscriptionService_1.SubscriptionService.applyLifetimePromo(usuarioId, promoCode || '', orderId);
-            res.json({
-                subscription,
-                order: capturedOrder,
-                message: 'Assinatura lifetime ativada com sucesso',
-            });
-        }
-        catch (error) {
-            console.error('Erro ao capturar pagamento lifetime:', error);
-            res.status(500).json({ error: error.message || 'Erro ao capturar pagamento lifetime' });
+            console.error('Erro ao criar pagamento lifetime:', error);
+            res.status(500).json({ error: error.message || 'Erro ao criar pagamento lifetime' });
         }
     }
     /**
@@ -300,45 +282,77 @@ class SubscriptionController {
         }
     }
     /**
-     * PayPal webhook endpoint
+     * Asaas webhook endpoint
      * POST /api/subscriptions/webhook
      */
     static async webhook(req, res) {
         try {
-            const body = JSON.stringify(req.body);
             const headers = req.headers;
             // Verify webhook signature
-            const isValid = await PayPalService_1.PayPalService.verifyWebhookSignature(headers, body);
+            const isValid = AsaasService_1.AsaasService.verifyWebhook(headers);
             if (!isValid) {
                 console.warn('Invalid webhook signature');
                 return res.status(400).json({ error: 'Invalid signature' });
             }
             const event = req.body;
+            // Asaas webhook format
+            // event.event = 'PAYMENT_RECEIVED', 'PAYMENT_CREATED', etc.
+            // event.payment = payment object (if payment event)
+            // event.subscription = subscription object (if subscription event)
+            const resourceId = event.payment?.id || event.subscription?.id;
+            if (!resourceId) {
+                console.warn('No resource ID in webhook event');
+                return res.status(400).json({ error: 'No resource ID' });
+            }
             // Handle different event types
-            switch (event.event_type) {
-                case 'BILLING.SUBSCRIPTION.CREATED':
-                case 'BILLING.SUBSCRIPTION.UPDATED':
-                case 'BILLING.SUBSCRIPTION.ACTIVATED':
-                case 'BILLING.SUBSCRIPTION.SUSPENDED':
-                case 'BILLING.SUBSCRIPTION.CANCELLED':
-                    if (event.resource?.id) {
-                        await SubscriptionService_1.SubscriptionService.syncPayPalSubscription(event.resource.id, event);
+            switch (event.event) {
+                case 'PAYMENT_CREATED':
+                    // New payment created (for subscriptions, this is when a new billing cycle starts)
+                    if (event.payment?.subscription) {
+                        await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.subscription, event);
                     }
                     break;
-                case 'PAYMENT.SALE.COMPLETED':
-                    // Handle successful payment
-                    if (event.resource?.billing_agreement_id) {
-                        await SubscriptionService_1.SubscriptionService.syncPayPalSubscription(event.resource.billing_agreement_id, event);
+                case 'PAYMENT_RECEIVED':
+                    // Payment confirmed (PIX paid or card approved)
+                    if (event.payment?.subscription) {
+                        // For subscription payments
+                        await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.subscription, event);
+                    }
+                    else if (event.payment?.id) {
+                        // For one-time payments (LIFETIME)
+                        const subscription = await SubscriptionService_1.SubscriptionService.getSubscriptionByAsaasPaymentId(event.payment.id);
+                        if (subscription) {
+                            await SubscriptionService_1.SubscriptionService.activateSubscription(subscription.id);
+                        }
                     }
                     break;
-                case 'PAYMENT.SALE.DENIED':
-                    // Handle failed payment
-                    if (event.resource?.billing_agreement_id) {
-                        await SubscriptionService_1.SubscriptionService.syncPayPalSubscription(event.resource.billing_agreement_id, event);
+                case 'PAYMENT_OVERDUE':
+                    // Payment overdue - handled by syncAsaasSubscription
+                    if (event.payment?.subscription) {
+                        await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.subscription, event);
+                    }
+                    else if (event.payment?.id) {
+                        // For one-time payments, just sync
+                        const subscription = await SubscriptionService_1.SubscriptionService.getSubscriptionByAsaasPaymentId(event.payment.id);
+                        if (subscription) {
+                            subscription.status = 'EXPIRED';
+                            // Let syncAsaasSubscription handle the update
+                            await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.id, event);
+                        }
+                    }
+                    break;
+                case 'PAYMENT_REFUNDED':
+                    // Payment refunded - handled by syncAsaasSubscription
+                    if (event.payment?.subscription) {
+                        await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.subscription, event);
+                    }
+                    else if (event.payment?.id) {
+                        // For one-time payments, just sync
+                        await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.id, event);
                     }
                     break;
                 default:
-                    console.log('Unhandled webhook event type:', event.event_type);
+                    console.log('Unhandled webhook event type:', event.event);
             }
             res.status(200).json({ received: true });
         }

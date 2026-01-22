@@ -96,17 +96,78 @@ class GraficosService {
     }
     /**
      * Gráfico de Barras - Gastos por Participante (O que pagou vs O que deve)
+     * Considera subgrupos quando houver e indivíduos que não participam de subgrupos
      */
     static async getGastosParticipantes(grupoId, usuarioId) {
         await this.verificarAcesso(usuarioId, grupoId);
-        const saldos = await CalculadoraService_1.CalculadoraService.calcularSaldosGrupo(grupoId, usuarioId);
-        return saldos.map(saldo => ({
-            participanteId: saldo.participanteId,
-            participanteNome: saldo.participanteNome,
-            totalPagou: saldo.totalPagou,
-            totalDeve: saldo.totalDeve,
-            saldo: saldo.saldo,
-        }));
+        // Buscar grupos de participantes
+        const gruposParticipantes = await this.grupoParticipantesRepository.find({
+            where: { grupoId: grupoId },
+            relations: ['participantes', 'participantes.participante'],
+        });
+        // Obter todos os participantes do evento
+        const grupo = await this.grupoRepository.findOne({
+            where: { id: grupoId },
+            relations: ['participantes', 'participantes.participante'],
+        });
+        if (!grupo) {
+            return [];
+        }
+        // Identificar participantes que estão em grupos
+        const participantesEmGrupos = new Set();
+        gruposParticipantes.forEach(gp => {
+            gp.participantes.forEach(p => {
+                participantesEmGrupos.add(p.participanteId);
+            });
+        });
+        // Calcular saldos individuais
+        const saldosIndividuais = await CalculadoraService_1.CalculadoraService.calcularSaldosGrupo(grupoId, usuarioId);
+        const saldosMap = new Map();
+        saldosIndividuais.forEach(saldo => {
+            saldosMap.set(saldo.participanteId, {
+                participanteId: saldo.participanteId,
+                participanteNome: saldo.participanteNome,
+                totalPagou: saldo.totalPagou,
+                totalDeve: saldo.totalDeve,
+                saldo: saldo.saldo,
+            });
+        });
+        // Agregar por subgrupos e indivíduos não participantes
+        const resultado = [];
+        // Adicionar subgrupos
+        for (const grupoParticipantes of gruposParticipantes) {
+            const participantesIds = grupoParticipantes.participantes.map(p => p.participanteId);
+            const saldoGrupo = {
+                participanteId: grupoParticipantes.id,
+                participanteNome: grupoParticipantes.nome,
+                totalPagou: 0,
+                totalDeve: 0,
+                saldo: 0,
+            };
+            participantesIds.forEach(participanteId => {
+                const saldo = saldosMap.get(participanteId);
+                if (saldo) {
+                    saldoGrupo.totalPagou += saldo.totalPagou;
+                    saldoGrupo.totalDeve += saldo.totalDeve;
+                    saldoGrupo.saldo += saldo.saldo;
+                }
+            });
+            // Só adicionar se houver movimentação
+            if (saldoGrupo.totalPagou > 0 || saldoGrupo.totalDeve > 0) {
+                resultado.push(saldoGrupo);
+            }
+        }
+        // Adicionar indivíduos que não estão em grupos
+        grupo.participantes.forEach(pg => {
+            const participanteId = pg.participanteId;
+            if (!participantesEmGrupos.has(participanteId)) {
+                const saldo = saldosMap.get(participanteId);
+                if (saldo && (saldo.totalPagou > 0 || saldo.totalDeve > 0)) {
+                    resultado.push(saldo);
+                }
+            }
+        });
+        return resultado.sort((a, b) => b.totalPagou - a.totalPagou);
     }
     /**
      * Gráfico de Linha/Área - Evolução de Gastos ao Longo do Tempo (Por Data)
@@ -282,6 +343,7 @@ class GraficosService {
     /**
      * Evolução de Saldos ao Longo do Tempo (Por participante)
      * Calcula saldo acumulado por data considerando as despesas em ordem cronológica
+     * Considera subgrupos quando houver e indivíduos que não participam de subgrupos
      */
     static async getSaldosEvolucao(grupoId, usuarioId) {
         await this.verificarAcesso(usuarioId, grupoId);
@@ -302,10 +364,43 @@ class GraficosService {
                 participantesMap.set(pg.participante.id, pg.participante.nome);
             }
         });
-        // Inicializar saldos acumulados por participante
-        const saldosAcumulados = new Map();
+        // Buscar grupos de participantes
+        const gruposParticipantes = await this.grupoParticipantesRepository.find({
+            where: { grupoId: grupoId },
+            relations: ['participantes', 'participantes.participante'],
+        });
+        // Identificar participantes que estão em grupos
+        const participantesEmGrupos = new Set();
+        const participanteParaGrupo = new Map();
+        gruposParticipantes.forEach(gp => {
+            gp.participantes.forEach(p => {
+                participantesEmGrupos.add(p.participanteId);
+                participanteParaGrupo.set(p.participanteId, {
+                    grupoId: gp.id,
+                    grupoNome: gp.nome,
+                });
+            });
+        });
+        // Criar mapa de entidades (subgrupos e indivíduos)
+        const entidadesMap = new Map(); // Usa ID negativo para grupos
+        const participantesPorGrupo = new Map(); // grupoId -> [participanteIds]
+        // Adicionar subgrupos
+        gruposParticipantes.forEach(gp => {
+            const participantesIds = gp.participantes.map(p => p.participanteId);
+            participantesPorGrupo.set(gp.id, participantesIds);
+            entidadesMap.set(-gp.id, gp.nome); // IDs negativos para grupos
+        });
+        // Adicionar indivíduos não participantes
+        grupo?.participantes?.forEach(pg => {
+            const participanteId = pg.participanteId;
+            if (!participantesEmGrupos.has(participanteId)) {
+                entidadesMap.set(participanteId, pg.participante?.nome || 'Desconhecido');
+            }
+        });
+        // Inicializar saldos acumulados por participante individual (para cálculos)
+        const saldosAcumuladosIndividuais = new Map();
         Array.from(participantesMap.keys()).forEach(id => {
-            saldosAcumulados.set(id, 0);
+            saldosAcumuladosIndividuais.set(id, 0);
         });
         // Agrupar despesas por data
         const despesasPorData = new Map();
@@ -327,26 +422,46 @@ class GraficosService {
                 const valorTotal = Number(despesa.valorTotal);
                 const pagadorId = despesa.pagador?.id;
                 // Adicionar ao saldo do pagador (positivo)
-                if (pagadorId && saldosAcumulados.has(pagadorId)) {
-                    saldosAcumulados.set(pagadorId, saldosAcumulados.get(pagadorId) + valorTotal);
+                if (pagadorId && saldosAcumuladosIndividuais.has(pagadorId)) {
+                    saldosAcumuladosIndividuais.set(pagadorId, saldosAcumuladosIndividuais.get(pagadorId) + valorTotal);
                 }
                 // Subtrair do saldo de cada participante que deve pagar
                 despesa.participacoes?.forEach(participacao => {
                     const participanteId = participacao.participante_id;
                     const valorDeve = Number(participacao.valorDevePagar);
-                    if (saldosAcumulados.has(participanteId)) {
-                        saldosAcumulados.set(participanteId, saldosAcumulados.get(participanteId) - valorDeve);
+                    if (saldosAcumuladosIndividuais.has(participanteId)) {
+                        saldosAcumuladosIndividuais.set(participanteId, saldosAcumuladosIndividuais.get(participanteId) - valorDeve);
                     }
                 });
+            });
+            // Agregar saldos por entidade (subgrupos e indivíduos)
+            const participantesAgregados = [];
+            // Adicionar subgrupos
+            participantesPorGrupo.forEach((participantesIds, grupoId) => {
+                const saldoGrupo = participantesIds.reduce((sum, participanteId) => {
+                    return sum + (saldosAcumuladosIndividuais.get(participanteId) || 0);
+                }, 0);
+                participantesAgregados.push({
+                    participanteId: -grupoId,
+                    participanteNome: entidadesMap.get(-grupoId) || `Grupo ${grupoId}`,
+                    saldo: saldoGrupo,
+                });
+            });
+            // Adicionar indivíduos não participantes
+            grupo?.participantes?.forEach(pg => {
+                const participanteId = pg.participanteId;
+                if (!participantesEmGrupos.has(participanteId)) {
+                    participantesAgregados.push({
+                        participanteId,
+                        participanteNome: pg.participante?.nome || 'Desconhecido',
+                        saldo: saldosAcumuladosIndividuais.get(participanteId) || 0,
+                    });
+                }
             });
             // Registrar estado atual dos saldos
             evolucao.push({
                 data: dataStr,
-                participantes: Array.from(participantesMap.entries()).map(([id, nome]) => ({
-                    participanteId: id,
-                    participanteNome: nome,
-                    saldo: saldosAcumulados.get(id) || 0,
-                })),
+                participantes: participantesAgregados,
             });
         });
         return evolucao;

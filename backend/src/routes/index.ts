@@ -58,15 +58,15 @@ router.post('/analytics/event', authMiddleware, AnalyticsController.track);
 
 // Subscription routes
 router.post('/subscriptions', authMiddleware, SubscriptionController.create);
-router.post('/subscriptions/activate', authMiddleware, SubscriptionController.activate);
+router.get('/subscriptions/installment-options', authMiddleware, SubscriptionController.getInstallmentOptions);
 router.get('/subscriptions/me', authMiddleware, SubscriptionController.getMe);
 router.put('/subscriptions/:id', authMiddleware, SubscriptionController.update);
 router.post('/subscriptions/:id/cancel', authMiddleware, SubscriptionController.cancel);
 router.post('/subscriptions/:id/resume', authMiddleware, SubscriptionController.resume);
 router.get('/subscriptions/plans', authMiddleware, SubscriptionController.getPlans);
 router.post('/subscriptions/lifetime', authMiddleware, SubscriptionController.createLifetime);
-router.post('/subscriptions/lifetime/capture', authMiddleware, SubscriptionController.captureLifetime);
 router.get('/subscriptions/usage', authMiddleware, SubscriptionController.getUsage);
+router.post('/subscriptions/confirm-pix-sandbox', authMiddleware, SubscriptionController.confirmPixSandbox);
 router.post('/subscriptions/webhook', SubscriptionController.webhook); // Public webhook endpoint (validated internally)
 
 // Feature routes
