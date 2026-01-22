@@ -82,6 +82,8 @@ const Precos: React.FC = () => {
 
   const isActive = subscription?.status === 'ACTIVE';
   const currentPlan = isActive ? subscription?.planType : null;
+  // Verificar se usuário tem plano LIFETIME (ativo ou no perfil)
+  const hasLifetime = subscription?.planType === 'LIFETIME' && subscription?.status === 'ACTIVE' || usuario?.plano === 'LIFETIME';
 
   const getPlanLabel = (t: 'MONTHLY' | 'YEARLY' | 'LIFETIME') => {
     switch (t) {
@@ -245,8 +247,13 @@ const Precos: React.FC = () => {
           </div>
 
           {/* PRO Monthly */}
-          <div className="plan-card pro monthly">
-            <div className="plan-badge">Mais Popular</div>
+          <div className={`plan-card pro monthly ${hasLifetime ? 'disabled' : ''}`}>
+            {hasLifetime && (
+              <div className="plan-badge" style={{ backgroundColor: '#ffc107', color: '#000' }}>
+                Indisponível - Plano Vitalício Ativo
+              </div>
+            )}
+            {!hasLifetime && <div className="plan-badge">Mais Popular</div>}
             <div className="plan-header">
               <h2>PRO Mensal</h2>
               <div className="plan-price">
@@ -293,15 +300,21 @@ const Precos: React.FC = () => {
             <button
               className="btn-plan btn-primary"
               onClick={() => handleSubscribe('MONTHLY')}
-              disabled={loading || currentPlan === 'MONTHLY'}
+              disabled={loading || currentPlan === 'MONTHLY' || hasLifetime}
+              title={hasLifetime ? 'Você já possui um plano vitalício ativo' : ''}
             >
-              {loading ? 'Processando...' : currentPlan === 'MONTHLY' ? 'Plano Atual' : 'Assinar Mensal'}
+              {loading ? 'Processando...' : hasLifetime ? 'Plano Vitalício Ativo' : currentPlan === 'MONTHLY' ? 'Plano Atual' : 'Assinar Mensal'}
             </button>
           </div>
 
           {/* PRO Yearly */}
-          <div className="plan-card pro yearly">
-            <div className="plan-badge">Economia</div>
+          <div className={`plan-card pro yearly ${hasLifetime ? 'disabled' : ''}`}>
+            {hasLifetime && (
+              <div className="plan-badge" style={{ backgroundColor: '#ffc107', color: '#000' }}>
+                Indisponível - Plano Vitalício Ativo
+              </div>
+            )}
+            {!hasLifetime && <div className="plan-badge">Economia</div>}
             <div className="plan-header">
               <h2>PRO Anual</h2>
               <div className="plan-price">
@@ -351,9 +364,10 @@ const Precos: React.FC = () => {
             <button
               className="btn-plan btn-primary"
               onClick={() => handleSubscribe('YEARLY')}
-              disabled={loading || currentPlan === 'YEARLY'}
+              disabled={loading || currentPlan === 'YEARLY' || hasLifetime}
+              title={hasLifetime ? 'Você já possui um plano vitalício ativo' : ''}
             >
-              {loading ? 'Processando...' : currentPlan === 'YEARLY' ? 'Plano Atual' : currentPlan === 'MONTHLY' ? 'Fazer upgrade para Anual' : 'Assinar Anual'}
+              {loading ? 'Processando...' : hasLifetime ? 'Plano Vitalício Ativo' : currentPlan === 'YEARLY' ? 'Plano Atual' : currentPlan === 'MONTHLY' ? 'Fazer upgrade para Anual' : 'Assinar Anual'}
             </button>
           </div>
 

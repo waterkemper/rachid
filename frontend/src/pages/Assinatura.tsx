@@ -356,7 +356,7 @@ const Assinatura: React.FC = () => {
         <div className="plan-info">
           <h2>Plano Atual</h2>
           <div className="assinatura-plan-card card">
-            <h3>{getPlanName(subscription?.planType || usuario?.plano)}</h3>
+            <h3>{getPlanName(subscription?.status === 'ACTIVE' ? subscription?.planType : usuario?.plano)}</h3>
             {subscription?.status === 'ACTIVE' && subscription.currentPeriodEnd && (
               <p>
                 Válido até: {formatDate(subscription.currentPeriodEnd)}

@@ -132,6 +132,25 @@ export class SubscriptionService {
       throw new Error('Plan type must be MONTHLY or YEARLY for subscriptions');
     }
 
+    // Verificar se o usuário já tem plano LIFETIME ativo
+    // Se tiver, não permitir criar assinaturas mensais ou anuais
+    const existingLifetimeSubscription = await this.subscriptionRepository.findOne({
+      where: { 
+        usuarioId: data.usuarioId, 
+        planType: 'LIFETIME',
+        status: 'ACTIVE' 
+      },
+    });
+
+    if (existingLifetimeSubscription) {
+      throw new Error('Você já possui um plano vitalício ativo. Não é possível criar assinaturas mensais ou anuais.');
+    }
+
+    // Verificar se o usuário tem plano LIFETIME no perfil (mesmo sem subscription ativa)
+    if (usuario.plano === 'LIFETIME') {
+      throw new Error('Você já possui um plano vitalício. Não é possível criar assinaturas mensais ou anuais.');
+    }
+
     // Check if user already has an active subscription (only for new subscriptions)
     // Allow upgrading/downgrading if needed, but prevent duplicate active subscriptions
     const existingActiveSubscription = await this.subscriptionRepository.findOne({
@@ -675,6 +694,12 @@ export class SubscriptionService {
       eventType: 'canceled',
       newValue: { canceled: true, immediately },
     });
+
+    // If canceled immediately, update user plan
+    // If canceled at period end, wait until period ends (handled by sync)
+    if (immediately) {
+      await this.updateUserPlan(updatedSubscription);
+    }
 
     return updatedSubscription;
   }
@@ -1382,9 +1407,26 @@ export class SubscriptionService {
       // Enable features
       await this.enableProFeatures(subscription.id);
     } else {
-      // Downgrade to FREE
-      usuario.plano = 'FREE';
-      usuario.planoValidoAte = undefined;
+      // Check if user has any other ACTIVE subscription before downgrading
+      // Query to find active subscriptions excluding the current one
+      const activeSubscriptions = await this.subscriptionRepository.find({
+        where: { 
+          usuarioId: subscription.usuarioId, 
+          status: 'ACTIVE',
+        },
+      });
+
+      // Filter out current subscription
+      const otherActiveSubscription = activeSubscriptions.find(sub => sub.id !== subscription.id);
+
+      // Only downgrade to FREE if no other active subscription exists
+      if (!otherActiveSubscription) {
+        usuario.plano = 'FREE';
+        usuario.planoValidoAte = undefined;
+      } else {
+        // User has another active subscription, update to point to it
+        usuario.subscriptionId = otherActiveSubscription.id;
+      }
     }
 
     usuario.subscriptionId = subscription.id;
