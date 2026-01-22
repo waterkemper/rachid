@@ -191,9 +191,14 @@ const Precos: React.FC = () => {
         <h1>Escolha seu Plano</h1>
         <p className="subtitle">Desbloqueie recursos avançados para organizar melhor seus eventos</p>
 
-        {currentPlan && (
+        {(!currentPlan || usuario?.plano === 'FREE') && (
           <p className="precos-upgrade-banner" style={{ marginBottom: 16 }}>
-            Você está no plano <strong>{getPlanLabel(currentPlan)}</strong>. Faça upgrade para ter mais benefícios.
+            Você está no plano <strong>Grátis</strong>. Faça upgrade para ter mais benefícios.
+          </p>
+        )}
+        {currentPlan && usuario?.plano !== 'FREE' && (
+          <p className="precos-upgrade-banner" style={{ marginBottom: 16 }}>
+            Você está no plano <strong>{getPlanLabel(currentPlan)}</strong>.
           </p>
         )}
 
