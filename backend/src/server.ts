@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import { AppDataSource } from './database/data-source';
 import routes from './routes';
 import { EmailQueueService } from './services/EmailQueueService';
+import { SubscriptionController } from './controllers/SubscriptionController';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -30,6 +31,15 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(cookieParser());
+
+// Webhook route without /api prefix (for Asaas webhook compatibility)
+// This allows Asaas to call /subscriptions/webhook directly
+// The webhook controller validates the request internally using AsaasService.verifyWebhook
+app.post('/subscriptions/webhook', (req, res) => {
+  console.log('[Webhook] Received webhook request at /subscriptions/webhook');
+  console.log('[Webhook] Headers:', JSON.stringify(req.headers, null, 2));
+  SubscriptionController.webhook(req as any, res);
+});
 
 app.use('/api', routes);
 
