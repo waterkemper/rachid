@@ -953,8 +953,7 @@ export const subscriptionApi = {
       postalCode: string;
       addressNumber: string;
       addressComplement?: string;
-      phone?: string;
-      mobilePhone?: string;
+      mobilePhone?: string; // Telefone com DDD (obrigatório para cartão)
     };
   }): Promise<{ 
     subscriptionId: number; 
@@ -1046,8 +1045,7 @@ export const subscriptionApi = {
       postalCode: string;
       addressNumber: string;
       addressComplement?: string;
-      phone?: string;
-      mobilePhone?: string;
+      mobilePhone?: string; // Telefone com DDD (obrigatório para cartão)
     };
   }): Promise<{
     subscriptionId: number;

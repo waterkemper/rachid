@@ -233,8 +233,7 @@ export class AsaasService {
       postalCode: string;
       addressNumber: string;
       addressComplement?: string;
-      phone?: string;
-      mobilePhone?: string;
+      mobilePhone?: string; // Telefone com DDD (obrigatório para cartão)
     };
   }): Promise<AsaasSubscription> {
     const payload: any = {
@@ -291,8 +290,7 @@ export class AsaasService {
       postalCode: string;
       addressNumber: string;
       addressComplement?: string;
-      phone?: string;
-      mobilePhone?: string;
+      mobilePhone?: string; // Telefone com DDD (obrigatório para cartão)
     };
   }): Promise<AsaasPayment> {
     const payload: any = {

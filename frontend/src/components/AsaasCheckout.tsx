@@ -94,8 +94,7 @@ export const AsaasCheckout: React.FC<AsaasCheckoutProps> = ({
     state: '',
     addressNumber: '',
     addressComplement: '',
-    phone: '',
-    mobilePhone: '',
+    mobilePhone: '', // Telefone com DDD (obrigatório para cartão)
   });
 
   const [loadingCEP, setLoadingCEP] = useState(false);
@@ -285,8 +284,7 @@ export const AsaasCheckout: React.FC<AsaasCheckoutProps> = ({
       errors.cpfCnpj = validateCPFCNPJ(cardHolderInfo.cpfCnpj) || '';
       errors.cep = validateCEP(cardHolderInfo.postalCode) || '';
       errors.addressNumber = !cardHolderInfo.addressNumber ? 'Número do endereço é obrigatório' : '';
-      errors.phone = validatePhone(cardHolderInfo.phone) || '';
-      errors.mobilePhone = validatePhone(cardHolderInfo.mobilePhone) || '';
+      errors.mobilePhone = validatePhone(cardHolderInfo.mobilePhone, true) || ''; // Telefone obrigatório para cartão
     }
     // Para PIX, não há validação de campos necessária
 
@@ -396,7 +394,6 @@ export const AsaasCheckout: React.FC<AsaasCheckoutProps> = ({
               postalCode: cardHolderInfo.postalCode.replace(/\D/g, ''),
               addressNumber: cardHolderInfo.addressNumber,
               addressComplement: cardHolderInfo.addressComplement || undefined,
-              phone: cardHolderInfo.phone.replace(/\D/g, '') || undefined,
               mobilePhone: cardHolderInfo.mobilePhone.replace(/\D/g, '') || undefined,
             },
           });
@@ -418,7 +415,6 @@ export const AsaasCheckout: React.FC<AsaasCheckoutProps> = ({
               postalCode: cardHolderInfo.postalCode.replace(/\D/g, ''),
               addressNumber: cardHolderInfo.addressNumber,
               addressComplement: cardHolderInfo.addressComplement || undefined,
-              phone: cardHolderInfo.phone.replace(/\D/g, '') || undefined,
               mobilePhone: cardHolderInfo.mobilePhone.replace(/\D/g, '') || undefined,
             },
           });
@@ -1281,36 +1277,10 @@ export const AsaasCheckout: React.FC<AsaasCheckoutProps> = ({
                     </div>
                   </div>
 
-                  <div style={{ marginBottom: '16px' }}>
-                    <input
-                      type="text"
-                      placeholder="Telefone (opcional)"
-                      value={cardHolderInfo.phone ? formatPhone(cardHolderInfo.phone) : ''}
-                      onChange={(e) => {
-                        const cleaned = e.target.value.replace(/\D/g, '');
-                        setCardHolderInfo({ ...cardHolderInfo, phone: cleaned });
-                        if (fieldErrors.phone) {
-                          setFieldErrors(prev => {
-                            const newErrors = { ...prev };
-                            delete newErrors.phone;
-                            return newErrors;
-                          });
-                        }
-                      }}
-                      onBlur={() => handleBlur('phone', (v) => validatePhone(v))}
-                      style={inputStyle(!!fieldErrors.phone)}
-                    />
-                    {fieldErrors.phone && (
-                      <p style={{ color: 'rgba(239, 68, 68, 0.9)', fontSize: '12px', marginTop: '4px', marginBottom: '0' }}>
-                        {fieldErrors.phone}
-                      </p>
-                    )}
-                  </div>
-
                   <div style={{ marginBottom: '0' }}>
                     <input
                       type="text"
-                      placeholder="Celular (opcional)"
+                      placeholder="Telefone com DDD *"
                       value={cardHolderInfo.mobilePhone ? formatPhone(cardHolderInfo.mobilePhone) : ''}
                       onChange={(e) => {
                         const cleaned = e.target.value.replace(/\D/g, '');
@@ -1323,7 +1293,7 @@ export const AsaasCheckout: React.FC<AsaasCheckoutProps> = ({
                           });
                         }
                       }}
-                      onBlur={() => handleBlur('mobilePhone', (v) => validatePhone(v))}
+                      onBlur={() => handleBlur('mobilePhone', (v) => validatePhone(v, true))}
                       style={inputStyle(!!fieldErrors.mobilePhone)}
                     />
                     {fieldErrors.mobilePhone && (

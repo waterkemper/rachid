@@ -113,8 +113,7 @@ export class SubscriptionService {
       postalCode: string;
       addressNumber: string;
       addressComplement?: string;
-      phone?: string;
-      mobilePhone?: string;
+      mobilePhone?: string; // Telefone com DDD (obrigatório para cartão)
     };
     userCpfCnpj?: string; // CPF/CNPJ do usuário para PIX
   }): Promise<{ 
@@ -251,7 +250,7 @@ export class SubscriptionService {
       // Format and validate phone for credit card payments
       if (data.paymentMethod === 'CREDIT_CARD') {
         // Phone is required for credit card payments
-        let phone = creditCardHolderInfo.mobilePhone || creditCardHolderInfo.phone;
+        let phone = creditCardHolderInfo.mobilePhone;
         
         // If not provided, try to use user's phone from database
         if (!phone && usuario.ddd && usuario.telefone) {
@@ -406,8 +405,7 @@ export class SubscriptionService {
       postalCode: string;
       addressNumber: string;
       addressComplement?: string;
-      phone?: string;
-      mobilePhone?: string;
+      mobilePhone?: string; // Telefone com DDD (obrigatório para cartão)
     };
     userCpfCnpj?: string; // CPF/CNPJ do usuário para PIX
   }): Promise<{ 
@@ -503,7 +501,7 @@ export class SubscriptionService {
       // Format and validate phone for credit card payments
       if (data.paymentMethod === 'CREDIT_CARD') {
         // Phone is required for credit card payments
-        let phone = creditCardHolderInfo.mobilePhone || creditCardHolderInfo.phone;
+        let phone = creditCardHolderInfo.mobilePhone;
         
         // If not provided, try to use user's phone from database
         if (!phone && usuario.ddd && usuario.telefone) {
