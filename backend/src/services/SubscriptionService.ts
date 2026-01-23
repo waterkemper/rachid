@@ -237,13 +237,46 @@ export class SubscriptionService {
       nextDueDate = now.toISOString().split('T')[0];
     }
 
-    // Prepare creditCardHolderInfo with cleaned CPF if provided
+    // Prepare creditCardHolderInfo with cleaned CPF and formatted phone if provided
     let creditCardHolderInfo = data.creditCardHolderInfo;
-    if (creditCardHolderInfo && creditCardHolderInfo.cpfCnpj) {
-      creditCardHolderInfo = {
-        ...creditCardHolderInfo,
-        cpfCnpj: this.validateAndCleanCpfCnpj(creditCardHolderInfo.cpfCnpj)!,
-      };
+    if (creditCardHolderInfo) {
+      // Clean CPF
+      if (creditCardHolderInfo.cpfCnpj) {
+        creditCardHolderInfo = {
+          ...creditCardHolderInfo,
+          cpfCnpj: this.validateAndCleanCpfCnpj(creditCardHolderInfo.cpfCnpj)!,
+        };
+      }
+
+      // Format and validate phone for credit card payments
+      if (data.paymentMethod === 'CREDIT_CARD') {
+        // Phone is required for credit card payments
+        let phone = creditCardHolderInfo.mobilePhone || creditCardHolderInfo.phone;
+        
+        // If not provided, try to use user's phone from database
+        if (!phone && usuario.ddd && usuario.telefone) {
+          phone = `${usuario.ddd}${usuario.telefone.replace(/\D/g, '')}`;
+        }
+
+        // Validate phone format (must have DDD + number, minimum 10 digits, maximum 11)
+        if (!phone) {
+          throw new Error('Telefone com DDD é obrigatório para pagamento com cartão de crédito.');
+        }
+
+        // Remove all non-digit characters
+        const cleanedPhone = phone.replace(/\D/g, '');
+
+        // Validate length: DDD (2) + number (8 or 9) = 10 or 11 digits
+        if (cleanedPhone.length < 10 || cleanedPhone.length > 11) {
+          throw new Error('Telefone inválido. Deve conter DDD + número (10 ou 11 dígitos).');
+        }
+
+        // Set mobilePhone (Asaas expects mobilePhone for credit card holder)
+        creditCardHolderInfo = {
+          ...creditCardHolderInfo,
+          mobilePhone: cleanedPhone,
+        };
+      }
     }
 
     // Create subscription in Asaas
@@ -456,13 +489,46 @@ export class SubscriptionService {
       }
     }
 
-    // Prepare creditCardHolderInfo with cleaned CPF if provided
+    // Prepare creditCardHolderInfo with cleaned CPF and formatted phone if provided
     let creditCardHolderInfo = data.creditCardHolderInfo;
-    if (creditCardHolderInfo && creditCardHolderInfo.cpfCnpj) {
-      creditCardHolderInfo = {
-        ...creditCardHolderInfo,
-        cpfCnpj: this.validateAndCleanCpfCnpj(creditCardHolderInfo.cpfCnpj)!,
-      };
+    if (creditCardHolderInfo) {
+      // Clean CPF
+      if (creditCardHolderInfo.cpfCnpj) {
+        creditCardHolderInfo = {
+          ...creditCardHolderInfo,
+          cpfCnpj: this.validateAndCleanCpfCnpj(creditCardHolderInfo.cpfCnpj)!,
+        };
+      }
+
+      // Format and validate phone for credit card payments
+      if (data.paymentMethod === 'CREDIT_CARD') {
+        // Phone is required for credit card payments
+        let phone = creditCardHolderInfo.mobilePhone || creditCardHolderInfo.phone;
+        
+        // If not provided, try to use user's phone from database
+        if (!phone && usuario.ddd && usuario.telefone) {
+          phone = `${usuario.ddd}${usuario.telefone.replace(/\D/g, '')}`;
+        }
+
+        // Validate phone format (must have DDD + number, minimum 10 digits, maximum 11)
+        if (!phone) {
+          throw new Error('Telefone com DDD é obrigatório para pagamento com cartão de crédito.');
+        }
+
+        // Remove all non-digit characters
+        const cleanedPhone = phone.replace(/\D/g, '');
+
+        // Validate length: DDD (2) + number (8 or 9) = 10 or 11 digits
+        if (cleanedPhone.length < 10 || cleanedPhone.length > 11) {
+          throw new Error('Telefone inválido. Deve conter DDD + número (10 ou 11 dígitos).');
+        }
+
+        // Set mobilePhone (Asaas expects mobilePhone for credit card holder)
+        creditCardHolderInfo = {
+          ...creditCardHolderInfo,
+          mobilePhone: cleanedPhone,
+        };
+      }
     }
 
     // Create payment in Asaas
