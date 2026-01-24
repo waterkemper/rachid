@@ -158,14 +158,24 @@ const EventoPublico: React.FC = () => {
     setLoadingDetalhes(true);
     
     try {
+      // Sempre recarregar despesas frescas da API (sem filtro de placeholder para o modal)
+      const despesasData = await publicEventoApi.getDespesas(token).catch(() => []);
+      
+      // Converter IDs para números para garantir comparação correta
+      const participanteId = Number(saldo.participanteId);
+      
       // Filtrar despesas relacionadas ao participante
-      const despesasRelacionadas = despesas.filter(despesa => {
+      const despesasRelacionadas = (despesasData || []).filter(despesa => {
         // Despesas que o participante pagou
-        if (despesa.pagador?.id === saldo.participanteId) {
+        const pagadorId = despesa.pagador?.id ? Number(despesa.pagador.id) : null;
+        if (pagadorId === participanteId) {
           return true;
         }
         // Despesas em que o participante deve pagar
-        if (despesa.participacoes?.some((p: any) => p.participante_id === saldo.participanteId)) {
+        if (despesa.participacoes?.some((p: any) => {
+          const participacaoId = p.participante_id ? Number(p.participante_id) : null;
+          return participacaoId === participanteId;
+        })) {
           return true;
         }
         return false;
@@ -185,6 +195,7 @@ const EventoPublico: React.FC = () => {
       
       setDespesasDetalhes(despesasComAnexos);
     } catch (err) {
+      console.error('Erro ao carregar detalhes do participante:', err);
       alert('Erro ao carregar detalhes do participante');
     } finally {
       setLoadingDetalhes(false);
@@ -204,17 +215,26 @@ const EventoPublico: React.FC = () => {
     setLoadingDetalhes(true);
     
     try {
-      // Obter IDs dos participantes do grupo
-      const participantesIdsGrupo = new Set(grupoCompleto.participantes.map(p => p.participanteId));
+      // Sempre recarregar despesas frescas da API (sem filtro de placeholder para o modal)
+      const despesasData = await publicEventoApi.getDespesas(token).catch(() => []);
+      
+      // Obter IDs dos participantes do grupo (convertendo para números)
+      const participantesIdsGrupo = new Set(
+        grupoCompleto.participantes.map(p => Number(p.participanteId))
+      );
       
       // Filtrar despesas relacionadas aos participantes do grupo
-      const despesasRelacionadas = despesas.filter(despesa => {
+      const despesasRelacionadas = (despesasData || []).filter(despesa => {
         // Despesas que algum participante do grupo pagou
-        if (despesa.pagador?.id && participantesIdsGrupo.has(despesa.pagador.id)) {
+        const pagadorId = despesa.pagador?.id ? Number(despesa.pagador.id) : null;
+        if (pagadorId && participantesIdsGrupo.has(pagadorId)) {
           return true;
         }
         // Despesas em que algum participante do grupo deve pagar
-        if (despesa.participacoes?.some((p: any) => participantesIdsGrupo.has(p.participante_id))) {
+        if (despesa.participacoes?.some((p: any) => {
+          const participacaoId = p.participante_id ? Number(p.participante_id) : null;
+          return participacaoId && participantesIdsGrupo.has(participacaoId);
+        })) {
           return true;
         }
         return false;
@@ -234,6 +254,7 @@ const EventoPublico: React.FC = () => {
       
       setDespesasDetalhes(despesasComAnexos);
     } catch (err) {
+      console.error('Erro ao carregar detalhes do grupo:', err);
       alert('Erro ao carregar detalhes do grupo');
     } finally {
       setLoadingDetalhes(false);
@@ -1214,7 +1235,7 @@ const EventoPublico: React.FC = () => {
                                 <span style={{ fontSize: '24px' }}>💵</span>
                                 <div style={{ flex: 1 }}>
                                   <div style={{ color: 'rgba(226, 232, 240, 0.8)', fontSize: '14px' }}>
-                                    {despesa.pagador?.nome} (do grupo) pagou esta despesa
+                                    {despesa.pagador?.nome} pagou esta despesa
                                   </div>
                                   <div style={{ color: '#4caf50', fontWeight: 'bold', marginTop: '4px' }}>
                                     + {formatCurrency(despesa.valorTotal)}
@@ -1237,8 +1258,28 @@ const EventoPublico: React.FC = () => {
                                 <span style={{ fontSize: '24px' }}>📋</span>
                                 <div style={{ flex: 1 }}>
                                   <div style={{ color: 'rgba(226, 232, 240, 0.8)', fontSize: '14px' }}>
-                                    Grupo deve pagar ({participacoesDoGrupo.length}{' '}
-                                    {participacoesDoGrupo.length === 1 ? 'participante' : 'participantes'})
+                                    {(() => {
+                                      // Obter nomes dos participantes do grupo que devem pagar
+                                      const nomesParticipantes = participacoesDoGrupo
+                                        .map((p: any) => {
+                                          // Tentar obter nome do participante
+                                          if (p.participante?.nome) {
+                                            return p.participante.nome;
+                                          }
+                                          // Se não tiver, buscar no grupo selecionado
+                                          const participanteNoGrupo = grupoSelecionadoDetalhes?.participantes.find(
+                                            part => part.participanteId === p.participante_id
+                                          );
+                                          return participanteNoGrupo?.participanteNome || 'Desconhecido';
+                                        })
+                                        .filter((nome: string) => nome !== 'Desconhecido');
+                                      
+                                      if (nomesParticipantes.length === 0) {
+                                        return `Grupo deve pagar (${participacoesDoGrupo.length} ${participacoesDoGrupo.length === 1 ? 'participante' : 'participantes'})`;
+                                      }
+                                      
+                                      return `${nomesParticipantes.join(', ')} ${participacoesDoGrupo.length === 1 ? 'deve' : 'devem'} pagar`;
+                                    })()}
                                   </div>
                                   <div style={{ color: '#f44336', fontWeight: 'bold', marginTop: '4px' }}>
                                     - {formatCurrency(totalGrupoDeve)}
