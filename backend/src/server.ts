@@ -15,7 +15,13 @@ const PORT = process.env.PORT || 3001;
 
 // Trust proxy - necessário quando atrás de Apache/Nginx reverse proxy
 // Permite que express-rate-limit identifique corretamente o IP do cliente
-app.set('trust proxy', true);
+// Em desenvolvimento (localhost), não confiar em proxies para evitar bypass de rate limiting
+// Em produção, confiar apenas em 1 proxy (Apache/Nginx)
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1); // Confiar apenas no primeiro proxy (Apache/Nginx)
+} else {
+  app.set('trust proxy', false); // Em desenvolvimento, não confiar em proxies
+}
 
 app.use(cors({
   origin: [
