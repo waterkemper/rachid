@@ -15,7 +15,10 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().url().default('http://localhost:5173'),
 
   // Database Configuration
-  DATABASE_URL: z.string().url().optional(),
+  DATABASE_URL: z.preprocess(
+    (val) => (val === '' || val === undefined ? undefined : val),
+    z.string().url().optional()
+  ),
   DB_HOST: z.string().optional(),
   DB_PORT: z.string().regex(/^\d+$/).transform(Number).optional(),
   DB_USERNAME: z.string().optional(),
@@ -27,8 +30,14 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('7d'),
 
   // SendGrid Email Configuration
-  SENDGRID_API_KEY: z.string().min(1, 'SENDGRID_API_KEY is required').optional(),
-  SENDGRID_FROM_EMAIL: z.string().email().optional(),
+  SENDGRID_API_KEY: z.preprocess(
+    (val) => (val === '' || val === undefined ? undefined : val),
+    z.string().min(1, 'SENDGRID_API_KEY is required').optional()
+  ),
+  SENDGRID_FROM_EMAIL: z.preprocess(
+    (val) => (val === '' || val === undefined ? undefined : val),
+    z.string().email().optional()
+  ),
   SENDGRID_FROM_NAME: z.string().optional(),
 
   // AWS S3 Configuration
@@ -56,7 +65,10 @@ const envSchema = z.object({
   ASAAS_WEBHOOK_TOKEN: z.string().optional(),
 
   // Webhook Security
-  WEBHOOK_SECRET_PATH: z.string().min(10, 'WEBHOOK_SECRET_PATH should be at least 10 characters for security').optional(),
+  WEBHOOK_SECRET_PATH: z.preprocess(
+    (val) => (val === '' || val === undefined ? undefined : val),
+    z.string().min(10, 'WEBHOOK_SECRET_PATH should be at least 10 characters for security').optional()
+  ),
 
   // Optional Configuration
   MIN_INSTALLMENT_VALUE: z.string().regex(/^\d+(\.\d+)?$/).transform(Number).default('30'),
