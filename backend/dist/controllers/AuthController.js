@@ -21,7 +21,7 @@ class AuthController {
                 sameSite: 'strict',
                 maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
             });
-            // Retornar token no body tamb�m (para mobile)
+            // Retornar token no body também (para mobile)
             res.json({ usuario: resultado.usuario, token: resultado.token });
         }
         catch (error) {

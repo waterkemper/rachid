@@ -20,7 +20,7 @@ const envSchema = zod_1.z.object({
     PORT: zod_1.z.string().regex(/^\d+$/).transform(Number).default('3001'),
     FRONTEND_URL: zod_1.z.string().url().default('http://localhost:5173'),
     // Database Configuration
-    DATABASE_URL: zod_1.z.string().url().optional(),
+    DATABASE_URL: zod_1.z.preprocess((val) => (val === '' || val === undefined ? undefined : val), zod_1.z.string().url().optional()),
     DB_HOST: zod_1.z.string().optional(),
     DB_PORT: zod_1.z.string().regex(/^\d+$/).transform(Number).optional(),
     DB_USERNAME: zod_1.z.string().optional(),
@@ -30,8 +30,8 @@ const envSchema = zod_1.z.object({
     JWT_SECRET: zod_1.z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     JWT_EXPIRES_IN: zod_1.z.string().default('7d'),
     // SendGrid Email Configuration
-    SENDGRID_API_KEY: zod_1.z.string().min(1, 'SENDGRID_API_KEY is required').optional(),
-    SENDGRID_FROM_EMAIL: zod_1.z.string().email().optional(),
+    SENDGRID_API_KEY: zod_1.z.preprocess((val) => (val === '' || val === undefined ? undefined : val), zod_1.z.string().min(1, 'SENDGRID_API_KEY is required').optional()),
+    SENDGRID_FROM_EMAIL: zod_1.z.preprocess((val) => (val === '' || val === undefined ? undefined : val), zod_1.z.string().email().optional()),
     SENDGRID_FROM_NAME: zod_1.z.string().optional(),
     // AWS S3 Configuration
     AWS_REGION: zod_1.z.string().default('sa-east-1'),
@@ -54,7 +54,7 @@ const envSchema = zod_1.z.object({
     ASAAS_ENVIRONMENT: zod_1.z.enum(['sandbox', 'production']).default('sandbox'),
     ASAAS_WEBHOOK_TOKEN: zod_1.z.string().optional(),
     // Webhook Security
-    WEBHOOK_SECRET_PATH: zod_1.z.string().min(10, 'WEBHOOK_SECRET_PATH should be at least 10 characters for security').optional(),
+    WEBHOOK_SECRET_PATH: zod_1.z.preprocess((val) => (val === '' || val === undefined ? undefined : val), zod_1.z.string().min(10, 'WEBHOOK_SECRET_PATH should be at least 10 characters for security').optional()),
     // Optional Configuration
     MIN_INSTALLMENT_VALUE: zod_1.z.string().regex(/^\d+(\.\d+)?$/).transform(Number).default('30'),
     IMAGE_MAX_WIDTH: zod_1.z.string().regex(/^\d+$/).transform(Number).default('1920'),

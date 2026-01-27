@@ -72,14 +72,11 @@ export class DespesaController {
       const id = parseInt(req.params.id);
       const usuarioId = req.usuarioId!;
       // Whitelist allowed fields to prevent privilege escalation
-      // Note: participacoes is handled separately as it's a nested structure
+      // Frontend envia: valorTotal, participante_pagador_id, participacoes
       const allowedData = whitelistFields(req.body, DESPESA_UPDATE_ALLOWED_FIELDS);
-      const { descricao, valor, pagadorId, data } = allowedData;
+      const { descricao, valorTotal, participante_pagador_id, data } = allowedData;
       // Handle participacoes separately (it's not in the whitelist but needs special handling)
       const participacoes = req.body.participacoes;
-      // Map to internal field names
-      const valorTotal = valor;
-      const participante_pagador_id = pagadorId;
 
       console.log('[DespesaController.update] Recebido:', {
         id,
@@ -89,22 +86,24 @@ export class DespesaController {
         tipo: typeof participante_pagador_id,
       });
 
-      // Garantir que participante_pagador_id seja sempre processado se presente no body
+      // Construir objeto de atualização com campos permitidos
       const updateData: any = {};
       if (descricao !== undefined) updateData.descricao = descricao;
-      if (valorTotal !== undefined) updateData.valorTotal = parseFloat(valorTotal);
+      if (valorTotal !== undefined) {
+        updateData.valorTotal = typeof valorTotal === 'number' ? valorTotal : parseFloat(String(valorTotal));
+      }
       if (participante_pagador_id !== undefined && participante_pagador_id !== null) {
-        updateData.participante_pagador_id = parseInt(String(participante_pagador_id));
-        console.log('[DespesaController.update] Processando participante_pagador_id:', {
-          original: participante_pagador_id,
-          processado: updateData.participante_pagador_id,
-        });
+        updateData.participante_pagador_id = typeof participante_pagador_id === 'number' 
+          ? participante_pagador_id 
+          : parseInt(String(participante_pagador_id));
       }
       if (data !== undefined) updateData.data = new Date(data);
-      if (participacoes !== undefined) {
+      if (participacoes !== undefined && Array.isArray(participacoes)) {
         updateData.participacoes = participacoes.map((p: any) => ({
           participante_id: p.participante_id,
-          valorDevePagar: parseFloat(p.valorDevePagar),
+          valorDevePagar: typeof p.valorDevePagar === 'number' 
+            ? p.valorDevePagar 
+            : parseFloat(String(p.valorDevePagar)),
         }));
       }
 

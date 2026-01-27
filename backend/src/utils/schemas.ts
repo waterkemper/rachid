@@ -81,10 +81,14 @@ export const createDespesaSchema = z.object({
 
 export const updateDespesaSchema = z.object({
   descricao: z.string().min(1).max(500).optional(),
-  valor: z.number().positive().optional(),
-  pagadorId: z.number().int().positive().optional(),
+  valorTotal: z.number().positive().optional(), // Frontend envia valorTotal
+  participante_pagador_id: z.number().int().positive().optional(), // Frontend envia participante_pagador_id
   participanteIds: z.array(z.number().int().positive()).optional(),
   data: z.string().optional(),
+  participacoes: z.array(z.object({
+    participante_id: z.number().int().positive(),
+    valorDevePagar: z.number().positive(),
+  })).optional(),
 });
 
 // Subscription schemas

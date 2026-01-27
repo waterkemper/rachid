@@ -57,10 +57,11 @@ export const GRUPO_UPDATE_ALLOWED_FIELDS = [
 /**
  * Despesa update allowed fields
  * Note: participacoes is handled separately in the controller
+ * Frontend envia: valorTotal e participante_pagador_id
  */
 export const DESPESA_UPDATE_ALLOWED_FIELDS = [
   'descricao',
-  'valor',
-  'pagadorId',
+  'valorTotal',
+  'participante_pagador_id',
   'data',
 ] as const;

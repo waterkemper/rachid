@@ -71,10 +71,14 @@ exports.createDespesaSchema = zod_1.z.object({
 });
 exports.updateDespesaSchema = zod_1.z.object({
     descricao: zod_1.z.string().min(1).max(500).optional(),
-    valor: zod_1.z.number().positive().optional(),
-    pagadorId: zod_1.z.number().int().positive().optional(),
+    valorTotal: zod_1.z.number().positive().optional(), // Frontend envia valorTotal
+    participante_pagador_id: zod_1.z.number().int().positive().optional(), // Frontend envia participante_pagador_id
     participanteIds: zod_1.z.array(zod_1.z.number().int().positive()).optional(),
     data: zod_1.z.string().optional(),
+    participacoes: zod_1.z.array(zod_1.z.object({
+        participante_id: zod_1.z.number().int().positive(),
+        valorDevePagar: zod_1.z.number().positive(),
+    })).optional(),
 });
 // Subscription schemas
 exports.createSubscriptionSchema = zod_1.z.object({

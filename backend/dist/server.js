@@ -16,6 +16,9 @@ const SubscriptionController_1 = require("./controllers/SubscriptionController")
 require("./config/env");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3001;
+// Trust proxy - necessário quando atrás de Apache/Nginx reverse proxy
+// Permite que express-rate-limit identifique corretamente o IP do cliente
+app.set('trust proxy', true);
 app.use((0, cors_1.default)({
     origin: [
         // Produção
