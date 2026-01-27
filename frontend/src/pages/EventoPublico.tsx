@@ -1199,92 +1199,73 @@ const EventoPublico: React.FC = () => {
                             style={{
                               marginBottom: '16px',
                               padding: '12px',
-                              backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                              borderRadius: '12px',
+                              backgroundColor: 'rgba(2, 6, 23, 0.18)',
+                              borderRadius: '8px',
                             }}
                           >
-                            <div
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                marginBottom: '8px',
-                              }}
-                            >
-                              <span style={{ fontWeight: '600', color: 'rgba(255, 255, 255, 0.95)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                              <div style={{ fontWeight: '600', fontSize: '16px', color: 'rgba(255, 255, 255, 0.92)' }}>
                                 {despesa.descricao}
-                              </span>
-                              <span style={{ fontSize: '12px', color: 'rgba(226, 232, 240, 0.6)' }}>
+                              </div>
+                              <div style={{ fontSize: '13px', color: 'rgba(226, 232, 240, 0.6)' }}>
                                 {formatarData(despesa.data)}
-                              </span>
+                              </div>
                             </div>
                             <div style={{ fontSize: '14px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '12px' }}>
                               Valor Total: {formatCurrency(despesa.valorTotal)}
                             </div>
                             {algumParticipantePagou && (
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '12px',
-                                  marginTop: '8px',
-                                  padding: '8px',
-                                  backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                                  borderRadius: '8px',
-                                }}
-                              >
-                                <span style={{ fontSize: '24px' }}>💵</span>
+                              <div style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                marginTop: '8px',
+                                padding: '8px',
+                                backgroundColor: 'rgba(2, 6, 23, 0.3)',
+                                borderRadius: '6px'
+                              }}>
+                                <span style={{ fontSize: '24px', marginRight: '12px' }}>💵</span>
                                 <div style={{ flex: 1 }}>
-                                  <div style={{ color: 'rgba(226, 232, 240, 0.8)', fontSize: '14px' }}>
+                                  <div style={{ fontSize: '14px', color: 'rgba(226, 232, 240, 0.7)' }}>
                                     {despesa.pagador?.nome} pagou esta despesa
                                   </div>
-                                  <div style={{ color: '#4caf50', fontWeight: 'bold', marginTop: '4px' }}>
+                                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#4caf50' }}>
                                     + {formatCurrency(despesa.valorTotal)}
                                   </div>
                                 </div>
                               </div>
                             )}
                             {participacoesDoGrupo.length > 0 && (
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '12px',
-                                  marginTop: '8px',
-                                  padding: '8px',
-                                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                  borderRadius: '8px',
-                                }}
-                              >
-                                <span style={{ fontSize: '24px' }}>📋</span>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ color: 'rgba(226, 232, 240, 0.8)', fontSize: '14px' }}>
-                                    {(() => {
-                                      // Obter nomes dos participantes do grupo que devem pagar
-                                      const nomesParticipantes = participacoesDoGrupo
-                                        .map((p: any) => {
-                                          // Tentar obter nome do participante
-                                          if (p.participante?.nome) {
-                                            return p.participante.nome;
-                                          }
-                                          // Se não tiver, buscar no grupo selecionado
-                                          const participanteNoGrupo = grupoSelecionadoDetalhes?.participantes.find(
-                                            part => part.participanteId === p.participante_id
-                                          );
-                                          return participanteNoGrupo?.participanteNome || 'Desconhecido';
-                                        })
-                                        .filter((nome: string) => nome !== 'Desconhecido');
-                                      
-                                      if (nomesParticipantes.length === 0) {
-                                        return `Grupo deve pagar (${participacoesDoGrupo.length} ${participacoesDoGrupo.length === 1 ? 'participante' : 'participantes'})`;
-                                      }
-                                      
-                                      return `${nomesParticipantes.join(', ')} ${participacoesDoGrupo.length === 1 ? 'deve' : 'devem'} pagar`;
-                                    })()}
-                                  </div>
-                                  <div style={{ color: '#f44336', fontWeight: 'bold', marginTop: '4px' }}>
-                                    - {formatCurrency(totalGrupoDeve)}
-                                  </div>
+                              <div style={{ 
+                                marginTop: '8px',
+                                padding: '8px',
+                                backgroundColor: 'rgba(2, 6, 23, 0.3)',
+                                borderRadius: '6px'
+                              }}>
+                                <div style={{ fontSize: '14px', color: 'rgba(226, 232, 240, 0.7)', marginBottom: '8px' }}>
+                                  Participantes nesta despesa:
                                 </div>
+                                {participacoesDoGrupo.map((participacao: any) => {
+                                  const participante = grupoSelecionadoDetalhes?.participantes.find(
+                                    p => p.participanteId === participacao.participante_id
+                                  );
+                                  return (
+                                    <div key={participacao.participante_id} style={{ 
+                                      display: 'flex', 
+                                      alignItems: 'center',
+                                      marginTop: '4px'
+                                    }}>
+                                      <span style={{ fontSize: '20px', marginRight: '12px' }}>📋</span>
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: '14px', color: 'rgba(226, 232, 240, 0.7)' }}>
+                                          {participante?.participanteNome || participacao.participante?.nome || 'Participante'} - Deve pagar (sua parte)
+                                        </div>
+                                        <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#f44336' }}>
+                                          - {formatCurrency(participacao.valorDevePagar)}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
 

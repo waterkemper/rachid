@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { grupoApi, templateApi } from '../services/api';
 import { EventTemplate } from '../types';
@@ -15,6 +15,7 @@ const NovoEvento: React.FC = () => {
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(false);
   const navigate = useNavigate();
+  const nomeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadTemplates();
@@ -27,6 +28,10 @@ const NovoEvento: React.FC = () => {
       if (template) {
         setNome(template.nome);
         setDescricao(template.descricao);
+        // Focar no campo Nome do Evento após um pequeno delay para garantir que o DOM foi atualizado
+        setTimeout(() => {
+          nomeInputRef.current?.focus();
+        }, 100);
       }
     }
   }, [selectedTemplateId, templates]);
@@ -88,6 +93,7 @@ const NovoEvento: React.FC = () => {
           <div className="form-group">
             <label htmlFor="nome">Nome do Evento *</label>
             <input
+              ref={nomeInputRef}
               type="text"
               id="nome"
               value={nome}

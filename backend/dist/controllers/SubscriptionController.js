@@ -309,14 +309,34 @@ class SubscriptionController {
                 case 'PAYMENT_CREATED':
                     // New payment created (for subscriptions, this is when a new billing cycle starts)
                     if (event.payment?.subscription) {
-                        await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.subscription, event);
+                        try {
+                            await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.subscription, event);
+                        }
+                        catch (error) {
+                            if (error.message?.includes('Subscription not found')) {
+                                console.warn(`[Webhook] Subscription ${event.payment.subscription} not found in database, ignoring event`);
+                            }
+                            else {
+                                throw error;
+                            }
+                        }
                     }
                     break;
                 case 'PAYMENT_RECEIVED':
                     // Payment confirmed (PIX paid or card approved)
                     if (event.payment?.subscription) {
                         // For subscription payments
-                        await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.subscription, event);
+                        try {
+                            await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.subscription, event);
+                        }
+                        catch (error) {
+                            if (error.message?.includes('Subscription not found')) {
+                                console.warn(`[Webhook] Subscription ${event.payment.subscription} not found in database, ignoring event`);
+                            }
+                            else {
+                                throw error;
+                            }
+                        }
                     }
                     else if (event.payment?.id) {
                         // For one-time payments (LIFETIME)
@@ -324,12 +344,25 @@ class SubscriptionController {
                         if (subscription) {
                             await SubscriptionService_1.SubscriptionService.activateSubscription(subscription.id);
                         }
+                        else {
+                            console.warn(`[Webhook] Payment ${event.payment.id} not found in database, ignoring event`);
+                        }
                     }
                     break;
                 case 'PAYMENT_OVERDUE':
                     // Payment overdue - handled by syncAsaasSubscription
                     if (event.payment?.subscription) {
-                        await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.subscription, event);
+                        try {
+                            await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.subscription, event);
+                        }
+                        catch (error) {
+                            if (error.message?.includes('Subscription not found')) {
+                                console.warn(`[Webhook] Subscription ${event.payment.subscription} not found in database, ignoring event`);
+                            }
+                            else {
+                                throw error;
+                            }
+                        }
                     }
                     else if (event.payment?.id) {
                         // For one-time payments, just sync
@@ -337,18 +370,51 @@ class SubscriptionController {
                         if (subscription) {
                             subscription.status = 'EXPIRED';
                             // Let syncAsaasSubscription handle the update
-                            await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.id, event);
+                            try {
+                                await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.id, event);
+                            }
+                            catch (error) {
+                                if (error.message?.includes('Subscription not found')) {
+                                    console.warn(`[Webhook] Payment ${event.payment.id} not found in database, ignoring event`);
+                                }
+                                else {
+                                    throw error;
+                                }
+                            }
+                        }
+                        else {
+                            console.warn(`[Webhook] Payment ${event.payment.id} not found in database, ignoring event`);
                         }
                     }
                     break;
                 case 'PAYMENT_REFUNDED':
                     // Payment refunded - handled by syncAsaasSubscription
                     if (event.payment?.subscription) {
-                        await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.subscription, event);
+                        try {
+                            await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.subscription, event);
+                        }
+                        catch (error) {
+                            if (error.message?.includes('Subscription not found')) {
+                                console.warn(`[Webhook] Subscription ${event.payment.subscription} not found in database, ignoring event`);
+                            }
+                            else {
+                                throw error;
+                            }
+                        }
                     }
                     else if (event.payment?.id) {
                         // For one-time payments, just sync
-                        await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.id, event);
+                        try {
+                            await SubscriptionService_1.SubscriptionService.syncAsaasSubscription(event.payment.id, event);
+                        }
+                        catch (error) {
+                            if (error.message?.includes('Subscription not found')) {
+                                console.warn(`[Webhook] Payment ${event.payment.id} not found in database, ignoring event`);
+                            }
+                            else {
+                                throw error;
+                            }
+                        }
                     }
                     break;
                 default:
@@ -357,7 +423,15 @@ class SubscriptionController {
             res.status(200).json({ received: true });
         }
         catch (error) {
-            console.error('Erro ao processar webhook:', error);
+            // Se a subscription não foi encontrada, não é um erro crítico
+            // Retornar 200 para que o Asaas não continue tentando reenviar
+            if (error.message?.includes('Subscription not found')) {
+                console.warn(`[Webhook] Subscription not found, ignoring event: ${error.message}`);
+                return res.status(200).json({ received: true, warning: 'Subscription not found in database' });
+            }
+            // Para outros erros, logar e retornar 500
+            console.error('[Webhook] Erro ao processar webhook:', error);
+            console.error('[Webhook] Event data:', JSON.stringify(req.body, null, 2));
             res.status(500).json({ error: 'Erro ao processar webhook' });
         }
     }

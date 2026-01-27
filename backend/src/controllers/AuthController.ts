@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { AuthService } from '../services/AuthService';
+import { whitelistFields, USER_UPDATE_ALLOWED_FIELDS } from '../utils/fieldWhitelist';
 
 export class AuthController {
   static async login(req: Request, res: Response) {
@@ -24,7 +25,7 @@ export class AuthController {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
       });
 
-      // Retornar token no body tamb�m (para mobile)
+      // Retornar token no body também (para mobile)
       res.json({ usuario: resultado.usuario, token: resultado.token });
     } catch (error) {
       console.error('Erro no login:', error);
@@ -201,7 +202,9 @@ export class AuthController {
         return res.status(401).json({ error: 'Não autenticado' });
       }
 
-      const { nome, email, ddd, telefone, chavePix } = req.body;
+      // Whitelist allowed fields to prevent privilege escalation
+      const allowedData = whitelistFields(req.body, USER_UPDATE_ALLOWED_FIELDS);
+      const { nome, email, ddd, telefone, chavePix } = allowedData;
 
       // Validar que pelo menos um campo foi fornecido
       if (!nome && !email && ddd === undefined && telefone === undefined && chavePix === undefined) {

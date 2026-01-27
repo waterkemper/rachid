@@ -7,6 +7,8 @@ import { AppDataSource } from './database/data-source';
 import routes from './routes';
 import { EmailQueueService } from './services/EmailQueueService';
 import { SubscriptionController } from './controllers/SubscriptionController';
+// Import env validation - this will validate and fail fast if config is invalid
+import './config/env';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -33,10 +35,22 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Webhook route without /api prefix (for Asaas webhook compatibility)
-// This allows Asaas to call /subscriptions/webhook directly
+// Uses randomized path segment from environment variable for security
 // The webhook controller validates the request internally using AsaasService.verifyWebhook
+// Rate limiting is applied in the routes file
+const webhookSecretPath = process.env.WEBHOOK_SECRET_PATH || 'webhook';
+app.post(`/subscriptions/webhook/${webhookSecretPath}`, (req, res) => {
+  console.log(`[Webhook] Received webhook request at /subscriptions/webhook/${webhookSecretPath}`);
+  console.log('[Webhook] Event type:', req.body?.event);
+  console.log('[Webhook] Resource ID:', req.body?.payment?.subscription || req.body?.payment?.id || req.body?.subscription?.id);
+  SubscriptionController.webhook(req as any, res);
+});
+
+// Legacy webhook route for backward compatibility (can be removed after updating payment providers)
+// This route is less secure but allows time to update payment provider configurations
 app.post('/subscriptions/webhook', (req, res) => {
-  console.log('[Webhook] Received webhook request at /subscriptions/webhook');
+  console.warn('[Webhook] Received webhook request at legacy endpoint /subscriptions/webhook');
+  console.warn('[Webhook] Consider updating payment provider to use randomized path');
   console.log('[Webhook] Event type:', req.body?.event);
   console.log('[Webhook] Resource ID:', req.body?.payment?.subscription || req.body?.payment?.id || req.body?.subscription?.id);
   SubscriptionController.webhook(req as any, res);

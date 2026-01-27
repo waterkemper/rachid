@@ -79,6 +79,22 @@ class SubscriptionService {
         if (!['MONTHLY', 'YEARLY'].includes(data.planType)) {
             throw new Error('Plan type must be MONTHLY or YEARLY for subscriptions');
         }
+        // Verificar se o usuário já tem plano LIFETIME ativo
+        // Se tiver, não permitir criar assinaturas mensais ou anuais
+        const existingLifetimeSubscription = await this.subscriptionRepository.findOne({
+            where: {
+                usuarioId: data.usuarioId,
+                planType: 'LIFETIME',
+                status: 'ACTIVE'
+            },
+        });
+        if (existingLifetimeSubscription) {
+            throw new Error('Você já possui um plano vitalício ativo. Não é possível criar assinaturas mensais ou anuais.');
+        }
+        // Verificar se o usuário tem plano LIFETIME no perfil (mesmo sem subscription ativa)
+        if (usuario.plano === 'LIFETIME') {
+            throw new Error('Você já possui um plano vitalício. Não é possível criar assinaturas mensais ou anuais.');
+        }
         // Check if user already has an active subscription (only for new subscriptions)
         // Allow upgrading/downgrading if needed, but prevent duplicate active subscriptions
         const existingActiveSubscription = await this.subscriptionRepository.findOne({
@@ -159,13 +175,40 @@ class SubscriptionService {
         else {
             nextDueDate = now.toISOString().split('T')[0];
         }
-        // Prepare creditCardHolderInfo with cleaned CPF if provided
+        // Prepare creditCardHolderInfo with cleaned CPF and formatted phone if provided
         let creditCardHolderInfo = data.creditCardHolderInfo;
-        if (creditCardHolderInfo && creditCardHolderInfo.cpfCnpj) {
-            creditCardHolderInfo = {
-                ...creditCardHolderInfo,
-                cpfCnpj: this.validateAndCleanCpfCnpj(creditCardHolderInfo.cpfCnpj),
-            };
+        if (creditCardHolderInfo) {
+            // Clean CPF
+            if (creditCardHolderInfo.cpfCnpj) {
+                creditCardHolderInfo = {
+                    ...creditCardHolderInfo,
+                    cpfCnpj: this.validateAndCleanCpfCnpj(creditCardHolderInfo.cpfCnpj),
+                };
+            }
+            // Format and validate phone for credit card payments
+            if (data.paymentMethod === 'CREDIT_CARD') {
+                // Phone is required for credit card payments
+                let phone = creditCardHolderInfo.mobilePhone;
+                // If not provided, try to use user's phone from database
+                if (!phone && usuario.ddd && usuario.telefone) {
+                    phone = `${usuario.ddd}${usuario.telefone.replace(/\D/g, '')}`;
+                }
+                // Validate phone format (must have DDD + number, minimum 10 digits, maximum 11)
+                if (!phone) {
+                    throw new Error('Telefone com DDD é obrigatório para pagamento com cartão de crédito.');
+                }
+                // Remove all non-digit characters
+                const cleanedPhone = phone.replace(/\D/g, '');
+                // Validate length: DDD (2) + number (8 or 9) = 10 or 11 digits
+                if (cleanedPhone.length < 10 || cleanedPhone.length > 11) {
+                    throw new Error('Telefone inválido. Deve conter DDD + número (10 ou 11 dígitos).');
+                }
+                // Set mobilePhone (Asaas expects mobilePhone for credit card holder)
+                creditCardHolderInfo = {
+                    ...creditCardHolderInfo,
+                    mobilePhone: cleanedPhone,
+                };
+            }
         }
         // Create subscription in Asaas
         const asaasSubscription = await AsaasService_1.AsaasService.createSubscription({
@@ -333,13 +376,40 @@ class SubscriptionService {
                 throw new Error(`Valor mínimo por parcela é R$ ${minInstallmentValue.toFixed(2)}`);
             }
         }
-        // Prepare creditCardHolderInfo with cleaned CPF if provided
+        // Prepare creditCardHolderInfo with cleaned CPF and formatted phone if provided
         let creditCardHolderInfo = data.creditCardHolderInfo;
-        if (creditCardHolderInfo && creditCardHolderInfo.cpfCnpj) {
-            creditCardHolderInfo = {
-                ...creditCardHolderInfo,
-                cpfCnpj: this.validateAndCleanCpfCnpj(creditCardHolderInfo.cpfCnpj),
-            };
+        if (creditCardHolderInfo) {
+            // Clean CPF
+            if (creditCardHolderInfo.cpfCnpj) {
+                creditCardHolderInfo = {
+                    ...creditCardHolderInfo,
+                    cpfCnpj: this.validateAndCleanCpfCnpj(creditCardHolderInfo.cpfCnpj),
+                };
+            }
+            // Format and validate phone for credit card payments
+            if (data.paymentMethod === 'CREDIT_CARD') {
+                // Phone is required for credit card payments
+                let phone = creditCardHolderInfo.mobilePhone;
+                // If not provided, try to use user's phone from database
+                if (!phone && usuario.ddd && usuario.telefone) {
+                    phone = `${usuario.ddd}${usuario.telefone.replace(/\D/g, '')}`;
+                }
+                // Validate phone format (must have DDD + number, minimum 10 digits, maximum 11)
+                if (!phone) {
+                    throw new Error('Telefone com DDD é obrigatório para pagamento com cartão de crédito.');
+                }
+                // Remove all non-digit characters
+                const cleanedPhone = phone.replace(/\D/g, '');
+                // Validate length: DDD (2) + number (8 or 9) = 10 or 11 digits
+                if (cleanedPhone.length < 10 || cleanedPhone.length > 11) {
+                    throw new Error('Telefone inválido. Deve conter DDD + número (10 ou 11 dígitos).');
+                }
+                // Set mobilePhone (Asaas expects mobilePhone for credit card holder)
+                creditCardHolderInfo = {
+                    ...creditCardHolderInfo,
+                    mobilePhone: cleanedPhone,
+                };
+            }
         }
         // Create payment in Asaas
         const asaasPayment = await AsaasService_1.AsaasService.createPayment({
@@ -543,6 +613,11 @@ class SubscriptionService {
             eventType: 'canceled',
             newValue: { canceled: true, immediately },
         });
+        // If canceled immediately, update user plan
+        // If canceled at period end, wait until period ends (handled by sync)
+        if (immediately) {
+            await this.updateUserPlan(updatedSubscription);
+        }
         return updatedSubscription;
     }
     /**
@@ -747,6 +822,7 @@ class SubscriptionService {
      * Sync subscription from Asaas webhook
      */
     static async syncAsaasSubscription(asaasResourceId, asaasEvent) {
+        console.log(`[SubscriptionService] Syncing subscription for Asaas ID: ${asaasResourceId}`);
         // Try to find by subscription ID first
         let subscription = await this.subscriptionRepository.findOne({
             where: { asaasSubscriptionId: asaasResourceId },
@@ -758,8 +834,10 @@ class SubscriptionService {
             });
         }
         if (!subscription) {
+            console.warn(`[SubscriptionService] Subscription not found for Asaas ID: ${asaasResourceId}. Event: ${asaasEvent?.event || 'N/A'}`);
             throw new Error(`Subscription not found for Asaas ID: ${asaasResourceId}`);
         }
+        console.log(`[SubscriptionService] Found subscription ${subscription.id} for Asaas ID: ${asaasResourceId}`);
         const oldStatus = subscription.status;
         // If we have subscription ID, sync from subscription
         if (subscription.asaasSubscriptionId) {
@@ -1166,9 +1244,25 @@ class SubscriptionService {
             await this.enableProFeatures(subscription.id);
         }
         else {
-            // Downgrade to FREE
-            usuario.plano = 'FREE';
-            usuario.planoValidoAte = undefined;
+            // Check if user has any other ACTIVE subscription before downgrading
+            // Query to find active subscriptions excluding the current one
+            const activeSubscriptions = await this.subscriptionRepository.find({
+                where: {
+                    usuarioId: subscription.usuarioId,
+                    status: 'ACTIVE',
+                },
+            });
+            // Filter out current subscription
+            const otherActiveSubscription = activeSubscriptions.find(sub => sub.id !== subscription.id);
+            // Only downgrade to FREE if no other active subscription exists
+            if (!otherActiveSubscription) {
+                usuario.plano = 'FREE';
+                usuario.planoValidoAte = undefined;
+            }
+            else {
+                // User has another active subscription, update to point to it
+                usuario.subscriptionId = otherActiveSubscription.id;
+            }
         }
         usuario.subscriptionId = subscription.id;
         await this.usuarioRepository.save(usuario);

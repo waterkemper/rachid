@@ -3,6 +3,8 @@ import { PublicEventoService } from '../services/PublicEventoService';
 import { AdminService } from '../services/AdminService';
 import { AppDataSource } from '../database/data-source';
 import { Despesa } from '../entities/Despesa';
+import { DespesaAnexoService } from '../services/DespesaAnexoService';
+import { S3Service } from '../services/S3Service';
 
 export class PublicEventoController {
   static async getByToken(req: Request, res: Response) {
@@ -153,10 +155,23 @@ export class PublicEventoController {
       }
 
       // Verificar se a despesa pertence ao evento
-      const { DespesaAnexoService } = await import('../services/DespesaAnexoService');
       const anexos = await DespesaAnexoService.findByDespesa(parseInt(despesaId));
-      
-      res.json(anexos);
+
+      // Gerar URLs assinadas para cada anexo (público, mas com expiração)
+      const anexosComUrls = await Promise.all(
+        anexos.map(async (anexo) => {
+          const signedUrl = await S3Service.getSignedUrl(anexo.nome_arquivo, 3600); // 1 hora
+          return {
+            ...anexo,
+            url_download: signedUrl, // URL temporária assinada
+            // Não retornar URLs públicas antigas por segurança
+            url_s3: undefined,
+            url_cloudfront: undefined,
+          };
+        })
+      );
+
+      res.json(anexosComUrls);
     } catch (error) {
       console.error('Erro ao buscar anexos públicos:', error);
       res.status(500).json({ error: 'Erro ao buscar anexos' });

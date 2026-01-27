@@ -64,6 +64,7 @@ export class DespesaAnexoController {
   /**
    * Listar anexos de uma despesa
    * GET /api/despesas/:id/anexos
+   * Retorna anexos com URLs assinadas temporárias
    */
   static async list(req: AuthRequest, res: Response) {
     try {
@@ -72,7 +73,21 @@ export class DespesaAnexoController {
 
       const anexos = await DespesaAnexoService.findByDespesa(despesaId, usuarioId);
 
-      res.json(anexos);
+      // Gerar URLs assinadas para cada anexo
+      const anexosComUrls = await Promise.all(
+        anexos.map(async (anexo) => {
+          const signedUrl = await S3Service.getSignedUrl(anexo.nome_arquivo, 3600); // 1 hora
+          return {
+            ...anexo,
+            url_download: signedUrl, // URL temporária assinada
+            // Não retornar URLs públicas antigas por segurança
+            url_s3: undefined,
+            url_cloudfront: undefined,
+          };
+        })
+      );
+
+      res.json(anexosComUrls);
     } catch (error: any) {
       console.error('Erro ao listar anexos:', error);
       res.status(500).json({ error: 'Erro ao listar anexos' });
@@ -109,6 +124,7 @@ export class DespesaAnexoController {
   /**
    * Gerar URL assinada para download
    * GET /api/despesas/:id/anexos/:anexoId/download
+   * Retorna URL assinada temporária (válida por 1 hora)
    */
   static async download(req: AuthRequest, res: Response) {
     try {
@@ -121,14 +137,14 @@ export class DespesaAnexoController {
         return res.status(404).json({ error: 'Anexo não encontrado' });
       }
 
-      // Retornar URL CloudFront (já é pública se configurada corretamente)
-      // Ou gerar signed URL se necessário
-      const downloadUrl = anexo.url_cloudfront || anexo.url_s3;
+      // Gerar URL assinada temporária (válida por 1 hora)
+      const signedUrl = await S3Service.getSignedUrl(anexo.nome_arquivo, 3600);
 
       res.json({
-        url: downloadUrl,
+        url: signedUrl,
         nome: anexo.nome_original,
         tipo: anexo.tipo_mime,
+        expiresIn: 3600, // Informar tempo de expiração
       });
     } catch (error: any) {
       console.error('Erro ao gerar URL de download:', error);

@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DespesaController = void 0;
 const DespesaService_1 = require("../services/DespesaService");
+const fieldWhitelist_1 = require("../utils/fieldWhitelist");
 class DespesaController {
     static async getAll(req, res) {
         try {
@@ -65,7 +66,15 @@ class DespesaController {
         try {
             const id = parseInt(req.params.id);
             const usuarioId = req.usuarioId;
-            const { descricao, valorTotal, participante_pagador_id, data, participacoes } = req.body;
+            // Whitelist allowed fields to prevent privilege escalation
+            // Note: participacoes is handled separately as it's a nested structure
+            const allowedData = (0, fieldWhitelist_1.whitelistFields)(req.body, fieldWhitelist_1.DESPESA_UPDATE_ALLOWED_FIELDS);
+            const { descricao, valor, pagadorId, data } = allowedData;
+            // Handle participacoes separately (it's not in the whitelist but needs special handling)
+            const participacoes = req.body.participacoes;
+            // Map to internal field names
+            const valorTotal = valor;
+            const participante_pagador_id = pagadorId;
             console.log('[DespesaController.update] Recebido:', {
                 id,
                 usuarioId,

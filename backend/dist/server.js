@@ -11,6 +11,9 @@ const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const data_source_1 = require("./database/data-source");
 const routes_1 = __importDefault(require("./routes"));
 const EmailQueueService_1 = require("./services/EmailQueueService");
+const SubscriptionController_1 = require("./controllers/SubscriptionController");
+// Import env validation - this will validate and fail fast if config is invalid
+require("./config/env");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3001;
 app.use((0, cors_1.default)({
@@ -33,6 +36,26 @@ app.use((0, cors_1.default)({
 }));
 app.use(express_1.default.json());
 app.use((0, cookie_parser_1.default)());
+// Webhook route without /api prefix (for Asaas webhook compatibility)
+// Uses randomized path segment from environment variable for security
+// The webhook controller validates the request internally using AsaasService.verifyWebhook
+// Rate limiting is applied in the routes file
+const webhookSecretPath = process.env.WEBHOOK_SECRET_PATH || 'webhook';
+app.post(`/subscriptions/webhook/${webhookSecretPath}`, (req, res) => {
+    console.log(`[Webhook] Received webhook request at /subscriptions/webhook/${webhookSecretPath}`);
+    console.log('[Webhook] Event type:', req.body?.event);
+    console.log('[Webhook] Resource ID:', req.body?.payment?.subscription || req.body?.payment?.id || req.body?.subscription?.id);
+    SubscriptionController_1.SubscriptionController.webhook(req, res);
+});
+// Legacy webhook route for backward compatibility (can be removed after updating payment providers)
+// This route is less secure but allows time to update payment provider configurations
+app.post('/subscriptions/webhook', (req, res) => {
+    console.warn('[Webhook] Received webhook request at legacy endpoint /subscriptions/webhook');
+    console.warn('[Webhook] Consider updating payment provider to use randomized path');
+    console.log('[Webhook] Event type:', req.body?.event);
+    console.log('[Webhook] Resource ID:', req.body?.payment?.subscription || req.body?.payment?.id || req.body?.subscription?.id);
+    SubscriptionController_1.SubscriptionController.webhook(req, res);
+});
 app.use('/api', routes_1.default);
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });

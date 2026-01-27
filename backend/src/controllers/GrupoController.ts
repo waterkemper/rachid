@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { GrupoService } from '../services/GrupoService';
 import { PlanService } from '../services/PlanService';
 import { FeatureService } from '../services/FeatureService';
+import { whitelistFields, GRUPO_UPDATE_ALLOWED_FIELDS } from '../utils/fieldWhitelist';
 
 export class GrupoController {
   static async getAll(req: AuthRequest, res: Response) {
@@ -95,7 +96,9 @@ export class GrupoController {
   static async update(req: AuthRequest, res: Response) {
     try {
       const id = parseInt(req.params.id);
-      const { nome, descricao, data } = req.body;
+      // Whitelist allowed fields to prevent privilege escalation
+      const allowedData = whitelistFields(req.body, GRUPO_UPDATE_ALLOWED_FIELDS);
+      const { nome, descricao, data } = allowedData;
       const usuarioId = req.usuarioId!;
       const grupo = await GrupoService.update(id, usuarioId, {
         nome,

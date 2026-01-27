@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const AuthService_1 = require("../services/AuthService");
+const fieldWhitelist_1 = require("../utils/fieldWhitelist");
 class AuthController {
     static async login(req, res) {
         try {
@@ -169,7 +170,9 @@ class AuthController {
             if (!usuarioId) {
                 return res.status(401).json({ error: 'Não autenticado' });
             }
-            const { nome, email, ddd, telefone, chavePix } = req.body;
+            // Whitelist allowed fields to prevent privilege escalation
+            const allowedData = (0, fieldWhitelist_1.whitelistFields)(req.body, fieldWhitelist_1.USER_UPDATE_ALLOWED_FIELDS);
+            const { nome, email, ddd, telefone, chavePix } = allowedData;
             // Validar que pelo menos um campo foi fornecido
             if (!nome && !email && ddd === undefined && telefone === undefined && chavePix === undefined) {
                 return res.status(400).json({ error: 'Pelo menos um campo deve ser fornecido para atualização' });

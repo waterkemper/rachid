@@ -63,6 +63,8 @@ class S3Service {
     }
     /**
      * Faz upload de um arquivo para o S3
+     * Note: URLs públicas não são mais retornadas por padrão por segurança
+     * Use getSignedUrl() para gerar URLs temporárias quando necessário
      */
     static async uploadFile(buffer, key, contentType) {
         const client = this.initializeClient();
@@ -71,10 +73,12 @@ class S3Service {
             Key: key,
             Body: buffer,
             ContentType: contentType,
-            // Cache control para CloudFront
-            CacheControl: 'public, max-age=31536000, immutable',
+            // Remover CacheControl público - arquivos devem ser privados
+            // CacheControl: 'public, max-age=31536000, immutable',
         });
         await client.send(command);
+        // Por compatibilidade, ainda retornamos URLs, mas elas não devem ser usadas diretamente
+        // Use getSignedUrl() para acesso seguro
         return {
             urlS3: this.getS3Url(key),
             urlCloudFront: this.getCloudFrontUrl(key),
@@ -94,6 +98,10 @@ class S3Service {
     }
     /**
      * Gera uma URL assinada para download (com expiração)
+     * Esta é a forma segura de acessar arquivos privados no S3
+     * @param key - Chave do arquivo no S3
+     * @param expiresIn - Tempo de expiração em segundos (padrão: 1 hora)
+     * @returns URL assinada temporária
      */
     static async getSignedUrl(key, expiresIn = 3600) {
         const client = this.initializeClient();
@@ -101,13 +109,9 @@ class S3Service {
             Bucket: this.bucketName,
             Key: key,
         });
-        // Se CloudFront estiver configurado, usar CloudFront para signed URL
-        // Caso contrário, usar S3 diretamente
-        if (this.cloudFrontDomain) {
-            // Para CloudFront, precisaríamos usar CloudFront signed URLs
-            // Por enquanto, retornar URL do CloudFront (pode ser público se configurado)
-            return this.getCloudFrontUrl(key);
-        }
+        // Sempre usar S3 signed URLs para segurança
+        // CloudFront signed URLs requerem configuração adicional (chave privada)
+        // Por enquanto, usar S3 signed URLs que funcionam com bucket privado
         return await (0, s3_request_presigner_1.getSignedUrl)(client, command, { expiresIn });
     }
     /**

@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { DespesaService } from '../services/DespesaService';
+import { whitelistFields, DESPESA_UPDATE_ALLOWED_FIELDS } from '../utils/fieldWhitelist';
 
 export class DespesaController {
   static async getAll(req: AuthRequest, res: Response) {
@@ -70,7 +71,15 @@ export class DespesaController {
     try {
       const id = parseInt(req.params.id);
       const usuarioId = req.usuarioId!;
-      const { descricao, valorTotal, participante_pagador_id, data, participacoes } = req.body;
+      // Whitelist allowed fields to prevent privilege escalation
+      // Note: participacoes is handled separately as it's a nested structure
+      const allowedData = whitelistFields(req.body, DESPESA_UPDATE_ALLOWED_FIELDS);
+      const { descricao, valor, pagadorId, data } = allowedData;
+      // Handle participacoes separately (it's not in the whitelist but needs special handling)
+      const participacoes = req.body.participacoes;
+      // Map to internal field names
+      const valorTotal = valor;
+      const participante_pagador_id = pagadorId;
 
       console.log('[DespesaController.update] Recebido:', {
         id,

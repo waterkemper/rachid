@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { ParticipanteService } from '../services/ParticipanteService';
+import { whitelistFields, PARTICIPANTE_UPDATE_ALLOWED_FIELDS } from '../utils/fieldWhitelist';
 
 export class ParticipanteController {
   static async getAll(req: AuthRequest, res: Response) {
@@ -48,7 +49,9 @@ export class ParticipanteController {
   static async update(req: AuthRequest, res: Response) {
     try {
       const id = parseInt(req.params.id);
-      const { nome, email, chavePix, telefone } = req.body;
+      // Whitelist allowed fields to prevent privilege escalation
+      const allowedData = whitelistFields(req.body, PARTICIPANTE_UPDATE_ALLOWED_FIELDS);
+      const { nome, email, chavePix, telefone } = allowedData;
       const usuarioId = req.usuarioId!;
       const participante = await ParticipanteService.update(id, usuarioId, { nome, email, chavePix, telefone });
       if (!participante) {

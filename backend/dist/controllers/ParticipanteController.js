@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ParticipanteController = void 0;
 const ParticipanteService_1 = require("../services/ParticipanteService");
+const fieldWhitelist_1 = require("../utils/fieldWhitelist");
 class ParticipanteController {
     static async getAll(req, res) {
         try {
@@ -48,7 +49,9 @@ class ParticipanteController {
     static async update(req, res) {
         try {
             const id = parseInt(req.params.id);
-            const { nome, email, chavePix, telefone } = req.body;
+            // Whitelist allowed fields to prevent privilege escalation
+            const allowedData = (0, fieldWhitelist_1.whitelistFields)(req.body, fieldWhitelist_1.PARTICIPANTE_UPDATE_ALLOWED_FIELDS);
+            const { nome, email, chavePix, telefone } = allowedData;
             const usuarioId = req.usuarioId;
             const participante = await ParticipanteService_1.ParticipanteService.update(id, usuarioId, { nome, email, chavePix, telefone });
             if (!participante) {

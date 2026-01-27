@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.GrupoController = void 0;
 const GrupoService_1 = require("../services/GrupoService");
 const FeatureService_1 = require("../services/FeatureService");
+const fieldWhitelist_1 = require("../utils/fieldWhitelist");
 class GrupoController {
     static async getAll(req, res) {
         try {
@@ -91,7 +92,9 @@ class GrupoController {
     static async update(req, res) {
         try {
             const id = parseInt(req.params.id);
-            const { nome, descricao, data } = req.body;
+            // Whitelist allowed fields to prevent privilege escalation
+            const allowedData = (0, fieldWhitelist_1.whitelistFields)(req.body, fieldWhitelist_1.GRUPO_UPDATE_ALLOWED_FIELDS);
+            const { nome, descricao, data } = allowedData;
             const usuarioId = req.usuarioId;
             const grupo = await GrupoService_1.GrupoService.update(id, usuarioId, {
                 nome,
