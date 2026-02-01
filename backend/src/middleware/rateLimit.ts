@@ -1,4 +1,14 @@
 import rateLimit from 'express-rate-limit';
+import { Request } from 'express';
+
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+/** Skip rate limiting on localhost / development */
+function skipOnLocalhost(_req: Request): boolean {
+  if (isDevelopment) return true;
+  const ip = _req.ip ?? _req.socket?.remoteAddress ?? '';
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+}
 
 /**
  * Strict rate limiter for authentication endpoints
@@ -10,9 +20,10 @@ export const authRateLimiter = rateLimit({
   message: {
     error: 'Too many authentication attempts, please try again after 15 minutes',
   },
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  skipSuccessfulRequests: false, // Count successful requests too
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  skip: skipOnLocalhost,
 });
 
 /**
@@ -27,6 +38,7 @@ export const mutationRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipOnLocalhost,
 });
 
 /**
@@ -41,6 +53,7 @@ export const readRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipOnLocalhost,
 });
 
 /**
@@ -56,6 +69,7 @@ export const passwordResetRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false,
+  skip: skipOnLocalhost,
 });
 
 /**
@@ -70,4 +84,5 @@ export const webhookRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipOnLocalhost,
 });
