@@ -205,17 +205,6 @@ export class GrupoController {
       const usuarioId = req.usuarioId!;
       const id = parseInt(req.params.id);
 
-      // Check if user has public sharing enabled
-      const hasPublicSharing = await FeatureService.checkFeature(usuarioId, 'public_sharing_enabled');
-      if (!hasPublicSharing) {
-        return res.status(402).json({
-          error: 'Compartilhamento público requer assinatura PRO',
-          errorCode: 'PRO_REQUIRED',
-          feature: 'public_sharing',
-          upgradeUrl: '/precos',
-        });
-      }
-
       const token = await GrupoService.gerarShareToken(id, usuarioId);
       res.json({ token, link: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/evento/${token}` });
     } catch (error: any) {

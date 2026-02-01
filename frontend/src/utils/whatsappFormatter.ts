@@ -388,12 +388,15 @@ export const formatarSugestoesPagamento = (
 
   // Call-to-action no final
   let cta = '\n💡 *Use o Rachid para organizar seus eventos também!*\n';
-  // Link público do evento (participacoes?evento=X) - prioriza o link da API se existir, senão usa o link direto
-  const linkPublicoEvento = link || `${frontendUrl}/participacoes?evento=${evento.id}`;
-  cta += `👉 ${linkPublicoEvento}\n`;
-  cta += 'Confira o resumo completo online!\n\n';
+  if (link) {
+    cta += `👉 ${link}\n`;
+    cta += 'Dá pra ver o resumo e seus saldos sem criar conta.\n\n';
+  }
+  
+  // Link de cadastro com referral (referenciando o evento)
+  const linkCadastro = `${frontendUrl}/cadastro?ref=share_${evento.id}`;
   cta += `🚀 *Crie sua conta gratuita:*\n`;
-  cta += `${frontendUrl}/cadastro?ref=share_${evento.id}\n`;
+  cta += `${linkCadastro}\n`;
   cta += 'É grátis e sem complicação!\n';
 
   return header + mensagemFormatada + cta;
