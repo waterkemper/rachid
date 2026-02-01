@@ -70,13 +70,17 @@ export const updateGrupoSchema = z.object({
   data: z.string().optional(),
 });
 
-// Despesa schemas
+// Despesa schemas - alinhado ao payload do frontend (grupo_id, valorTotal, participante_pagador_id, participacoes)
 export const createDespesaSchema = z.object({
+  grupo_id: z.number().int().positive('grupo_id is required'),
   descricao: z.string().min(1, 'Description is required').max(500),
-  valor: z.number().positive('Value must be positive'),
-  pagadorId: z.number().int().positive('Pagador ID must be a positive integer'),
-  participanteIds: z.array(z.number().int().positive()).min(1, 'At least one participant is required'),
+  valorTotal: z.number().nonnegative('Value must be zero or positive'),
+  participante_pagador_id: z.number().int().positive().optional(),
   data: z.string().optional(),
+  participacoes: z.array(z.object({
+    participante_id: z.number().int().positive(),
+    valorDevePagar: z.number().nonnegative(),
+  })).optional(),
 });
 
 export const updateDespesaSchema = z.object({
