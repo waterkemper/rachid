@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { adminApi, EstatisticasGerais } from '../services/api';
 import { Usuario, Grupo } from '../types';
-import { FaUsers, FaCalendarAlt, FaMoneyBillWave, FaEye, FaSpinner, FaChartBar, FaList } from 'react-icons/fa';
+import { FaUsers, FaCalendarAlt, FaMoneyBillWave, FaEye, FaSpinner, FaChartBar, FaList, FaSignInAlt } from 'react-icons/fa';
 import './AdminDashboard.css';
 
 type TabType = 'estatisticas' | 'usuarios' | 'eventos';
 
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, login } = useAuth();
+  const [impersonatingId, setImpersonatingId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('estatisticas');
   const [estatisticas, setEstatisticas] = useState<EstatisticasGerais | null>(null);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -75,6 +76,20 @@ const AdminDashboard: React.FC = () => {
       hour: '2-digit',
       minute: '2-digit',
     }).format(date);
+  };
+
+  const handleLogarComo = async (usuario: Usuario) => {
+    try {
+      setImpersonatingId(usuario.id);
+      const { usuario: usuarioImpersonado } = await adminApi.impersonateUser(usuario.id);
+      login(usuarioImpersonado);
+      navigate('/eventos');
+    } catch (err: any) {
+      console.error('Erro ao logar como usuário:', err);
+      setError(err.response?.data?.error || 'Erro ao logar como usuário. Tente novamente.');
+    } finally {
+      setImpersonatingId(null);
+    }
   };
 
   if (error && activeTab === 'estatisticas') {
@@ -269,6 +284,14 @@ const AdminDashboard: React.FC = () => {
       {!loading && activeTab === 'usuarios' && (
         <div className="admin-section">
           <h2>Usuários Cadastrados ({usuarios.length})</h2>
+          {error && (
+            <div className="admin-error" style={{ marginBottom: '1rem' }}>
+              <p>{error}</p>
+              <button type="button" className="btn btn-secondary" onClick={() => setError(null)}>
+                Fechar
+              </button>
+            </div>
+          )}
           <div className="admin-table-container">
             <table className="admin-table">
               <thead>
@@ -280,6 +303,7 @@ const AdminDashboard: React.FC = () => {
                   <th>Role</th>
                   <th>Auth Provider</th>
                   <th>Cadastrado em</th>
+                  <th>Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -300,6 +324,24 @@ const AdminDashboard: React.FC = () => {
                     </td>
                     <td>{usuario.auth_provider || 'local'}</td>
                     <td>{formatDate(usuario.criadoEm)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-primary admin-btn-logar-como"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLogarComo(usuario);
+                        }}
+                        disabled={impersonatingId !== null}
+                        title="Abrir a plataforma como este usuário (para manutenção)"
+                      >
+                        {impersonatingId === usuario.id ? (
+                          <><FaSpinner className="spinner" /> Entrando...</>
+                        ) : (
+                          <><FaSignInAlt /> Logar como</>
+                        )}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

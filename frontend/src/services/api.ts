@@ -630,6 +630,14 @@ export const adminApi = {
     const response = await api.get('/admin/usuarios');
     return response.data;
   },
+  /**
+   * Permite que o admin "logue" como outro usuário (impersonation) para manutenção.
+   * Retorna { usuario, token }; o cookie também é definido pela API.
+   */
+  impersonateUser: async (userId: number): Promise<{ usuario: Usuario; token: string }> => {
+    const response = await api.post(`/admin/impersonate/${userId}`);
+    return response.data;
+  },
   getAllEventos: async (): Promise<Grupo[]> => {
     const response = await api.get('/admin/eventos');
     return response.data;

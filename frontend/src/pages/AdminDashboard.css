@@ -251,6 +251,19 @@
   cursor: pointer;
 }
 
+.admin-btn-logar-como {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  padding: 0.4rem 0.75rem;
+}
+
+.admin-btn-logar-como .spinner {
+  font-size: 1rem;
+}
+
 @media (max-width: 768px) {
   .admin-dashboard {
     padding: 1rem;

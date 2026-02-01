@@ -1,11 +1,13 @@
 import { Request, Response } from 'express';
 import { AdminService } from '../services/AdminService';
+import { AuthService } from '../services/AuthService';
 import { EmailQueueService } from '../services/EmailQueueService';
 import { EmailAggregationService } from '../services/EmailAggregationService';
 import { AppDataSource } from '../database/data-source';
 import { Email } from '../entities/Email';
 import { EmailPendente } from '../entities/EmailPendente';
 import { Like, MoreThanOrEqual, LessThanOrEqual, Between } from 'typeorm';
+import { generateToken } from '../utils/jwt';
 
 export class AdminController {
   static async getEstatisticasGerais(req: Request, res: Response) {
@@ -65,6 +67,42 @@ export class AdminController {
     } catch (error) {
       console.error('Erro ao listar usuários:', error);
       res.status(500).json({ error: 'Erro ao listar usuários' });
+    }
+  }
+
+  /**
+   * Permite que um admin "logue" como outro usuário (impersonation) para manutenção.
+   * POST /api/admin/impersonate/:userId
+   */
+  static async impersonateUser(req: Request, res: Response) {
+    try {
+      const userId = parseInt(req.params.userId, 10);
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: 'ID do usuário inválido' });
+      }
+
+      const usuarioAlvo = await AuthService.findById(userId);
+      if (!usuarioAlvo) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+
+      const token = generateToken({
+        usuarioId: usuarioAlvo.id,
+        email: usuarioAlvo.email,
+      });
+
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
+      });
+
+      const { senha: _, ...usuarioSemSenha } = usuarioAlvo;
+      res.json({ usuario: usuarioSemSenha, token });
+    } catch (error) {
+      console.error('Erro ao fazer login como usuário:', error);
+      res.status(500).json({ error: 'Erro ao fazer login como usuário' });
     }
   }
 

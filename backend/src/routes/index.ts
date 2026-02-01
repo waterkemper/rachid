@@ -193,6 +193,7 @@ router.get('/admin/estatisticas/eventos', readRateLimiter, authMiddleware, requi
 router.get('/admin/estatisticas/despesas', readRateLimiter, authMiddleware, requireAdmin, AdminController.getEstatisticasDespesas);
 router.get('/admin/estatisticas/acessos', readRateLimiter, authMiddleware, requireAdmin, AdminController.getEstatisticasAcessos);
 router.get('/admin/usuarios', readRateLimiter, authMiddleware, requireAdmin, AdminController.getAllUsuarios);
+router.post('/admin/impersonate/:userId', mutationRateLimiter, authMiddleware, requireAdmin, AdminController.impersonateUser);
 router.get('/admin/eventos', readRateLimiter, authMiddleware, requireAdmin, AdminController.getAllEventos);
 router.get('/admin/eventos/:id', readRateLimiter, authMiddleware, requireAdmin, AdminController.getEventoDetalhes);
 router.get('/admin/eventos/:id/saldos', readRateLimiter, authMiddleware, requireAdmin, AdminController.getEventoSaldos);
