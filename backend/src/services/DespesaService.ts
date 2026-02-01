@@ -1,7 +1,10 @@
 import { AppDataSource } from '../database/data-source';
 import { Despesa } from '../entities/Despesa';
 import { ParticipacaoDespesa } from '../entities/ParticipacaoDespesa';
+import { DespesaAnexo } from '../entities/DespesaAnexo';
+import { DespesaHistorico } from '../entities/DespesaHistorico';
 import { ParticipacaoService } from './ParticipacaoService';
+import { S3Service } from './S3Service';
 import { Grupo } from '../entities/Grupo';
 import { ParticipanteGrupo } from '../entities/ParticipanteGrupo';
 import { Usuario } from '../entities/Usuario';
@@ -26,6 +29,8 @@ export interface CriarDespesaDTO {
 export class DespesaService {
   private static despesaRepository = AppDataSource.getRepository(Despesa);
   private static participacaoRepository = AppDataSource.getRepository(ParticipacaoDespesa);
+  private static anexoRepository = AppDataSource.getRepository(DespesaAnexo);
+  private static historicoRepository = AppDataSource.getRepository(DespesaHistorico);
   private static grupoRepository = AppDataSource.getRepository(Grupo);
   private static participanteGrupoRepository = AppDataSource.getRepository(ParticipanteGrupo);
   private static usuarioRepository = AppDataSource.getRepository(Usuario);
@@ -689,6 +694,20 @@ export class DespesaService {
     if (!canEdit) {
       throw new Error('Usuário não tem permissão para excluir esta despesa');
     }
+
+    // Excluir em cascata: anexos (S3 + DB), participações, histórico e depois a despesa
+    // (evita erro de FK quando a tabela despesa_anexos não tem ON DELETE CASCADE no banco)
+    const anexos = await this.anexoRepository.find({ where: { despesa_id: id } });
+    for (const anexo of anexos) {
+      try {
+        await S3Service.deleteFile(anexo.nome_arquivo);
+      } catch (err) {
+        console.error('[DespesaService.delete] Erro ao deletar anexo do S3:', err);
+      }
+      await this.anexoRepository.remove(anexo);
+    }
+    await this.participacaoRepository.delete({ despesa_id: id });
+    await this.historicoRepository.delete({ despesa_id: id });
 
     const result = await this.despesaRepository.delete({ id });
     return (result.affected ?? 0) > 0;

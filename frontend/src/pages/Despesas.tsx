@@ -523,9 +523,7 @@ const Despesas: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      // Buscar a despesa para verificar valor e participantes
       const despesa = despesas.find(d => d.id === id);
-      
       if (!despesa) {
         setError('Despesa não encontrada');
         return;
@@ -533,24 +531,13 @@ const Despesas: React.FC = () => {
 
       const valorTotal = Number(despesa.valorTotal) || 0;
       const temParticipantes = despesa.participacoes && despesa.participacoes.length > 0;
+      const mensagem =
+        valorTotal > 0 && temParticipantes
+          ? 'Esta despesa possui valor e participantes vinculados. Tem certeza que deseja excluir esta despesa?'
+          : 'Tem certeza que deseja excluir esta despesa?';
 
-      // Se o valor estiver zerado, excluir diretamente
-      if (valorTotal === 0) {
-        await despesaApi.delete(id);
-        loadDespesas();
+      if (!window.confirm(mensagem)) {
         return;
-      }
-
-      // Se o valor for maior que 0 e tiver participantes, pedir confirmação
-      if (valorTotal > 0 && temParticipantes) {
-        if (!window.confirm('Esta despesa possui valor e participantes vinculados. Tem certeza que deseja excluir esta despesa?')) {
-          return;
-        }
-      } else {
-        // Se não tiver participantes mas tiver valor, também pedir confirmação
-        if (!window.confirm('Tem certeza que deseja excluir esta despesa?')) {
-          return;
-        }
       }
 
       await despesaApi.delete(id);
