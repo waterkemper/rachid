@@ -11,6 +11,7 @@ import {
   SaldoGrupo,
   Usuario,
   EventTemplate,
+  DespesaAnexo,
 } from '../../shared/types';
 
 const api: AxiosInstance = axios.create({
@@ -337,6 +338,33 @@ export const despesaApi = {
   delete: async (id: number): Promise<void> => {
     await api.delete(`/despesas/${id}`);
   },
+
+  uploadAnexo: async (
+    despesaId: number,
+    file: { uri: string; name: string; type: string }
+  ): Promise<DespesaAnexo> => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: file.uri,
+      name: file.name,
+      type: file.type,
+    } as any);
+    const response = await api.post(`/despesas/${despesaId}/anexos`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  listAnexos: async (despesaId: number): Promise<DespesaAnexo[]> => {
+    const response = await api.get(`/despesas/${despesaId}/anexos`);
+    return response.data;
+  },
+
+  deleteAnexo: async (despesaId: number, anexoId: number): Promise<void> => {
+    await api.delete(`/despesas/${despesaId}/anexos/${anexoId}`);
+  },
 };
 
 export const relatorioApi = {
@@ -505,4 +533,3 @@ export const templateApi = {
     return response.data;
   },
 };
-

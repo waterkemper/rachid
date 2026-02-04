@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity, Image, Linking } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { FAB, Card, Text, Button, ActivityIndicator, Portal, Modal, TextInput, Menu, Divider, Checkbox } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -7,7 +8,7 @@ import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MainTabParamList } from '../navigation/AppNavigator';
 import { despesaApi, grupoApi, participanteApi } from '../services/api';
-import { Despesa, Grupo, Participante } from '../../shared/types';
+import { Despesa, Grupo, Participante, DespesaAnexo } from '../../shared/types';
 import { menuTheme } from '../theme';
 
 const STORAGE_KEY_SELECTED_EVENT = '@rachid:selectedEventId';
@@ -41,6 +42,9 @@ const DespesasScreen: React.FC = () => {
   const [menuPagadorVisible, setMenuPagadorVisible] = useState(false);
   const [participantesSelecionados, setParticipantesSelecionados] = useState<number[]>([]);
   const [participantesExpandido, setParticipantesExpandido] = useState(false);
+  const [anexos, setAnexos] = useState<DespesaAnexo[]>([]);
+  const [anexosLoading, setAnexosLoading] = useState(false);
+  const [anexosUploading, setAnexosUploading] = useState(false);
 
   const formatCurrency = (value: number): string => {
     return new Intl.NumberFormat('pt-BR', {
@@ -175,6 +179,78 @@ const DespesasScreen: React.FC = () => {
     }
   };
 
+  const loadAnexos = async (despesaId: number) => {
+    try {
+      setAnexosLoading(true);
+      const anexosData = await despesaApi.listAnexos(despesaId);
+      setAnexos(anexosData);
+    } catch (err) {
+      console.error('Erro ao carregar anexos:', err);
+      setAnexos([]);
+    } finally {
+      setAnexosLoading(false);
+    }
+  };
+
+  const handlePickAnexos = async () => {
+    if (!editingDespesa) {
+      Alert.alert('Atenção', 'Salve a despesa primeiro para adicionar anexos.');
+      return;
+    }
+
+    try {
+      setAnexosUploading(true);
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'application/pdf'],
+        multiple: true,
+      });
+
+      if (result.canceled) {
+        setAnexosUploading(false);
+        return;
+      }
+
+      const files = result.assets || [];
+      for (const file of files) {
+        if (!file.uri || !file.name || !file.mimeType) continue;
+        await despesaApi.uploadAnexo(editingDespesa.id, {
+          uri: file.uri,
+          name: file.name,
+          type: file.mimeType,
+        });
+      }
+      await loadAnexos(editingDespesa.id);
+    } catch (err: any) {
+      console.error('Erro ao fazer upload de anexos:', err);
+      Alert.alert(
+        'Erro',
+        err?.response?.data?.error || 'Erro ao fazer upload de anexos. Tente novamente.'
+      );
+    } finally {
+      setAnexosUploading(false);
+    }
+  };
+
+  const handleDeleteAnexo = async (anexoId: number) => {
+    if (!editingDespesa) return;
+    try {
+      await despesaApi.deleteAnexo(editingDespesa.id, anexoId);
+      await loadAnexos(editingDespesa.id);
+    } catch (err) {
+      console.error('Erro ao excluir anexo:', err);
+      Alert.alert('Erro', 'Não foi possível remover o anexo.');
+    }
+  };
+
+  const formatFileSize = (bytes: number | undefined) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  };
+
+  const isImageMime = (mime: string) => mime.startsWith('image/');
+
   const handleOpenModal = async (despesa?: Despesa) => {
     if (despesa) {
       setEditingDespesa(despesa);
@@ -186,12 +262,14 @@ const DespesasScreen: React.FC = () => {
         data: despesa.data.split('T')[0],
       });
       await loadParticipantesDoEvento(despesa.grupo_id, despesa.participante_pagador_id || undefined);
+      await loadAnexos(despesa.id);
       // Carregar participantes da despesa
       const participantesIds = despesa.participacoes?.map(p => p.participante_id) || [];
       setParticipantesSelecionados(participantesIds);
       setParticipantesExpandido(true); // Expandir ao editar
     } else {
       setEditingDespesa(null);
+      setAnexos([]);
       const grupoId = grupoFiltro ? Number(grupoFiltro) : 0;
       setFormData({
         grupo_id: grupoId,
@@ -218,6 +296,7 @@ const DespesasScreen: React.FC = () => {
     setParticipantesDoEvento([]);
     setParticipantesSelecionados([]);
     setParticipantesExpandido(false);
+    setAnexos([]);
     setError(null); // Limpar erro ao fechar modal
     setFormData({
       grupo_id: 0,
@@ -731,6 +810,76 @@ const DespesasScreen: React.FC = () => {
                     </Text>
                   )}
                 </View>
+                <View style={styles.anexosSection}>
+                  <View style={styles.anexosHeader}>
+                    <Text variant="bodyMedium" style={styles.label}>
+                      Anexos
+                    </Text>
+                    <Button
+                      mode="contained"
+                      icon="paperclip"
+                      onPress={handlePickAnexos}
+                      disabled={!editingDespesa || anexosUploading}
+                      style={styles.anexosButton}
+                    >
+                      {anexosUploading ? 'Enviando...' : 'Adicionar'}
+                    </Button>
+                  </View>
+
+                  {!editingDespesa && (
+                    <Text variant="bodySmall" style={styles.helpText}>
+                      Salve a despesa para anexar recibos e documentos.
+                    </Text>
+                  )}
+
+                  {anexosLoading ? (
+                    <ActivityIndicator style={styles.anexosLoading} />
+                  ) : anexos.length === 0 ? (
+                    <Text variant="bodySmall" style={styles.anexosEmpty}>
+                      Nenhum anexo adicionado.
+                    </Text>
+                  ) : (
+                    <View style={styles.anexosList}>
+                      {anexos.map((anexo) => (
+                        <View key={anexo.id} style={styles.anexoItem}>
+                          <TouchableOpacity
+                            style={styles.anexoPreview}
+                            onPress={() => Linking.openURL(anexo.url_cloudfront || anexo.url_s3)}
+                          >
+                            {isImageMime(anexo.tipo_mime) ? (
+                              <Image
+                                source={{ uri: anexo.url_cloudfront || anexo.url_s3 }}
+                                style={styles.anexoImage}
+                              />
+                            ) : (
+                              <MaterialCommunityIcons
+                                name={anexo.tipo_mime === 'application/pdf' ? 'file-pdf-box' : 'file-document-outline'}
+                                size={32}
+                                color="#94a3b8"
+                              />
+                            )}
+                          </TouchableOpacity>
+                          <View style={styles.anexoInfo}>
+                            <Text style={styles.anexoName} numberOfLines={1}>
+                              {anexo.nome_original}
+                            </Text>
+                            <Text style={styles.anexoMeta}>
+                              {formatFileSize(anexo.tamanho_otimizado || anexo.tamanho_original)}
+                            </Text>
+                          </View>
+                          <Button
+                            mode="text"
+                            icon="delete"
+                            compact
+                            onPress={() => handleDeleteAnexo(anexo.id)}
+                          >
+                            Remover
+                          </Button>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
               </ScrollView>
 
               <View style={styles.modalActions}>
@@ -892,6 +1041,62 @@ const styles = StyleSheet.create({
   participantesSection: {
     marginTop: 8,
     marginBottom: 16,
+  },
+  anexosSection: {
+    marginBottom: 8,
+  },
+  anexosHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  anexosButton: {
+    marginLeft: 8,
+  },
+  anexosLoading: {
+    marginVertical: 12,
+  },
+  anexosEmpty: {
+    color: '#94a3b8',
+    marginBottom: 8,
+  },
+  anexosList: {
+    marginTop: 4,
+  },
+  anexoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(148, 163, 184, 0.12)',
+    marginBottom: 8,
+  },
+  anexoPreview: {
+    width: 48,
+    height: 48,
+    borderRadius: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  anexoImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 6,
+  },
+  anexoInfo: {
+    flex: 1,
+  },
+  anexoName: {
+    color: '#e2e8f0',
+    fontWeight: '600',
+  },
+  anexoMeta: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 2,
   },
   participantesHeader: {
     flexDirection: 'row',

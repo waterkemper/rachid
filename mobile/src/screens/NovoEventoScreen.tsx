@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Card, Text, Button, ActivityIndicator, TextInput } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -23,6 +23,19 @@ const NovoEventoScreen: React.FC = () => {
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(false);
   const [carregandoGrupos, setCarregandoGrupos] = useState(true);
+
+  const getTemplateIcon = (templateId?: string) => {
+    const icons: Record<string, string> = {
+      churrasco: '🍖',
+      viagem: '✈️',
+      aniversario: '🎂',
+      restaurante: '🍽️',
+      festa: '🎉',
+      default: '📋',
+    };
+    if (!templateId) return '➕';
+    return icons[templateId] || icons.default;
+  };
 
   useEffect(() => {
     loadGruposMaiores();
@@ -112,17 +125,52 @@ const NovoEventoScreen: React.FC = () => {
               <Text variant="titleMedium" style={styles.templatesTitle}>
                 Usar template (opcional):
               </Text>
-              {templates.map((template) => (
-                <Button
-                  key={template.id}
-                  mode={selectedTemplateId === template.id ? 'contained' : 'outlined'}
-                  onPress={() => setSelectedTemplateId(selectedTemplateId === template.id ? null : template.id)}
-                  style={styles.templateButton}
+              <View style={styles.templateGrid}>
+                <TouchableOpacity
+                  style={[
+                    styles.templateCard,
+                    selectedTemplateId === null ? styles.templateCardSelected : null,
+                  ]}
+                  onPress={() => setSelectedTemplateId(null)}
                   disabled={carregando}
                 >
-                  {template.nome}
-                </Button>
-              ))}
+                  <Text style={styles.templateIcon}>{getTemplateIcon()}</Text>
+                  <Text style={styles.templateName}>Criar do zero</Text>
+                  <Text style={styles.templateDescription}>Começar sem sugestões</Text>
+                </TouchableOpacity>
+                {templates.map((template) => (
+                  <TouchableOpacity
+                    key={template.id}
+                    style={[
+                      styles.templateCard,
+                      selectedTemplateId === template.id ? styles.templateCardSelected : null,
+                    ]}
+                    onPress={() => setSelectedTemplateId(template.id)}
+                    disabled={carregando}
+                  >
+                    <Text style={styles.templateIcon}>{getTemplateIcon(template.id)}</Text>
+                    <Text style={styles.templateName}>{template.nome}</Text>
+                    <Text style={styles.templateDescription}>{template.descricao}</Text>
+                    {template.despesas?.length ? (
+                      <View style={styles.templateExpenses}>
+                        <Text style={styles.templateExpensesLabel}>Despesas sugeridas:</Text>
+                        <View style={styles.templateExpensesList}>
+                          {template.despesas.slice(0, 3).map((despesa, idx) => (
+                            <Text key={idx} style={styles.templateExpenseTag}>
+                              {despesa}
+                            </Text>
+                          ))}
+                          {template.despesas.length > 3 && (
+                            <Text style={styles.templateExpenseTag}>
+                              +{template.despesas.length - 3}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    ) : null}
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           ) : null}
 
@@ -233,8 +281,55 @@ const styles = StyleSheet.create({
   templatesTitle: {
     marginBottom: 12,
   },
-  templateButton: {
+  templateGrid: {
+    flexDirection: 'column',
+  },
+  templateCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.3)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  templateCardSelected: {
+    borderColor: '#6366f1',
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  templateIcon: {
+    fontSize: 22,
+    marginBottom: 6,
+  },
+  templateName: {
+    fontWeight: '700',
+    color: '#e2e8f0',
+    marginBottom: 4,
+  },
+  templateDescription: {
+    color: '#94a3b8',
     marginBottom: 8,
+  },
+  templateExpenses: {
+    marginTop: 4,
+  },
+  templateExpensesLabel: {
+    fontSize: 12,
+    color: '#cbd5f5',
+    marginBottom: 6,
+  },
+  templateExpensesList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  templateExpenseTag: {
+    backgroundColor: 'rgba(148, 163, 184, 0.2)',
+    color: '#e2e8f0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    fontSize: 12,
+    marginRight: 6,
+    marginBottom: 6,
   },
   button: {
     marginTop: 8,
@@ -250,4 +345,3 @@ const styles = StyleSheet.create({
 });
 
 export default NovoEventoScreen;
-
