@@ -494,6 +494,12 @@ const RelatorioScreen: React.FC = () => {
     setMensagemWhatsApp('');
   };
 
+  const getMensagemPreview = (mensagem: string) => {
+    if (!mensagem) return '';
+    const linhas = mensagem.split('\n').filter(Boolean);
+    return linhas.slice(0, 4).join('\n');
+  };
+
   // FunÃ§Ã£o para organizar saldos por grupo
   const organizarSaldosPorGrupo = () => {
     if (saldosGrupos.length === 0) {
@@ -636,6 +642,48 @@ const RelatorioScreen: React.FC = () => {
             </View>
           ) : (
             <>
+              {sugestoes.length > 0 && (
+                <Card style={styles.shareCard}>
+                  <Card.Content>
+                    <Text variant="titleMedium" style={styles.shareCardTitle}>
+                      Compartilhe o resumo do evento
+                    </Text>
+                    <Text style={styles.shareCardSubtitle}>
+                      Envie no WhatsApp e deixe todo mundo ver os saldos sem precisar criar conta.
+                    </Text>
+                    {mensagemWhatsApp ? (
+                      <View style={styles.sharePreview}>
+                        <Text style={styles.sharePreviewLabel}>PrÃ©via da mensagem</Text>
+                        <Text style={styles.sharePreviewText}>{getMensagemPreview(mensagemWhatsApp)}</Text>
+                      </View>
+                    ) : null}
+                    <View style={styles.shareActions}>
+                      <View style={styles.shareActionItem}>
+                        <Button
+                          mode="contained"
+                          icon="whatsapp"
+                          onPress={handleCompartilharWhatsApp}
+                          buttonColor="#25D366"
+                          contentStyle={styles.shareButtonContent}
+                        >
+                          Compartilhar agora
+                        </Button>
+                      </View>
+                      <View style={styles.shareActionItem}>
+                        <Button
+                          mode="outlined"
+                          icon="content-copy"
+                          onPress={handleCopiarMensagem}
+                          disabled={!mensagemWhatsApp}
+                        >
+                          Copiar Ãºltima mensagem
+                        </Button>
+                      </View>
+                    </View>
+                  </Card.Content>
+                </Card>
+              )}
+
               {/* 1. SugestÃµes de Pagamento */}
               <Card style={styles.card}>
                 <Card.Title 
@@ -1501,6 +1549,49 @@ const styles = StyleSheet.create({
   shareButtonFull: {
     width: '100%',
   },
+  shareCard: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: 'rgba(37, 211, 102, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(37, 211, 102, 0.3)',
+  },
+  shareCardTitle: {
+    fontWeight: '700',
+    color: customColors.text,
+    marginBottom: 6,
+  },
+  shareCardSubtitle: {
+    color: customColors.textSecondary,
+    marginBottom: 12,
+  },
+  sharePreview: {
+    backgroundColor: customColors.surfaceVariant,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  sharePreviewLabel: {
+    color: customColors.textSecondary,
+    fontSize: 12,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  sharePreviewText: {
+    color: customColors.text,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  shareActions: {
+    flexDirection: 'column',
+  },
+  shareActionItem: {
+    marginBottom: 12,
+  },
+  shareButtonContent: {
+    paddingVertical: 6,
+  },
   mensagemScrollView: {
     maxHeight: 400,
     marginBottom: 16,
@@ -1648,4 +1739,3 @@ const styles = StyleSheet.create({
 });
 
 export default RelatorioScreen;
-
