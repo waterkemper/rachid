@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, Alert } from 'react-native';
-import { FAB, Card, Text, Button, ActivityIndicator, Portal, Modal, TextInput } from 'react-native-paper';
+import { FAB, Card, Text, Button, ActivityIndicator, Portal, Modal, TextInput, Menu, IconButton } from 'react-native-paper';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { CompositeNavigationProp } from '@react-navigation/native';
@@ -28,6 +28,9 @@ const GruposScreen: React.FC = () => {
   const [eventoEditando, setEventoEditando] = useState<Grupo | null>(null);
   const [formData, setFormData] = useState({ nome: '', data: '' });
   const [salvando, setSalvando] = useState(false);
+  const [menuAcoesVisible, setMenuAcoesVisible] = useState(false);
+  const [eventoMenuAcoes, setEventoMenuAcoes] = useState<Grupo | null>(null);
+  const [atualizandoStatus, setAtualizandoStatus] = useState(false);
 
   const formatarData = (dataStr: string): string => {
     const dataParte = dataStr.split('T')[0];
@@ -177,6 +180,40 @@ const GruposScreen: React.FC = () => {
     }
   };
 
+  const statusLabel = (status?: string) => {
+    if (status === 'CONCLUIDO') return 'Concluído';
+    if (status === 'CANCELADO') return 'Cancelado';
+    return 'Em aberto';
+  };
+
+  const handleAtualizarStatus = async (grupo: Grupo, novoStatus: 'EM_ABERTO' | 'CONCLUIDO' | 'CANCELADO') => {
+    setMenuAcoesVisible(false);
+    setEventoMenuAcoes(null);
+    setAtualizandoStatus(true);
+    setError(null);
+    try {
+      await grupoApi.updateStatus(grupo.id, novoStatus);
+      loadData();
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Erro ao atualizar status');
+    } finally {
+      setAtualizandoStatus(false);
+    }
+  };
+
+  const handleDuplicar = async (grupo: Grupo) => {
+    setMenuAcoesVisible(false);
+    setEventoMenuAcoes(null);
+    setError(null);
+    try {
+      await grupoApi.duplicar(grupo.id);
+      loadData();
+      Alert.alert('Sucesso', `Evento "${grupo.nome}" duplicado.`);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Erro ao duplicar evento');
+    }
+  };
+
   const handleDelete = async (id: number) => {
     // Verificar dados antes de tentar excluir para mostrar informações ao usuário
     try {
@@ -301,6 +338,8 @@ const GruposScreen: React.FC = () => {
   const renderItem = ({ item }: { item: Grupo }) => {
     const total = totaisDespesas.get(item.id) || 0;
     const numParticipantes = item.participantes?.length || 0;
+    const status = item.status || 'EM_ABERTO';
+    const bloqueado = status === 'CONCLUIDO' || status === 'CANCELADO';
 
     return (
       <Card style={styles.card}>
@@ -308,28 +347,59 @@ const GruposScreen: React.FC = () => {
           <View style={styles.titleRow}>
             <Text variant="titleLarge" style={styles.title}>{item.nome}</Text>
             <View style={styles.titleActions}>
-              <Button 
-                mode="text" 
-                onPress={() => handleEdit(item)}
-                icon="pencil"
-                compact
-                contentStyle={styles.iconButtonContent}
-                labelStyle={styles.iconButtonLabel}
+              {!bloqueado && (
+                <>
+                  <Button
+                    mode="text"
+                    onPress={() => handleEdit(item)}
+                    icon="pencil"
+                    compact
+                    contentStyle={styles.iconButtonContent}
+                    labelStyle={styles.iconButtonLabel}
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    mode="text"
+                    textColor="red"
+                    onPress={() => handleDelete(item.id)}
+                    icon="delete"
+                    compact
+                    contentStyle={styles.iconButtonContent}
+                    labelStyle={styles.iconButtonLabel}
+                  >
+                    Excluir
+                  </Button>
+                </>
+              )}
+              <Menu
+                visible={menuAcoesVisible && eventoMenuAcoes?.id === item.id}
+                onDismiss={() => { setMenuAcoesVisible(false); setEventoMenuAcoes(null); }}
+                anchor={
+                  <IconButton
+                    icon="dots-vertical"
+                    onPress={() => { setEventoMenuAcoes(item); setMenuAcoesVisible(true); }}
+                    size={20}
+                  />
+                }
               >
-                Editar
-              </Button>
-              <Button 
-                mode="text" 
-                textColor="red" 
-                onPress={() => handleDelete(item.id)}
-                icon="delete"
-                compact
-                contentStyle={styles.iconButtonContent}
-                labelStyle={styles.iconButtonLabel}
-              >
-                Excluir
-              </Button>
+                {status === 'EM_ABERTO' && (
+                  <>
+                    <Menu.Item onPress={() => handleAtualizarStatus(item, 'CONCLUIDO')} title="Concluir evento" />
+                    <Menu.Item onPress={() => handleAtualizarStatus(item, 'CANCELADO')} title="Cancelar evento" />
+                  </>
+                )}
+                {(status === 'CONCLUIDO' || status === 'CANCELADO') && (
+                  <Menu.Item onPress={() => handleAtualizarStatus(item, 'EM_ABERTO')} title="Reabrir evento" />
+                )}
+                <Menu.Item onPress={() => handleDuplicar(item)} title="Duplicar evento" />
+              </Menu>
             </View>
+          </View>
+          <View style={styles.statusRow}>
+            <Text variant="labelSmall" style={[styles.statusBadge, status === 'CONCLUIDO' && styles.statusConcluido, status === 'CANCELADO' && styles.statusCancelado]}>
+              {statusLabel(status)}
+            </Text>
           </View>
           {item.descricao ? <Text variant="bodyMedium" style={styles.descricao}>{item.descricao}</Text> : null}
           <Text variant="bodySmall" style={styles.data}>
@@ -342,39 +412,33 @@ const GruposScreen: React.FC = () => {
             </Text>
           </View>
           <View style={styles.actions}>
-            <Button 
-              mode="outlined" 
-              onPress={() => {
-                navigation.navigate('AdicionarParticipantesEvento' as any, { 
-                  eventoId: item.id,
-                });
-              }}
+            <Button
+              mode="outlined"
+              onPress={() => navigation.navigate('AdicionarParticipantesEvento' as any, { eventoId: item.id })}
               icon="account-plus"
               compact
               style={styles.actionButton}
               contentStyle={styles.actionButtonContent}
               labelStyle={styles.actionButtonLabel}
+              disabled={bloqueado}
             >
               Participantes
             </Button>
-            <Button 
-              mode="outlined" 
-              onPress={() => {
-                navigation.navigate('Despesas', { eventoId: item.id });
-              }}
+            <Button
+              mode="outlined"
+              onPress={() => navigation.navigate('Despesas', { eventoId: item.id })}
               icon="currency-usd"
               compact
               style={styles.actionButton}
               contentStyle={styles.actionButtonContent}
               labelStyle={styles.actionButtonLabel}
+              disabled={bloqueado}
             >
               Despesas
             </Button>
-            <Button 
-              mode="outlined" 
-              onPress={() => {
-                navigation.navigate('Relatorios', { eventoId: item.id });
-              }}
+            <Button
+              mode="outlined"
+              onPress={() => navigation.navigate('Relatorios', { eventoId: item.id })}
               icon="chart-bar"
               compact
               style={styles.actionButton}
@@ -519,6 +583,26 @@ const styles = StyleSheet.create({
   titleActions: {
     flexDirection: 'row',
     gap: 4,
+    alignItems: 'center',
+  },
+  statusRow: {
+    marginBottom: 8,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    color: '#4caf50',
+  },
+  statusConcluido: {
+    backgroundColor: 'rgba(33, 150, 243, 0.2)',
+    color: '#2196f3',
+  },
+  statusCancelado: {
+    backgroundColor: 'rgba(244, 67, 54, 0.2)',
+    color: '#f44336',
   },
   descricao: {
     color: '#666',

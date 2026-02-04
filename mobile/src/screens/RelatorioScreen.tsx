@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Alert, TouchableOpacity, Platform } from 'react-native';
 import { Card, Text, Button, ActivityIndicator, Menu, TextInput, Modal, Portal, Divider, IconButton } from 'react-native-paper';
-import { useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
+import { useRoute, useNavigation, RouteProp, useFocusEffect } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../navigation/AppNavigator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import { MainTabParamList } from '../navigation/AppNavigator';
-import { relatorioApi, grupoApi, grupoParticipantesApi, despesaApi, participanteApi } from '../services/api';
+import { relatorioApi, grupoApi, grupoParticipantesApi, despesaApi, participanteApi, pagamentoApi } from '../services/api';
 import { SaldoParticipante, SugestaoPagamento, Grupo, Despesa, Participante, GrupoParticipantesEvento, SaldoGrupo } from '../../shared/types';
 import { menuTheme, customColors } from '../theme';
 import { formatarSugestoesPagamento, filtrarDespesasPlaceholder } from '../utils/whatsappFormatter';
@@ -16,6 +18,7 @@ type RelatorioScreenRouteProp = RouteProp<MainTabParamList, 'Relatorios'>;
 
 const RelatorioScreen: React.FC = () => {
   const route = useRoute<RelatorioScreenRouteProp>();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Main'>>();
   const eventoIdFromRoute = route.params?.eventoId;
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [grupoSelecionado, setGrupoSelecionado] = useState<number | null>(null);
@@ -45,6 +48,7 @@ const RelatorioScreen: React.FC = () => {
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [subgrupos, setSubgrupos] = useState<GrupoParticipantesEvento[]>([]);
   const [despesas, setDespesas] = useState<Despesa[]>([]);
+  const [acaoPagamentoEmAndamento, setAcaoPagamentoEmAndamento] = useState(false);
 
   const formatCurrency = (value: number): string => {
     return new Intl.NumberFormat('pt-BR', {
@@ -494,6 +498,87 @@ const RelatorioScreen: React.FC = () => {
     setMensagemWhatsApp('');
   };
 
+  const eventoStatus = grupoSelecionado ? (grupos.find(g => g.id === grupoSelecionado)?.status || 'EM_ABERTO') : 'EM_ABERTO';
+  const podeAlterarPagamento = eventoStatus === 'EM_ABERTO';
+  const sugestoesTipo = subgrupos.length > 0 ? 'ENTRE_GRUPOS' : 'INDIVIDUAL';
+
+  const handleMarcarComoPago = async (index: number) => {
+    if (!grupoSelecionado || acaoPagamentoEmAndamento) return;
+    const s = sugestoes[index];
+    setAcaoPagamentoEmAndamento(true);
+    try {
+      if (sugestoesTipo === 'ENTRE_GRUPOS') {
+        const deGrupo = saldosGrupos.find(g => g.grupoId === s.deGrupoId);
+        const paraGrupo = saldosGrupos.find(g => g.grupoId === s.paraGrupoId);
+        const pagoPorParticipanteId = deGrupo?.participantes?.[0]?.participanteId;
+        if (!pagoPorParticipanteId || s.deGrupoId == null || s.paraGrupoId == null) {
+          Alert.alert('Erro', 'Dados da sugestão incompletos.');
+          return;
+        }
+        await pagamentoApi.marcarComoPagoEntreGrupos(grupoSelecionado, {
+          sugestaoIndex: index,
+          deGrupoId: s.deGrupoId,
+          paraGrupoId: s.paraGrupoId,
+          sugestaoValor: s.valor,
+          pagoPorParticipanteId,
+          valor: s.valor,
+          deNome: s.de,
+          paraNome: s.para,
+        });
+      } else {
+        if (s.deParticipanteId == null || s.paraParticipanteId == null) {
+          Alert.alert('Erro', 'Dados da sugestão incompletos.');
+          return;
+        }
+        await pagamentoApi.marcarComoPago(grupoSelecionado, {
+          sugestaoIndex: index,
+          deParticipanteId: s.deParticipanteId,
+          paraParticipanteId: s.paraParticipanteId,
+          sugestaoValor: s.valor,
+          pagoPorParticipanteId: s.deParticipanteId,
+          valor: s.valor,
+          deNome: s.de,
+          paraNome: s.para,
+        });
+      }
+      await loadRelatorio();
+    } catch (err: any) {
+      Alert.alert('Erro', err?.response?.data?.error || 'Erro ao marcar como pago');
+    } finally {
+      setAcaoPagamentoEmAndamento(false);
+    }
+  };
+
+  const handleConfirmarRecebimento = async (index: number) => {
+    if (!grupoSelecionado || acaoPagamentoEmAndamento) return;
+    const s = sugestoes[index];
+    const pagamentoId = s.pagamentoId;
+    if (pagamentoId == null) {
+      Alert.alert('Erro', 'Pagamento não encontrado.');
+      return;
+    }
+    let confirmadoPorParticipanteId: number;
+    if (sugestoesTipo === 'ENTRE_GRUPOS') {
+      const paraGrupo = saldosGrupos.find(g => g.grupoId === s.paraGrupoId);
+      confirmadoPorParticipanteId = paraGrupo?.participantes?.[0]?.participanteId as number;
+    } else {
+      confirmadoPorParticipanteId = s.paraParticipanteId as number;
+    }
+    if (confirmadoPorParticipanteId == null) {
+      Alert.alert('Erro', 'Participante credor não encontrado.');
+      return;
+    }
+    setAcaoPagamentoEmAndamento(true);
+    try {
+      await pagamentoApi.confirmar(pagamentoId, confirmadoPorParticipanteId);
+      await loadRelatorio();
+    } catch (err: any) {
+      Alert.alert('Erro', err?.response?.data?.error || 'Erro ao confirmar recebimento');
+    } finally {
+      setAcaoPagamentoEmAndamento(false);
+    }
+  };
+
   // FunÃ§Ã£o para organizar saldos por grupo
   const organizarSaldosPorGrupo = () => {
     if (saldosGrupos.length === 0) {
@@ -625,6 +710,16 @@ const RelatorioScreen: React.FC = () => {
               </Text>
             </View>
           )}
+          {grupoSelecionado && (
+            <Button
+              mode="outlined"
+              icon="chart-line"
+              onPress={() => navigation.navigate('Graficos' as any, { eventoId: grupoSelecionado })}
+              style={{ marginTop: 8 }}
+            >
+              Ver gráficos
+            </Button>
+          )}
         </Card.Content>
       </Card>
 
@@ -671,6 +766,10 @@ const RelatorioScreen: React.FC = () => {
                     <Text style={styles.emptyText}>Nenhuma sugestÃ£o encontrada</Text>
                   ) : (
                     sugestoes.map((sugestao, index) => {
+                      const pago = !!sugestao.pago;
+                      const confirmado = !!sugestao.confirmado;
+                      const podeMarcarPago = podeAlterarPagamento && !pago && !acaoPagamentoEmAndamento;
+                      const podeConfirmar = podeAlterarPagamento && pago && !confirmado && sugestao.pagamentoId != null && !acaoPagamentoEmAndamento;
                       // Buscar chave PIX do recebedor
                       const obterChavesPix = (nomeRecebedor: string): string[] => {
                         // Primeiro, verificar se Ã© um subgrupo
@@ -731,9 +830,38 @@ const RelatorioScreen: React.FC = () => {
                           <Text variant="bodyLarge">
                             {sugestao.de} â†’ {sugestao.para}
                           </Text>
-                          <Text variant="titleMedium" style={styles.sugestaoValor}>
-                            {formatCurrency(sugestao.valor)}
-                          </Text>
+                          {(pago || confirmado) && (
+                            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                              {pago && (
+                                <Text variant="labelSmall" style={styles.badgePago}>Pago</Text>
+                              )}
+                              {confirmado && (
+                                <Text variant="labelSmall" style={styles.badgeConfirmado}>Confirmado</Text>
+                              )}
+                            </View>
+                          )}
+                          {podeMarcarPago && (
+                            <Button
+                              mode="outlined"
+                              compact
+                              onPress={() => handleMarcarComoPago(index)}
+                              style={{ marginTop: 8 }}
+                              icon="check-circle"
+                            >
+                              Marcar como pago
+                            </Button>
+                          )}
+                          {podeConfirmar && (
+                            <Button
+                              mode="outlined"
+                              compact
+                              onPress={() => handleConfirmarRecebimento(index)}
+                              style={{ marginTop: 8 }}
+                              icon="check-decagram"
+                            >
+                              Confirmar recebimento
+                            </Button>
+                          )}
                           {chavesPix.length > 0 && (
                             <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
                               <Text variant="bodySmall" style={styles.pixInfo}>
@@ -1365,6 +1493,22 @@ const styles = StyleSheet.create({
     marginTop: 4,
     color: '#1976d2',
   },
+  badgePago: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    color: '#4caf50',
+  },
+  badgeConfirmado: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    backgroundColor: 'rgba(33, 150, 243, 0.2)',
+    color: '#2196f3',
+  },
   errorCard: {
     margin: 16,
     backgroundColor: '#ffebee',
@@ -1497,6 +1641,12 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: customColors.border,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 16,
   },
   shareButtonFull: {
     width: '100%',

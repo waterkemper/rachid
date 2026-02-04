@@ -1,6 +1,8 @@
-# Racha Contas
+# Rachid (Racha Contas)
 
 Sistema web para gerenciar e dividir despesas entre grupos de pessoas, calculando automaticamente quanto cada participante deve receber ou pagar.
+
+**Plataformas**: Web (React), Mobile (React Native + Expo), Landing (Astro)
 
 ## 🚀 Como Executar
 
@@ -8,6 +10,19 @@ Sistema web para gerenciar e dividir despesas entre grupos de pessoas, calculand
 
 - Node.js (versão 16 ou superior)
 - npm ou yarn
+- PostgreSQL (para backend)
+
+### Opção A: Docker
+
+```bash
+# Criar arquivo .env na raiz (veja mds/ENV_TEMPLATE.md)
+docker-compose up -d
+```
+
+- Backend: `http://localhost:3001`
+- Frontend: `http://localhost:8080`
+
+### Opção B: Desenvolvimento Local
 
 ### 1. Instalar dependências do Backend
 
@@ -125,6 +140,13 @@ O sistema agora oferece um fluxo intuitivo e guiado:
 - Selecionar quais participantes devem dividir (não precisa ser todos)
 - Divisão automática igual ou valores personalizados por pessoa
 - Adicionar participantes esquecidos rapidamente
+- **Anexos** (cupons, recibos): upload de imagens/PDFs, armazenamento em S3/CloudFront (plano PRO)
+
+### Planos e Assinaturas
+- Planos FREE, PRO e LIFETIME
+- Checkout via PayPal (mensal/anual) ou Asaas (PIX/boleto)
+- Limites configuráveis por plano (eventos, participantes, anexos, etc.)
+- Painel admin para gerenciar assinaturas e limites
 
 ### Grupos Maiores
 - Criar grupos que contêm outros grupos ou participantes
@@ -138,6 +160,12 @@ O sistema agora oferece um fluxo intuitivo e guiado:
 - Sugestão de pagamentos otimizados (quem deve pagar para quem, com mínimo de transações)
 - Visualização de status de pagamentos (pago, confirmado, pendente)
 - Histórico completo de pagamentos realizados
+- **Gráficos**: área, barras, pizza, linhas para visualização de dados
+
+### Compartilhamento
+- Gerar mensagem formatada para **WhatsApp** com resumo, saldos e sugestões de pagamento
+- Incluir chaves PIX dos participantes na mensagem
+- Compartilhar via WhatsApp, email ou link público
 
 ## 📖 Exemplo de Uso
 
@@ -194,31 +222,40 @@ DB_DATABASE=racha_contas
 
 - **Backend**: Node.js + Express + TypeScript + TypeORM + PostgreSQL
 - **Frontend**: React + TypeScript + Vite
+- **Mobile**: React Native + Expo
+- **Landing**: Astro (marketing)
 - **Interface**: HTML/CSS puro (sem frameworks CSS)
 - **Emails**: SendGrid (com fallback para log em desenvolvimento)
 - **Fila de Jobs**: pg-boss (para processamento assíncrono de emails)
+- **Storage**: AWS S3 + CloudFront (anexos de despesas)
+- **Pagamentos**: PayPal (assinaturas) e Asaas (PIX/boleto)
 
 ## 📁 Estrutura do Projeto
 
 ```
-racha-contas/
-├── backend/
+Rachid/
+├── backend/           # API Node.js + Express + TypeORM
 │   ├── src/
 │   │   ├── entities/          # Entidades do banco
 │   │   ├── controllers/       # Controladores das rotas
 │   │   ├── services/          # Lógica de negócio
 │   │   ├── routes/            # Definição de rotas
 │   │   ├── database/          # Configuração do banco
-│   │   └── scripts/           # Scripts de migração
+│   │   └── middleware/        # Auth, rate limit, feature limits
 │   └── package.json
-├── frontend/
+├── frontend/          # Web app React + Vite
 │   ├── src/
-│   │   ├── components/        # Componentes React
+│   │   ├── components/        # Componentes React (ShareButtons, graficos, etc.)
 │   │   ├── pages/             # Páginas principais
 │   │   ├── services/          # APIs do frontend
 │   │   ├── types/             # Tipos TypeScript
-│   │   └── contexts/          # Contextos React (Auth)
+│   │   ├── contexts/          # Contextos React (Auth)
+│   │   └── utils/             # whatsappFormatter, plan
 │   └── package.json
+├── mobile/            # App React Native + Expo
+├── landing/           # Landing page Astro (marketing)
+├── mds/               # Documentação adicional
+├── docker-compose.yml # Deploy local com Docker
 └── README.md
 ```
 
@@ -277,8 +314,10 @@ O sistema utiliza SendGrid para envio de emails. Configure as variáveis de ambi
 SENDGRID_API_KEY=sua-api-key-aqui
 SENDGRID_FROM_EMAIL=noreply@seu-dominio.com
 SENDGRID_FROM_NAME=Rachid
-FRONTEND_URL=http://localhost:5173
+FRONTEND_URL=http://localhost:3000
 ```
+
+> **Nota**: O Vite usa porta 5173 por padrão em dev; ajuste conforme sua configuração.
 
 ### Tipos de Emails
 

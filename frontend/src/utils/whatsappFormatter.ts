@@ -221,7 +221,7 @@ export const formatarSugestoesPagamentoIndividual = (
   participantes: Participante[],
   _saldos: SaldoParticipante[],
   _saldosGrupos: SaldoGrupo[],
-  link?: string
+  _link?: string
 ): string => {
   // Filtrar despesas placeholder antes de calcular total
   const despesasValidas = filtrarDespesasPlaceholder(despesas);
@@ -231,11 +231,7 @@ export const formatarSugestoesPagamentoIndividual = (
   const totalFormatado = formatCurrency(totalDespesas);
 
   if (sugestoes.length === 0) {
-    let mensagem = `💰 *Sugestões de Pagamento - ${evento.nome.trim()}*\n\n*Total do evento: ${totalFormatado}*\n\nNenhum pagamento necessário. Todos os saldos estão quitados!`;
-    if (link) {
-      mensagem += `\n\n📋 Confira o detalhamento:\n${link}`;
-    }
-    return mensagem;
+    return `💰 *Sugestões de Pagamento - ${evento.nome.trim()}*\n\n*Total do evento: ${totalFormatado}*\n\nNenhum pagamento necessário. Todos os saldos estão quitados!`;
   }
 
   let mensagem = `💰 *Sugestões de Pagamento - ${evento.nome.trim()}*\n\n`;
@@ -260,10 +256,6 @@ export const formatarSugestoesPagamentoIndividual = (
     }
   });
 
-  if (link) {
-    mensagem += `\n\n📋 Confira o detalhamento:\n${link}`;
-  }
-
   return mensagem;
 };
 
@@ -278,7 +270,7 @@ export const formatarSugestoesPagamentoSubgrupos = (
   participantes: Participante[],
   _saldos: SaldoParticipante[],
   _saldosGrupos: SaldoGrupo[],
-  link?: string
+  _link?: string
 ): string => {
   // Filtrar despesas placeholder antes de calcular total
   const despesasValidas = filtrarDespesasPlaceholder(despesas);
@@ -288,11 +280,7 @@ export const formatarSugestoesPagamentoSubgrupos = (
   const totalFormatado = formatCurrency(totalDespesas);
 
   if (sugestoes.length === 0) {
-    let mensagem = `💰 *Sugestões de Pagamento - ${evento.nome.trim()}*\n\n*Total do evento: ${totalFormatado}*\n\nNenhum pagamento necessário. Todos os saldos estão quitados!`;
-    if (link) {
-      mensagem += `\n\n📋 Confira o detalhamento:\n${link}`;
-    }
-    return mensagem;
+    return `💰 *Sugestões de Pagamento - ${evento.nome.trim()}*\n\n*Total do evento: ${totalFormatado}*\n\nNenhum pagamento necessário. Todos os saldos estão quitados!`;
   }
 
   let mensagem = `💰 *Sugestões de Pagamento - ${evento.nome.trim()}*\n\n`;
@@ -316,10 +304,6 @@ export const formatarSugestoesPagamentoSubgrupos = (
       mensagem += `• *${deLimpo}* deve pagar *${valorFormatado}* para *${paraLimpo}*\n`;
     }
   });
-
-  if (link) {
-    mensagem += `\n\n📋 Confira o detalhamento:\n${link}`;
-  }
 
   return mensagem;
 };
@@ -387,11 +371,7 @@ export const formatarSugestoesPagamento = (
   header += '\n';
 
   // Call-to-action no final
-  let cta = '\n💡 *Use o Rachid para organizar seus eventos também!*\n';
-  if (link) {
-    cta += `👉 ${link}\n`;
-    cta += 'Dá pra ver o resumo e seus saldos sem criar conta.\n\n';
-  }
+  let cta = '\n💡 *Use o Rachid para organizar seus eventos também!*\n\n';
   
   // Link de cadastro com referral (referenciando o evento)
   const linkCadastro = `${frontendUrl}/cadastro?ref=share_${evento.id}`;

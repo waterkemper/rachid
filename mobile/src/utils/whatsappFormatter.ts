@@ -14,7 +14,9 @@ import {
  */
 export const isDespesaPlaceholder = (despesa: Despesa): boolean => {
   // Se não tem pagador definido, é placeholder (despesas de template não têm pagador até serem editadas)
-  if (!despesa.participante_pagador_id) {
+  // Verificar tanto participante_pagador_id quanto pagador.id (compatibilidade com API pública)
+  const temPagador = despesa.participante_pagador_id || despesa.pagador?.id;
+  if (!temPagador) {
     return true;
   }
   

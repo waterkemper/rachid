@@ -206,6 +206,17 @@ const LoginScreen: React.FC = () => {
             <View style={styles.linksContainer}>
               <Button
                 mode="text"
+                onPress={() => navigation.navigate('EventoPublico' as any)}
+                disabled={carregando}
+                style={styles.linkButton}
+                textColor={customColors.primary}
+                labelStyle={styles.linkButtonLabel}
+              >
+                Ver evento por link
+              </Button>
+
+              <Button
+                mode="text"
                 onPress={() => navigation.navigate('RecuperarSenha')}
                 disabled={carregando}
                 style={styles.linkButton}

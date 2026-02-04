@@ -103,6 +103,15 @@
 - ✅ Distribuição automática de valores
 - ✅ Valor individual por participante
 
+### Anexos de Despesas
+- ✅ Upload de anexos (imagens, PDF) por despesa
+- ✅ Armazenamento em AWS S3 + CloudFront
+- ✅ Otimização automática de imagens (redimensionamento, WebP)
+- ✅ Listar, visualizar e excluir anexos
+- ✅ URLs assinadas temporárias para download
+- ✅ Visualização de anexos em eventos públicos
+- ✅ Feature limitada por plano (PRO/LIFETIME)
+
 ---
 
 ## 📊 Relatórios e Cálculos
@@ -125,6 +134,13 @@
 - ✅ Status de pagamento por sugestão (pago, confirmado, pendente)
 - ✅ Matching baseado em IDs (não nomes) para evitar ambiguidade
 - ✅ Histórico completo de pagamentos realizados
+
+### Gráficos
+- ✅ Gráfico de área (evolução de saldos)
+- ✅ Gráfico de barras (por participante/grupo)
+- ✅ Gráfico de pizza (distribuição de despesas)
+- ✅ Gráfico de linhas (séries temporais)
+- ✅ Visualização em múltiplas páginas (Relatório, Participações)
 
 ---
 
@@ -295,6 +311,31 @@
 
 ---
 
+## 💎 Sistema de Assinaturas
+
+### Planos
+- ✅ Planos FREE, PRO e LIFETIME
+- ✅ Limites configuráveis por plano (admin)
+- ✅ Feature limits: eventos, participantes, anexos, compartilhamento público, gráficos avançados
+
+### Checkout
+- ✅ PayPal: assinaturas mensais/anuais e pagamento único (lifetime)
+- ✅ Asaas: PIX, boleto, cartão (Brasil)
+- ✅ Códigos promocionais para lifetime
+
+### Gerenciamento
+- ✅ Ativar, cancelar, retomar assinatura
+- ✅ Webhooks para sincronização automática
+- ✅ Emails de vencimento, pagamento falho, assinatura suspensa/expirada
+- ✅ Painel de uso vs limites
+
+### Admin
+- ✅ Listar assinaturas, aplicar reembolsos, estender período
+- ✅ Gerenciar limites de features (tabela editável)
+- ✅ Histórico de alterações em limites
+
+---
+
 ## 📈 Analytics
 
 ### Rastreamento de Eventos
@@ -351,6 +392,16 @@
 - ✅ Ajuda (Guia de uso)
 - ✅ Convidar Amigos
 - ✅ Evento Público (visualização sem login)
+- ✅ Preços (planos e checkout)
+- ✅ Assinatura (gerenciar plano atual)
+- ✅ Gráficos (visualização de dados)
+- ✅ Admin Dashboard (ADMIN)
+- ✅ Admin Plans, Subscriptions, Emails, Email Queue, Feature Limits, Eventos
+
+### Landing Page
+- ✅ Página de marketing (Astro)
+- ✅ Hero, features, CTA, steps
+- ✅ Deploy em Vercel
 
 ### Funcionalidades de UI
 - ✅ Formatação de valores monetários
@@ -436,6 +487,10 @@
 - `POST /api/despesas` - Criar
 - `PUT /api/despesas/:id` - Atualizar
 - `DELETE /api/despesas/:id` - Excluir
+- `POST /api/despesas/:id/anexos` - Upload de anexo
+- `GET /api/despesas/:id/anexos` - Listar anexos
+- `DELETE /api/despesas/:id/anexos/:anexoId` - Excluir anexo
+- `GET /api/despesas/:id/anexos/:anexoId/download` - URL de download
 
 ### Participações (Protegidas)
 - `POST /api/despesas/:despesaId/participacoes` - Toggle participação
@@ -488,9 +543,24 @@
 - `GET /api/public/eventos/:token/saldos-por-grupo` - Obter saldos por grupo
 - `GET /api/public/eventos/:token/sugestoes` - Obter sugestões de pagamento
 - `GET /api/public/eventos/:token/despesas` - Obter despesas do evento
+- `GET /api/public/eventos/:token/despesas/:despesaId/anexos` - Obter anexos de despesa (público)
 
 ### Eventos Públicos (Protegidas)
 - `POST /api/public/eventos/:token/reivindicar` - Reivindicar participação no evento
+
+### Assinaturas (Protegidas)
+- `GET /api/subscriptions/plans` - Listar planos
+- `POST /api/subscriptions` - Criar assinatura (PayPal)
+- `POST /api/subscriptions/activate` - Ativar após retorno PayPal
+- `GET /api/subscriptions/me` - Assinatura atual
+- `PUT /api/subscriptions/:id` - Atualizar
+- `POST /api/subscriptions/:id/cancel` - Cancelar
+- `POST /api/subscriptions/:id/resume` - Retomar
+- `POST /api/subscriptions/lifetime` - Criar order lifetime
+- `POST /api/subscriptions/lifetime/capture` - Capturar lifetime
+- `GET /api/subscriptions/usage` - Estatísticas de uso
+- `GET /api/features/check` - Verificar acesso a feature
+- `GET /api/features/limits` - Limites por plano
 
 ### Health Checks (Públicas)
 - `GET /api/health` - Health check básico
@@ -517,7 +587,7 @@
 
 ### Formatação
 - ✅ Formatação de valores monetários (R$)
-- ✅ Formatação para compartilhamento no WhatsApp
+- ✅ Formatação para compartilhamento no WhatsApp (resumo, saldos, sugestões, chaves PIX)
 - ✅ Formatação de telefones
 - ✅ Formatação de datas
 
@@ -567,10 +637,21 @@
 - **Pagamento**: Registro de pagamentos realizados (individuais e entre grupos, com confirmação)
 - **Email**: Log completo de todos os emails enviados pelo sistema (status, erros, metadados)
 - **DespesaHistorico**: Histórico de alterações em despesas para auditoria
+- **DespesaAnexo**: Anexos de despesas (S3/CloudFront)
+- **Subscription**: Assinaturas do usuário (PayPal/Asaas)
+- **SubscriptionHistory**: Histórico de eventos da assinatura
+- **SubscriptionFeature**: Features habilitadas por assinatura
+- **PlanLimit**: Limites configuráveis por plano
+- **PromoCode**: Códigos promocionais
 
 ---
 
 ## 🚀 Deploy e Infraestrutura
+
+### Docker
+- ✅ docker-compose.yml para backend + frontend
+- ✅ Health checks configurados
+- ✅ Variáveis de ambiente via .env
 
 ### Produção
 - ✅ Frontend: Vercel

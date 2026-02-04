@@ -24,18 +24,24 @@ import ContaScreen from '../screens/ContaScreen';
 import AdicionarParticipantesEventoScreen from '../screens/AdicionarParticipantesEventoScreen';
 import GruposMaioresScreen from '../screens/GruposMaioresScreen';
 import AjudaScreen from '../screens/AjudaScreen';
+import EventoPublicoScreen from '../screens/EventoPublicoScreen';
+import PlanosScreen from '../screens/PlanosScreen';
+import GraficosScreen from '../screens/GraficosScreen';
 
 export type RootStackParamList = {
   Auth: undefined;
   Main: undefined;
   Login: undefined;
-  Cadastro: undefined;
+  Cadastro: { token?: string } | undefined;
   RecuperarSenha: undefined;
   ResetarSenha: { token: string };
+  EventoPublico: { token?: string };
   NovoEvento: undefined;
   AdicionarParticipantesEvento: { eventoId: number; grupoMaior?: number | null };
   GruposMaiores: undefined;
   Ajuda: undefined;
+  Planos: undefined;
+  Graficos: { eventoId?: number } | undefined;
 };
 
 export type MainTabParamList = {
@@ -128,6 +134,11 @@ function AuthStack() {
       <Stack.Screen name="Cadastro" component={CadastroScreen} />
       <Stack.Screen name="RecuperarSenha" component={RecuperarSenhaScreen} />
       <Stack.Screen name="ResetarSenha" component={ResetarSenhaScreen} />
+      <Stack.Screen
+        name="EventoPublico"
+        component={EventoPublicoScreen}
+        initialParams={{ token: undefined }}
+      />
     </Stack.Navigator>
   );
 }
@@ -184,6 +195,22 @@ export default function AppNavigator() {
               options={{ 
                 headerShown: true,
                 header: () => <AppHeader title="Ajuda" showBack showHelp={false} />,
+              }}
+            />
+            <Stack.Screen 
+              name="Planos" 
+              component={PlanosScreen}
+              options={{ 
+                headerShown: true,
+                header: () => <AppHeader title="Planos" showBack />,
+              }}
+            />
+            <Stack.Screen 
+              name="Graficos" 
+              component={GraficosScreen}
+              options={{ 
+                headerShown: true,
+                header: () => <AppHeader title="Gráficos" showBack />,
               }}
             />
           </>

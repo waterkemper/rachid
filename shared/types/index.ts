@@ -24,6 +24,17 @@ export interface ParticipanteGrupo {
   participante?: Participante;
 }
 
+export interface DespesaAnexo {
+  id: number;
+  despesa_id: number;
+  nome_original: string;
+  nome_arquivo: string;
+  tipo_mime: string;
+  tamanho_original: number;
+  url_download?: string;
+  criado_em: string;
+}
+
 export interface Despesa {
   id: number;
   grupo_id: number;
@@ -37,6 +48,7 @@ export interface Despesa {
   grupo?: Grupo;
   pagador?: Participante;
   participacoes?: ParticipacaoDespesa[];
+  anexos?: DespesaAnexo[];
 }
 
 export interface ParticipacaoDespesa {
@@ -130,5 +142,14 @@ export interface DespesaHistorico {
   valor_novo?: string;
   criadoEm: string;
   usuario?: Usuario;
+}
+
+/** Evento público (visualização por token, sem login) */
+export interface EventoPublico {
+  id: number;
+  nome: string;
+  descricao?: string;
+  data: string;
+  participantes?: Participante[];
 }
 

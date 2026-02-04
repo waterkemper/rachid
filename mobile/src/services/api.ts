@@ -5,12 +5,14 @@ import {
   Participante,
   Grupo,
   Despesa,
+  DespesaAnexo,
   SaldoParticipante,
   SugestaoPagamento,
   GrupoParticipantesEvento,
   SaldoGrupo,
   Usuario,
   EventTemplate,
+  EventoPublico,
 } from '../../shared/types';
 
 const api: AxiosInstance = axios.create({
@@ -129,6 +131,33 @@ export const authApi = {
   resetarSenha: async (token: string, senha: string): Promise<void> => {
     await api.post('/auth/resetar-senha', { token, senha });
   },
+
+  updateUser: async (data: {
+    nome?: string;
+    email?: string;
+    ddd?: string;
+    telefone?: string;
+  }): Promise<Usuario> => {
+    const response = await api.put('/auth/me', data);
+    return response.data.usuario;
+  },
+
+  getEmailPreferences: async (): Promise<{
+    receberEmails: boolean;
+    emailOptOutData?: string | null;
+    emailOptOutReason?: string | null;
+  }> => {
+    const response = await api.get('/auth/email-preferences');
+    return response.data;
+  },
+
+  updateEmailPreferences: async (data: {
+    receberEmails: boolean;
+    emailOptOutReason?: string;
+  }): Promise<{ message: string; receberEmails: boolean }> => {
+    const response = await api.put('/auth/email-preferences', data);
+    return response.data;
+  },
 };
 
 export const participanteApi = {
@@ -214,6 +243,67 @@ export const grupoApi = {
 
   obterLink: async (id: number): Promise<{ token: string | null; link: string | null }> => {
     const response = await api.get(`/grupos/${id}/link`);
+    return response.data;
+  },
+
+  updateStatus: async (id: number, status: 'EM_ABERTO' | 'CONCLUIDO' | 'CANCELADO'): Promise<Grupo> => {
+    const response = await api.put(`/grupos/${id}/status`, { status });
+    return response.data;
+  },
+};
+
+export interface Pagamento {
+  id: number;
+  grupoId: number;
+  tipo: 'INDIVIDUAL' | 'ENTRE_GRUPOS';
+  deParticipanteId?: number;
+  paraParticipanteId?: number;
+  deGrupoId?: number;
+  paraGrupoId?: number;
+  valor: number;
+  pagoPorParticipanteId: number;
+  confirmadoPorParticipanteId?: number | null;
+  confirmadoEm?: string | null;
+  criadoEm: string;
+}
+
+export const pagamentoApi = {
+  getPorEvento: async (grupoId: number, tipo?: 'INDIVIDUAL' | 'ENTRE_GRUPOS'): Promise<Pagamento[]> => {
+    const params = tipo ? { tipo } : {};
+    const response = await api.get(`/grupos/${grupoId}/pagamentos`, { params });
+    return response.data;
+  },
+
+  marcarComoPago: async (grupoId: number, body: {
+    sugestaoIndex: number;
+    deParticipanteId: number;
+    paraParticipanteId: number;
+    sugestaoValor: number;
+    pagoPorParticipanteId: number;
+    valor: number;
+    deNome?: string;
+    paraNome?: string;
+  }): Promise<Pagamento> => {
+    const response = await api.post(`/grupos/${grupoId}/pagamentos`, body);
+    return response.data;
+  },
+
+  marcarComoPagoEntreGrupos: async (grupoId: number, body: {
+    sugestaoIndex: number;
+    deGrupoId: number;
+    paraGrupoId: number;
+    sugestaoValor: number;
+    pagoPorParticipanteId: number;
+    valor: number;
+    deNome?: string;
+    paraNome?: string;
+  }): Promise<Pagamento> => {
+    const response = await api.post(`/grupos/${grupoId}/pagamentos-grupos`, body);
+    return response.data;
+  },
+
+  confirmar: async (pagamentoId: number, confirmadoPorParticipanteId: number): Promise<Pagamento> => {
+    const response = await api.put(`/pagamentos/${pagamentoId}/confirmar`, { confirmadoPorParticipanteId });
     return response.data;
   },
 };
@@ -336,6 +426,33 @@ export const despesaApi = {
 
   delete: async (id: number): Promise<void> => {
     await api.delete(`/despesas/${id}`);
+  },
+
+  listAnexos: async (despesaId: number): Promise<DespesaAnexo[]> => {
+    const response = await api.get(`/despesas/${despesaId}/anexos`);
+    return response.data;
+  },
+
+  uploadAnexo: async (despesaId: number, file: { uri: string; name?: string; type?: string }): Promise<DespesaAnexo> => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: file.uri,
+      name: file.name || 'anexo',
+      type: file.type || 'image/jpeg',
+    } as any);
+    const response = await api.post(`/despesas/${despesaId}/anexos`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  deleteAnexo: async (despesaId: number, anexoId: number): Promise<void> => {
+    await api.delete(`/despesas/${despesaId}/anexos/${anexoId}`);
+  },
+
+  getDownloadUrl: async (despesaId: number, anexoId: number): Promise<string> => {
+    const response = await api.get(`/despesas/${despesaId}/anexos/${anexoId}/download`);
+    return response.data.url;
   },
 };
 
@@ -502,6 +619,172 @@ export const templateApi = {
 
   getById: async (id: string): Promise<EventTemplate> => {
     const response = await api.get(`/templates/${id}`);
+    return response.data;
+  },
+};
+
+/** API pública de eventos (sem autenticação) */
+export const publicEventoApi = {
+  getByToken: async (token: string): Promise<EventoPublico> => {
+    const response = await api.get(`/public/eventos/${token}`);
+    return response.data;
+  },
+  getSaldos: async (token: string): Promise<SaldoParticipante[]> => {
+    const response = await api.get(`/public/eventos/${token}/saldos`);
+    return response.data;
+  },
+  getSaldosPorGrupo: async (token: string): Promise<SaldoGrupo[]> => {
+    const response = await api.get(`/public/eventos/${token}/saldos-por-grupo`);
+    return response.data;
+  },
+  getSugestoes: async (token: string): Promise<SugestaoPagamento[]> => {
+    const response = await api.get(`/public/eventos/${token}/sugestoes`);
+    return response.data;
+  },
+  getDespesas: async (token: string): Promise<Despesa[]> => {
+    const response = await api.get(`/public/eventos/${token}/despesas`);
+    return response.data;
+  },
+  getAnexos: async (token: string, despesaId: number): Promise<DespesaAnexo[]> => {
+    const response = await api.get(`/public/eventos/${token}/despesas/${despesaId}/anexos`);
+    return response.data;
+  },
+  reivindicar: async (token: string, email: string): Promise<{ message: string; transferidos: number }> => {
+    const response = await api.post(`/public/eventos/${token}/reivindicar`, { email });
+    return response.data;
+  },
+};
+
+export interface Plan {
+  id: string;
+  name: string;
+  type: 'MONTHLY' | 'YEARLY' | 'LIFETIME';
+  price: number;
+  priceFormatted?: string;
+  features?: string[];
+}
+
+export interface Subscription {
+  id: number;
+  planType: string;
+  status: string;
+  validUntil?: string | null;
+  cancelledAt?: string | null;
+}
+
+export interface Usage {
+  eventos?: number;
+  participantes?: number;
+  anexos?: number;
+  [key: string]: number | undefined;
+}
+
+export const subscriptionApi = {
+  getPlans: async (): Promise<{ plans: Record<string, Plan> }> => {
+    const response = await api.get('/subscriptions/plans');
+    return response.data;
+  },
+  getMe: async (): Promise<{ subscription: Subscription | null; limits: Record<string, unknown>; usage: Usage }> => {
+    const response = await api.get('/subscriptions/me');
+    return response.data;
+  },
+  getUsage: async (): Promise<Usage> => {
+    const response = await api.get('/subscriptions/usage');
+    return response.data;
+  },
+  create: async (data: {
+    planType: 'MONTHLY' | 'YEARLY';
+    paymentMethod: 'PIX' | 'CREDIT_CARD';
+    userCpfCnpj?: string;
+  }): Promise<{
+    subscriptionId: number;
+    asaasSubscriptionId: string;
+    pixQrCode?: { encodedImage: string; payload: string; expirationDate: string };
+    status: string;
+  }> => {
+    const response = await api.post('/subscriptions', data);
+    return response.data;
+  },
+  activate: async (data: {
+    subscriptionId?: number;
+    payerId?: string;
+    subscription_id?: string;
+    ba_token?: string;
+    subscription_token?: string;
+  }): Promise<{ subscription: Subscription; message: string }> => {
+    const response = await api.post('/subscriptions/activate', data);
+    return response.data;
+  },
+  cancel: async (id: number, immediately?: boolean): Promise<{ subscription: Subscription; message: string }> => {
+    const response = await api.post(`/subscriptions/${id}/cancel`, { immediately });
+    return response.data;
+  },
+  resume: async (id: number): Promise<{ subscription: Subscription; message: string }> => {
+    const response = await api.post(`/subscriptions/${id}/resume`);
+    return response.data;
+  },
+  createLifetime: async (data: {
+    paymentMethod: 'PIX' | 'CREDIT_CARD';
+    userCpfCnpj?: string;
+    installmentCount?: number;
+  }): Promise<{ subscriptionId: number; pixQrCode?: { encodedImage: string; payload: string }; status: string }> => {
+    const response = await api.post('/subscriptions/lifetime', data);
+    return response.data;
+  },
+};
+
+/** Dados para gráficos (backend retorna formatos variados) */
+export interface GraficoPizzaItem {
+  label: string;
+  value: number;
+  percentage: number;
+}
+export interface GraficoBarraItem {
+  participanteId: number;
+  participanteNome: string;
+  totalPagou: number;
+  totalDeve: number;
+  saldo: number;
+}
+export interface PontoTemporal {
+  data: string;
+  valor: number;
+  quantidade: number;
+}
+export interface TopDespesaItem {
+  id: number;
+  descricao: string;
+  valor: number;
+  data: string;
+  pagadorNome: string;
+}
+export interface SaldoEvolucaoItem {
+  participanteId: number;
+  participanteNome: string;
+  pontos: Array<{ data: string; saldo: number }>;
+}
+
+export const graficosApi = {
+  getPorPagador: async (grupoId: number): Promise<GraficoPizzaItem[]> => {
+    const response = await api.get(`/grupos/${grupoId}/graficos/por-pagador`);
+    return response.data;
+  },
+  getGastosParticipantes: async (grupoId: number): Promise<GraficoBarraItem[]> => {
+    const response = await api.get(`/grupos/${grupoId}/graficos/gastos-participantes`);
+    return response.data;
+  },
+  getEvolucaoTempo: async (grupoId: number): Promise<PontoTemporal[]> => {
+    const response = await api.get(`/grupos/${grupoId}/graficos/evolucao-tempo`);
+    return response.data;
+  },
+  getTopDespesas: async (grupoId: number, limite?: number): Promise<TopDespesaItem[]> => {
+    const response = await api.get(`/grupos/${grupoId}/graficos/top-despesas`, {
+      params: limite ? { limite } : undefined,
+    });
+    return response.data;
+  },
+  getSaldosEvolucao: async (grupoId: number): Promise<SaldoEvolucaoItem[]> => {
+    const response = await api.get(`/grupos/${grupoId}/graficos/saldos-evolucao`);
     return response.data;
   },
 };

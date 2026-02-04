@@ -8,6 +8,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MainTabParamList } from '../navigation/AppNavigator';
 import { despesaApi, grupoApi, participanteApi } from '../services/api';
 import { Despesa, Grupo, Participante } from '../../shared/types';
+import { DespesaAnexo } from '../../shared/types';
+import * as ImagePicker from 'expo-image-picker';
+import { Linking } from 'react-native';
 import { menuTheme } from '../theme';
 
 const STORAGE_KEY_SELECTED_EVENT = '@rachid:selectedEventId';
@@ -41,6 +44,11 @@ const DespesasScreen: React.FC = () => {
   const [menuPagadorVisible, setMenuPagadorVisible] = useState(false);
   const [participantesSelecionados, setParticipantesSelecionados] = useState<number[]>([]);
   const [participantesExpandido, setParticipantesExpandido] = useState(false);
+  const [modalAnexosVisible, setModalAnexosVisible] = useState(false);
+  const [despesaParaAnexos, setDespesaParaAnexos] = useState<Despesa | null>(null);
+  const [anexosList, setAnexosList] = useState<DespesaAnexo[]>([]);
+  const [loadingAnexos, setLoadingAnexos] = useState(false);
+  const [uploadingAnexo, setUploadingAnexo] = useState(false);
 
   const formatCurrency = (value: number): string => {
     return new Intl.NumberFormat('pt-BR', {
@@ -309,6 +317,92 @@ const DespesasScreen: React.FC = () => {
     );
   };
 
+  const handleOpenAnexos = async (despesa: Despesa) => {
+    setDespesaParaAnexos(despesa);
+    setModalAnexosVisible(true);
+    setLoadingAnexos(true);
+    setAnexosList([]);
+    try {
+      const list = await despesaApi.listAnexos(despesa.id);
+      setAnexosList(list);
+    } catch {
+      setAnexosList([]);
+    } finally {
+      setLoadingAnexos(false);
+    }
+  };
+
+  const handleCloseAnexos = () => {
+    setModalAnexosVisible(false);
+    setDespesaParaAnexos(null);
+    setAnexosList([]);
+  };
+
+  const handleUploadAnexo = async () => {
+    if (!despesaParaAnexos) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão', 'É necessário permitir acesso às fotos para anexar.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const uri = asset.uri;
+    const name = asset.fileName || 'anexo.jpg';
+    const type = 'image/jpeg';
+    setUploadingAnexo(true);
+    try {
+      await despesaApi.uploadAnexo(despesaParaAnexos.id, { uri, name, type });
+      const list = await despesaApi.listAnexos(despesaParaAnexos.id);
+      setAnexosList(list);
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || 'Erro ao enviar anexo. Verifique se seu plano permite.';
+      Alert.alert('Erro', msg);
+    } finally {
+      setUploadingAnexo(false);
+    }
+  };
+
+  const handleViewAnexo = async (anexo: DespesaAnexo) => {
+    if (!despesaParaAnexos) return;
+    try {
+      const url = await despesaApi.getDownloadUrl(despesaParaAnexos.id, anexo.id);
+      await Linking.openURL(url);
+    } catch {
+      if (anexo.url_download) await Linking.openURL(anexo.url_download);
+      else Alert.alert('Erro', 'Não foi possível abrir o anexo.');
+    }
+  };
+
+  const handleDeleteAnexo = (anexo: DespesaAnexo) => {
+    if (!despesaParaAnexos) return;
+    Alert.alert(
+      'Excluir anexo',
+      `Excluir "${anexo.nome_original}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await despesaApi.deleteAnexo(despesaParaAnexos.id, anexo.id);
+              const list = await despesaApi.listAnexos(despesaParaAnexos.id);
+              setAnexosList(list);
+            } catch {
+              Alert.alert('Erro', 'Erro ao excluir anexo.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const calcularTotalDespesas = (): number => {
     return despesas.reduce((total, despesa) => total + Number(despesa.valorTotal), 0);
   };
@@ -339,6 +433,9 @@ const DespesasScreen: React.FC = () => {
           </Text>
         ) : null}
         <View style={styles.actions}>
+          <Button mode="outlined" onPress={() => handleOpenAnexos(item)} style={styles.editButton}>
+            Anexos
+          </Button>
           <Button mode="outlined" onPress={() => handleOpenModal(item)} style={styles.editButton}>
             Editar
           </Button>
@@ -745,6 +842,79 @@ const DespesasScreen: React.FC = () => {
                   {salvando ? 'Salvando...' : 'Salvar'}
                 </Button>
               </View>
+            </Card.Content>
+          </Card>
+        </Modal>
+
+        <Modal
+          visible={modalAnexosVisible}
+          onDismiss={handleCloseAnexos}
+          contentContainerStyle={styles.modalContent}
+          theme={{ colors: { backdrop: 'rgba(0, 0, 0, 0.7)' } }}
+        >
+          <Card style={styles.modalCard}>
+            <Card.Title
+              title={`Anexos: ${despesaParaAnexos?.descricao || ''}`}
+              right={(props) => (
+                <Button {...props} icon="close" onPress={handleCloseAnexos} mode="text" compact>
+                  {''}
+                </Button>
+              )}
+            />
+            <Card.Content>
+              {loadingAnexos ? (
+                <ActivityIndicator size="small" style={{ marginVertical: 16 }} />
+              ) : (
+                <>
+                  <Button
+                    mode="outlined"
+                    icon="upload"
+                    onPress={handleUploadAnexo}
+                    disabled={uploadingAnexo}
+                    style={{ marginBottom: 12 }}
+                  >
+                    {uploadingAnexo ? 'Enviando...' : 'Enviar foto'}
+                  </Button>
+                  {anexosList.length === 0 ? (
+                    <Text variant="bodySmall" style={styles.emptyText}>
+                      Nenhum anexo. Envie uma foto (cupom, recibo).
+                    </Text>
+                  ) : (
+                    <ScrollView style={{ maxHeight: 300 }}>
+                      {anexosList.map((anexo) => (
+                        <View
+                          key={anexo.id}
+                          style={{
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            paddingVertical: 8,
+                            borderBottomWidth: 1,
+                            borderBottomColor: '#333',
+                          }}
+                        >
+                          <Text variant="bodySmall" numberOfLines={1} style={{ flex: 1 }}>
+                            {anexo.nome_original}
+                          </Text>
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <Button mode="text" compact onPress={() => handleViewAnexo(anexo)}>
+                              Ver
+                            </Button>
+                            <Button
+                              mode="text"
+                              compact
+                              textColor="red"
+                              onPress={() => handleDeleteAnexo(anexo)}
+                            >
+                              Excluir
+                            </Button>
+                          </View>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  )}
+                </>
+              )}
             </Card.Content>
           </Card>
         </Modal>

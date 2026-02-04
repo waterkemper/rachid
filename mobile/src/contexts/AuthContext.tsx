@@ -10,6 +10,7 @@ interface AuthContextType {
   login: (usuario: Usuario, token: string) => Promise<void>;
   logout: () => Promise<void>;
   verificarAutenticacao: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -58,8 +59,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshUser = async () => {
+    try {
+      const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+      if (!token) return;
+      const usuarioAtual = await authApi.me();
+      setUsuario(usuarioAtual);
+    } catch (error) {
+      console.error('Erro ao atualizar usuário:', error);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ usuario, carregando, login, logout, verificarAutenticacao }}>
+    <AuthContext.Provider value={{ usuario, carregando, login, logout, verificarAutenticacao, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Image, Platform, Alert } from 'react-native';
 import { TextInput, Button, Text, Card } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
-import { authApi } from '../../services/api';
+import { authApi, publicEventoApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { customColors } from '../../theme';
 
@@ -27,6 +27,8 @@ try {
 type CadastroScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Cadastro'>;
 
 const CadastroScreen: React.FC = () => {
+  const route = useRoute<RouteProp<RootStackParamList, 'Cadastro'>>();
+  const tokenEvento = (route.params as { token?: string })?.token;
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [ddd, setDdd] = useState('');
@@ -137,6 +139,13 @@ const CadastroScreen: React.FC = () => {
       const { usuario, token } = await authApi.login(email.trim(), senha);
       console.log('✅ Login bem-sucedido após cadastro');
       await login(usuario, token);
+      if (tokenEvento?.trim()) {
+        try {
+          await publicEventoApi.reivindicar(tokenEvento.trim(), email.trim());
+        } catch (e) {
+          console.warn('Reivindicar participação:', e);
+        }
+      }
     } catch (error: any) {
       console.error('❌ Erro no cadastro:', error);
       console.error('Error response:', error.response);
