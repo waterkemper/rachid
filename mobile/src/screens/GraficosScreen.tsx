@@ -4,7 +4,7 @@ import { Card, Text, ActivityIndicator, Menu } from 'react-native-paper';
 import { useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { grupoApi, graficosApi, GraficoPizzaItem, GraficoBarraItem, PontoTemporal, TopDespesaItem, SaldoEvolucaoItem } from '../services/api';
-import { Grupo } from '../../shared/types';
+import { Grupo } from '../../../shared/types';
 import AppHeader from '../components/AppHeader';
 import { customColors } from '../theme';
 

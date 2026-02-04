@@ -150,6 +150,7 @@ router.get('/admin/estatisticas/eventos', rateLimit_1.readRateLimiter, auth_1.au
 router.get('/admin/estatisticas/despesas', rateLimit_1.readRateLimiter, auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminController_1.AdminController.getEstatisticasDespesas);
 router.get('/admin/estatisticas/acessos', rateLimit_1.readRateLimiter, auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminController_1.AdminController.getEstatisticasAcessos);
 router.get('/admin/usuarios', rateLimit_1.readRateLimiter, auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminController_1.AdminController.getAllUsuarios);
+router.post('/admin/impersonate/:userId', rateLimit_1.mutationRateLimiter, auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminController_1.AdminController.impersonateUser);
 router.get('/admin/eventos', rateLimit_1.readRateLimiter, auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminController_1.AdminController.getAllEventos);
 router.get('/admin/eventos/:id', rateLimit_1.readRateLimiter, auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminController_1.AdminController.getEventoDetalhes);
 router.get('/admin/eventos/:id/saldos', rateLimit_1.readRateLimiter, auth_1.authMiddleware, requireAdmin_1.requireAdmin, AdminController_1.AdminController.getEventoSaldos);

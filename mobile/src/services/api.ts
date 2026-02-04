@@ -788,4 +788,3 @@ export const graficosApi = {
     return response.data;
   },
 };
-

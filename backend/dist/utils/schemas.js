@@ -61,23 +61,27 @@ exports.updateGrupoSchema = zod_1.z.object({
     descricao: zod_1.z.string().optional(),
     data: zod_1.z.string().optional(),
 });
-// Despesa schemas
+// Despesa schemas - alinhado ao payload do frontend (grupo_id, valorTotal, participante_pagador_id, participacoes)
 exports.createDespesaSchema = zod_1.z.object({
+    grupo_id: zod_1.z.number().int().positive('grupo_id is required'),
     descricao: zod_1.z.string().min(1, 'Description is required').max(500),
-    valor: zod_1.z.number().positive('Value must be positive'),
-    pagadorId: zod_1.z.number().int().positive('Pagador ID must be a positive integer'),
-    participanteIds: zod_1.z.array(zod_1.z.number().int().positive()).min(1, 'At least one participant is required'),
+    valorTotal: zod_1.z.number().nonnegative('Value must be zero or positive'),
+    participante_pagador_id: zod_1.z.number().int().positive().optional(),
     data: zod_1.z.string().optional(),
+    participacoes: zod_1.z.array(zod_1.z.object({
+        participante_id: zod_1.z.number().int().positive(),
+        valorDevePagar: zod_1.z.number().nonnegative(),
+    })).optional(),
 });
 exports.updateDespesaSchema = zod_1.z.object({
     descricao: zod_1.z.string().min(1).max(500).optional(),
-    valorTotal: zod_1.z.number().positive().optional(), // Frontend envia valorTotal
+    valorTotal: zod_1.z.number().nonnegative().optional(), // Frontend envia valorTotal - permite zero
     participante_pagador_id: zod_1.z.number().int().positive().optional(), // Frontend envia participante_pagador_id
     participanteIds: zod_1.z.array(zod_1.z.number().int().positive()).optional(),
     data: zod_1.z.string().optional(),
     participacoes: zod_1.z.array(zod_1.z.object({
         participante_id: zod_1.z.number().int().positive(),
-        valorDevePagar: zod_1.z.number().positive(),
+        valorDevePagar: zod_1.z.number().nonnegative(), // Permite zero quando valorTotal é 0,00
     })).optional(),
 });
 // Subscription schemas

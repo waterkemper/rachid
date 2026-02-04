@@ -4,7 +4,10 @@ exports.DespesaService = void 0;
 const data_source_1 = require("../database/data-source");
 const Despesa_1 = require("../entities/Despesa");
 const ParticipacaoDespesa_1 = require("../entities/ParticipacaoDespesa");
+const DespesaAnexo_1 = require("../entities/DespesaAnexo");
+const DespesaHistorico_1 = require("../entities/DespesaHistorico");
 const ParticipacaoService_1 = require("./ParticipacaoService");
+const S3Service_1 = require("./S3Service");
 const Grupo_1 = require("../entities/Grupo");
 const ParticipanteGrupo_1 = require("../entities/ParticipanteGrupo");
 const Usuario_1 = require("../entities/Usuario");
@@ -577,6 +580,20 @@ class DespesaService {
         if (!canEdit) {
             throw new Error('Usuário não tem permissão para excluir esta despesa');
         }
+        // Excluir em cascata: anexos (S3 + DB), participações, histórico e depois a despesa
+        // (evita erro de FK quando a tabela despesa_anexos não tem ON DELETE CASCADE no banco)
+        const anexos = await this.anexoRepository.find({ where: { despesa_id: id } });
+        for (const anexo of anexos) {
+            try {
+                await S3Service_1.S3Service.deleteFile(anexo.nome_arquivo);
+            }
+            catch (err) {
+                console.error('[DespesaService.delete] Erro ao deletar anexo do S3:', err);
+            }
+            await this.anexoRepository.remove(anexo);
+        }
+        await this.participacaoRepository.delete({ despesa_id: id });
+        await this.historicoRepository.delete({ despesa_id: id });
         const result = await this.despesaRepository.delete({ id });
         return (result.affected ?? 0) > 0;
     }
@@ -638,6 +655,8 @@ class DespesaService {
 exports.DespesaService = DespesaService;
 DespesaService.despesaRepository = data_source_1.AppDataSource.getRepository(Despesa_1.Despesa);
 DespesaService.participacaoRepository = data_source_1.AppDataSource.getRepository(ParticipacaoDespesa_1.ParticipacaoDespesa);
+DespesaService.anexoRepository = data_source_1.AppDataSource.getRepository(DespesaAnexo_1.DespesaAnexo);
+DespesaService.historicoRepository = data_source_1.AppDataSource.getRepository(DespesaHistorico_1.DespesaHistorico);
 DespesaService.grupoRepository = data_source_1.AppDataSource.getRepository(Grupo_1.Grupo);
 DespesaService.participanteGrupoRepository = data_source_1.AppDataSource.getRepository(ParticipanteGrupo_1.ParticipanteGrupo);
 DespesaService.usuarioRepository = data_source_1.AppDataSource.getRepository(Usuario_1.Usuario);

@@ -5,6 +5,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.webhookRateLimiter = exports.passwordResetRateLimiter = exports.readRateLimiter = exports.mutationRateLimiter = exports.authRateLimiter = void 0;
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
+const isDevelopment = process.env.NODE_ENV === 'development';
+/** Skip rate limiting on localhost / development */
+function skipOnLocalhost(_req) {
+    if (isDevelopment)
+        return true;
+    const ip = _req.ip ?? _req.socket?.remoteAddress ?? '';
+    return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+}
 /**
  * Strict rate limiter for authentication endpoints
  * Prevents brute force attacks
@@ -15,9 +23,10 @@ exports.authRateLimiter = (0, express_rate_limit_1.default)({
     message: {
         error: 'Too many authentication attempts, please try again after 15 minutes',
     },
-    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-    skipSuccessfulRequests: false, // Count successful requests too
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: false,
+    skip: skipOnLocalhost,
 });
 /**
  * Moderate rate limiter for mutation endpoints (POST, PUT, DELETE)
@@ -31,6 +40,7 @@ exports.mutationRateLimiter = (0, express_rate_limit_1.default)({
     },
     standardHeaders: true,
     legacyHeaders: false,
+    skip: skipOnLocalhost,
 });
 /**
  * Lenient rate limiter for read endpoints (GET)
@@ -44,6 +54,7 @@ exports.readRateLimiter = (0, express_rate_limit_1.default)({
     },
     standardHeaders: true,
     legacyHeaders: false,
+    skip: skipOnLocalhost,
 });
 /**
  * Strict rate limiter for password reset endpoints
@@ -58,6 +69,7 @@ exports.passwordResetRateLimiter = (0, express_rate_limit_1.default)({
     standardHeaders: true,
     legacyHeaders: false,
     skipSuccessfulRequests: false,
+    skip: skipOnLocalhost,
 });
 /**
  * Rate limiter for webhook endpoints
@@ -71,4 +83,5 @@ exports.webhookRateLimiter = (0, express_rate_limit_1.default)({
     },
     standardHeaders: true,
     legacyHeaders: false,
+    skip: skipOnLocalhost,
 });

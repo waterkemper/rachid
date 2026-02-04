@@ -32,6 +32,12 @@ export interface DespesaAnexo {
   tipo_mime: string;
   tamanho_original: number;
   url_download?: string;
+  tamanho_otimizado?: number;
+  largura?: number;
+  altura?: number;
+  otimizado: boolean;
+  url_s3: string;
+  url_cloudfront: string;
   criado_em: string;
 }
 
@@ -152,4 +158,3 @@ export interface EventoPublico {
   data: string;
   participantes?: Participante[];
 }
-

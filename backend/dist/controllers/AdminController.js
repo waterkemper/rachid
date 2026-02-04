@@ -35,11 +35,13 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AdminController = void 0;
 const AdminService_1 = require("../services/AdminService");
+const AuthService_1 = require("../services/AuthService");
 const EmailQueueService_1 = require("../services/EmailQueueService");
 const data_source_1 = require("../database/data-source");
 const Email_1 = require("../entities/Email");
 const EmailPendente_1 = require("../entities/EmailPendente");
 const typeorm_1 = require("typeorm");
+const jwt_1 = require("../utils/jwt");
 class AdminController {
     static async getEstatisticasGerais(req, res) {
         try {
@@ -99,6 +101,38 @@ class AdminController {
         catch (error) {
             console.error('Erro ao listar usuários:', error);
             res.status(500).json({ error: 'Erro ao listar usuários' });
+        }
+    }
+    /**
+     * Permite que um admin "logue" como outro usuário (impersonation) para manutenção.
+     * POST /api/admin/impersonate/:userId
+     */
+    static async impersonateUser(req, res) {
+        try {
+            const userId = parseInt(req.params.userId, 10);
+            if (isNaN(userId)) {
+                return res.status(400).json({ error: 'ID do usuário inválido' });
+            }
+            const usuarioAlvo = await AuthService_1.AuthService.findById(userId);
+            if (!usuarioAlvo) {
+                return res.status(404).json({ error: 'Usuário não encontrado' });
+            }
+            const token = (0, jwt_1.generateToken)({
+                usuarioId: usuarioAlvo.id,
+                email: usuarioAlvo.email,
+            });
+            res.cookie('token', token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict',
+                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
+            });
+            const { senha: _, ...usuarioSemSenha } = usuarioAlvo;
+            res.json({ usuario: usuarioSemSenha, token });
+        }
+        catch (error) {
+            console.error('Erro ao fazer login como usuário:', error);
+            res.status(500).json({ error: 'Erro ao fazer login como usuário' });
         }
     }
     static async getAllEventos(req, res) {
