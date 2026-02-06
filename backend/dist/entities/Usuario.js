@@ -35,6 +35,10 @@ __decorate([
     __metadata("design:type", String)
 ], Usuario.prototype, "google_id", void 0);
 __decorate([
+    (0, typeorm_1.Column)('varchar', { nullable: true, unique: true }),
+    __metadata("design:type", String)
+], Usuario.prototype, "apple_id", void 0);
+__decorate([
     (0, typeorm_1.Column)('varchar', { default: 'local' }),
     __metadata("design:type", String)
 ], Usuario.prototype, "auth_provider", void 0);

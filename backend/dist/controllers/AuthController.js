@@ -164,6 +164,30 @@ class AuthController {
             res.status(statusCode).json({ error: errorMessage });
         }
     }
+    static async appleLogin(req, res) {
+        try {
+            const { identityToken, user, fullName, email } = req.body;
+            if (!identityToken) {
+                return res.status(400).json({ error: 'Identity Token da Apple e obrigatorio' });
+            }
+            const resultado = await AuthService_1.AuthService.loginWithApple(identityToken, user, fullName, email);
+            // Configurar cookie HTTP-only (para web)
+            res.cookie('token', resultado.token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict',
+                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
+            });
+            // Retornar token no body também (para mobile)
+            res.json({ usuario: resultado.usuario, token: resultado.token });
+        }
+        catch (error) {
+            console.error('Erro no login Apple:', error);
+            const errorMessage = error.message || 'Erro ao fazer login com Apple';
+            const statusCode = errorMessage.includes('invalido') || errorMessage.includes('expirado') ? 401 : 500;
+            res.status(statusCode).json({ error: errorMessage });
+        }
+    }
     static async updateUser(req, res) {
         try {
             const usuarioId = req.usuarioId;
@@ -254,6 +278,45 @@ class AuthController {
         catch (error) {
             console.error('Erro ao atualizar preferências de email:', error);
             res.status(500).json({ error: 'Erro ao atualizar preferências de email' });
+        }
+    }
+    /**
+     * Exclui a conta do usuario e todos os dados relacionados
+     * DELETE /api/auth/account
+     */
+    static async deleteAccount(req, res) {
+        try {
+            const usuarioId = req.usuarioId;
+            if (!usuarioId) {
+                return res.status(401).json({ error: 'Nao autenticado' });
+            }
+            // Opcional: requer confirmacao via senha para seguranca adicional
+            const { senha } = req.body;
+            if (senha) {
+                // Se senha fornecida, verificar antes de excluir
+                const usuario = await AuthService_1.AuthService.findById(usuarioId);
+                if (usuario && usuario.senha) {
+                    const bcrypt = require('bcrypt');
+                    const senhaValida = await bcrypt.compare(senha, usuario.senha);
+                    if (!senhaValida) {
+                        return res.status(401).json({ error: 'Senha incorreta' });
+                    }
+                }
+            }
+            const resultado = await AuthService_1.AuthService.deleteAccount(usuarioId);
+            // Limpar cookie de autenticacao
+            res.clearCookie('token');
+            res.json({
+                message: 'Conta excluida com sucesso. Todos os seus dados foram removidos.',
+                deletedData: resultado.deletedData,
+            });
+        }
+        catch (error) {
+            console.error('Erro ao excluir conta:', error);
+            if (error.message === 'Usuario nao encontrado') {
+                return res.status(404).json({ error: 'Usuario nao encontrado' });
+            }
+            res.status(500).json({ error: 'Erro ao excluir conta. Tente novamente mais tarde.' });
         }
     }
 }

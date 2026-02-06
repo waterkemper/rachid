@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL, STORAGE_KEYS } from '../constants/config';
+import { API_URL } from '../constants/config';
+import { saveToken, getToken, removeToken } from './secureStorage';
 import {
   Participante,
   Grupo,
@@ -31,7 +31,7 @@ if (__DEV__) {
 api.interceptors.request.use(
   async (config) => {
     try {
-      const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+      const token = await getToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -70,7 +70,7 @@ api.interceptors.response.use(
     }
     if (error.response?.status === 401) {
       // Token inválido ou expirado
-      AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+      removeToken();
     }
     return Promise.reject(error);
   }
@@ -81,7 +81,7 @@ export const authApi = {
     const response = await api.post('/auth/login', { email, senha });
     const token = response.data.token;
     if (token) {
-      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+      await saveToken(token);
     }
     return { usuario: response.data.usuario, token: token || '' };
   },
@@ -90,7 +90,29 @@ export const authApi = {
     const response = await api.post('/auth/google', { tokenId });
     const token = response.data.token;
     if (token) {
-      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+      await saveToken(token);
+    }
+    return { usuario: response.data.usuario, token: token || '' };
+  },
+
+  loginWithApple: async (
+    identityToken: string,
+    user?: string,
+    fullName?: { givenName?: string | null; familyName?: string | null } | null,
+    email?: string | null
+  ): Promise<{ usuario: Usuario; token: string }> => {
+    const response = await api.post('/auth/apple', {
+      identityToken,
+      user,
+      fullName: fullName ? {
+        givenName: fullName.givenName || undefined,
+        familyName: fullName.familyName || undefined,
+      } : undefined,
+      email: email || undefined,
+    });
+    const token = response.data.token;
+    if (token) {
+      await saveToken(token);
     }
     return { usuario: response.data.usuario, token: token || '' };
   },
@@ -99,7 +121,7 @@ export const authApi = {
     try {
       await api.post('/auth/logout');
     } finally {
-      await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+      await removeToken();
     }
   },
 
@@ -156,6 +178,13 @@ export const authApi = {
     emailOptOutReason?: string;
   }): Promise<{ message: string; receberEmails: boolean }> => {
     const response = await api.put('/auth/email-preferences', data);
+    return response.data;
+  },
+
+  deleteAccount: async (senha?: string): Promise<{ message: string; deletedData: any }> => {
+    const response = await api.delete('/auth/account', { data: { senha } });
+    // Clear token after account deletion
+    await removeToken();
     return response.data;
   },
 };
@@ -762,9 +791,7 @@ export interface SaldoEvolucaoItem {
   participanteId: number;
   participanteNome: string;
   pontos: Array<{ data: string; saldo: number }>;
-}
-
-export const graficosApi = {
+}export const graficosApi = {
   getPorPagador: async (grupoId: number): Promise<GraficoPizzaItem[]> => {
     const response = await api.get(`/grupos/${grupoId}/graficos/por-pagador`);
     return response.data;

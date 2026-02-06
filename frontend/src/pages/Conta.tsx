@@ -6,7 +6,7 @@ import { authApi, subscriptionApi } from '../services/api';
 import { Plan, Subscription } from '../types';
 
 const Conta: React.FC = () => {
-  const { usuario, login } = useAuth();
+  const { usuario, login, logout } = useAuth();
   const navigate = useNavigate();
   const usuarioPro = isPro(usuario);
 
@@ -23,6 +23,12 @@ const Conta: React.FC = () => {
   const [plans, setPlans] = useState<Record<string, Plan>>({});
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loadingPlans, setLoadingPlans] = useState(false);
+  
+  // Delete account state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // Função para determinar o tipo de PIX
   const determinarTipoPix = (chavePix: string, email: string) => {
@@ -209,6 +215,27 @@ const Conta: React.FC = () => {
   // Função para verificar se um plano é o atual
   const isCurrentPlan = (planType: string): boolean => {
     return currentPlanType === planType;
+  };
+
+  // Handler para excluir conta
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'EXCLUIR') {
+      setDeleteError('Digite EXCLUIR para confirmar');
+      return;
+    }
+
+    setDeletingAccount(true);
+    setDeleteError('');
+
+    try {
+      await authApi.deleteAccount();
+      await logout();
+      navigate('/');
+    } catch (error: any) {
+      setDeleteError(error.response?.data?.error || 'Erro ao excluir conta. Tente novamente.');
+    } finally {
+      setDeletingAccount(false);
+    }
   };
 
   return (
@@ -577,6 +604,84 @@ const Conta: React.FC = () => {
             Ver Todos os Planos e Assinar
           </button>
         </div>
+      </div>
+
+      {/* Zona de Perigo - Excluir Conta */}
+      <div className="card" style={{ marginBottom: '20px', borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+        <h3 style={{ marginBottom: '10px', color: 'rgba(239, 68, 68, 0.9)' }}>Zona de Perigo</h3>
+        
+        {!showDeleteConfirm ? (
+          <>
+            <p style={{ color: 'rgba(226, 232, 240, 0.85)', marginBottom: '15px' }}>
+              Excluir sua conta removera permanentemente todos os seus dados, incluindo eventos, despesas e participantes. Esta acao nao pode ser desfeita.
+            </p>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="btn"
+              style={{ 
+                backgroundColor: 'transparent', 
+                border: '1px solid rgba(239, 68, 68, 0.5)',
+                color: 'rgba(239, 68, 68, 0.9)'
+              }}
+            >
+              Excluir minha conta
+            </button>
+          </>
+        ) : (
+          <>
+            <p style={{ color: 'rgba(254, 226, 226, 0.98)', marginBottom: '15px', fontWeight: 'bold' }}>
+              Tem certeza? Esta acao e irreversivel!
+            </p>
+            <p style={{ color: 'rgba(226, 232, 240, 0.85)', marginBottom: '15px' }}>
+              Digite <strong>EXCLUIR</strong> para confirmar:
+            </p>
+            {deleteError && (
+              <div style={{ 
+                backgroundColor: 'rgba(239, 68, 68, 0.14)', 
+                border: '1px solid rgba(239, 68, 68, 0.28)',
+                color: 'rgba(254, 226, 226, 0.98)',
+                padding: '12px',
+                borderRadius: '8px',
+                marginBottom: '15px'
+              }}>
+                {deleteError}
+              </div>
+            )}
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value.toUpperCase())}
+              placeholder="Digite EXCLUIR"
+              style={{ marginBottom: '15px', width: '100%' }}
+              disabled={deletingAccount}
+            />
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={handleDeleteAccount}
+                className="btn"
+                disabled={deletingAccount || deleteConfirmText !== 'EXCLUIR'}
+                style={{ 
+                  backgroundColor: 'rgba(239, 68, 68, 0.9)', 
+                  color: 'white',
+                  opacity: deletingAccount || deleteConfirmText !== 'EXCLUIR' ? 0.5 : 1
+                }}
+              >
+                {deletingAccount ? 'Excluindo...' : 'Confirmar exclusao'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteConfirmText('');
+                  setDeleteError('');
+                }}
+                className="btn btn-secondary"
+                disabled={deletingAccount}
+              >
+                Cancelar
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -163,6 +163,26 @@ function Login() {
               Esqueci minha senha
             </button>
           </div>
+          <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '12px', color: 'rgba(226, 232, 240, 0.6)' }}>
+            Ao entrar, voce concorda com nossos{' '}
+            <button
+              type="button"
+              className="btn btn-link"
+              onClick={() => navigate('/termos')}
+              style={{ padding: 0, textDecoration: 'underline', color: 'rgba(99, 102, 241, 0.8)', fontSize: '12px' }}
+            >
+              Termos de Uso
+            </button>
+            {' '}e{' '}
+            <button
+              type="button"
+              className="btn btn-link"
+              onClick={() => navigate('/privacidade')}
+              style={{ padding: 0, textDecoration: 'underline', color: 'rgba(99, 102, 241, 0.8)', fontSize: '12px' }}
+            >
+              Politica de Privacidade
+            </button>
+          </div>
         </div>
       </div>
     </div>

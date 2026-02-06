@@ -1,0 +1,36 @@
+<VirtualHost *:443>
+  ServerName api.orachid.com.br
+
+  SSLUseStapling off
+  SSLEngine on
+  SSLCertificateFile /etc/ssl/acme/orachid.com.br/fullchain.pem
+  SSLCertificateKeyFile /etc/ssl/acme/orachid.com.br/privkey.pem
+
+  ProxyPreserveHost On
+  RequestHeader set X-Forwarded-Proto "https"
+  RequestHeader set X-Forwarded-Port "443"
+
+  ProxyPass /.well-known/acme-challenge/ !
+
+  ProxyPass / http://127.0.0.1:3001/
+  ProxyPassReverse / http://127.0.0.1:3001/
+
+  # CORS: Allow requests from frontend domains (fixes "No Access-Control-Allow-Origin" errors)
+  SetEnvIf Origin "^https://(www\.)?orachid\.com\.br$" CORS_ALLOW_ORIGIN=$0
+  Header always set Access-Control-Allow-Origin %{CORS_ALLOW_ORIGIN}e env=CORS_ALLOW_ORIGIN
+  Header always set Access-Control-Allow-Credentials "true" env=CORS_ALLOW_ORIGIN
+  Header always set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS" env=CORS_ALLOW_ORIGIN
+  Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, Origin" env=CORS_ALLOW_ORIGIN
+  Header always set Access-Control-Max-Age "86400" env=CORS_ALLOW_ORIGIN
+
+  # Security headers
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set X-XSS-Protection "1; mode=block"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  # HSTS - only on HTTPS
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+  ErrorLog  logs/orachid-api-ssl-error.log
+  CustomLog logs/orachid-api-ssl-access.log combined
+</VirtualHost>

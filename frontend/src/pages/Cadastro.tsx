@@ -270,7 +270,24 @@ const Cadastro: React.FC = () => {
             </div>
 
             <div className="cadastro-footer">
-              <span>Ao continuar, você será levado para criar seu primeiro evento.</span>
+              <span>
+                Ao criar sua conta, voce concorda com nossos{' '}
+                <button
+                  type="button"
+                  className="cadastro-link"
+                  onClick={() => navigate('/termos')}
+                >
+                  Termos de Uso
+                </button>
+                {' '}e{' '}
+                <button
+                  type="button"
+                  className="cadastro-link"
+                  onClick={() => navigate('/privacidade')}
+                >
+                  Politica de Privacidade
+                </button>
+              </span>
             </div>
           </form>
         </div>

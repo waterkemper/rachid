@@ -1,11 +1,17 @@
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
+import jwt from 'jsonwebtoken';
+import jwksClient from 'jwks-rsa';
 import { AppDataSource } from '../database/data-source';
 import { Usuario } from '../entities/Usuario';
 import { PasswordResetToken } from '../entities/PasswordResetToken';
 import { generateToken } from '../utils/jwt';
 import { EmailService } from './EmailService';
+import { Grupo } from '../entities/Grupo';
+import { Participante } from '../entities/Participante';
+import { Despesa } from '../entities/Despesa';
+import { Subscription } from '../entities/Subscription';
 
 export class AuthService {
   private static repository = AppDataSource.getRepository(Usuario);
@@ -169,6 +175,116 @@ export class AuthService {
     if (isNewUser) {
       EmailService.enviarEmailBoasVindasGoogle(usuario.email, usuario.nome).catch((error) => {
         console.error('Erro ao enviar email de boas-vindas Google:', error);
+      });
+    }
+
+    // Gerar token JWT
+    const token = generateToken({
+      usuarioId: usuario.id,
+      email: usuario.email,
+    });
+
+    const { senha: _, ...usuarioSemSenha } = usuario;
+    
+    return { token, usuario: usuarioSemSenha };
+  }
+
+  /**
+   * Login via Apple Sign In
+   * Valida o identity token da Apple e cria/busca usuário
+   */
+  static async loginWithApple(
+    identityToken: string,
+    user?: string,
+    fullName?: { givenName?: string; familyName?: string },
+    email?: string
+  ): Promise<{ token: string; usuario: Omit<Usuario, 'senha'> }> {
+    // Get Apple's public keys
+    const client = jwksClient({
+      jwksUri: 'https://appleid.apple.com/auth/keys',
+      cache: true,
+      cacheMaxEntries: 5,
+      cacheMaxAge: 600000, // 10 minutes
+    });
+
+    // Decode and verify the token
+    const getKey = (header: jwt.JwtHeader, callback: jwt.SigningKeyCallback) => {
+      client.getSigningKey(header.kid as string, (err: Error | null, key: jwksClient.SigningKey | undefined) => {
+        if (err) {
+          callback(err);
+          return;
+        }
+        const signingKey = key?.getPublicKey();
+        callback(null, signingKey);
+      });
+    };
+
+    let decoded: any;
+    try {
+      decoded = await new Promise((resolve, reject) => {
+        jwt.verify(identityToken, getKey, {
+          algorithms: ['RS256'],
+          audience: process.env.APPLE_CLIENT_ID || 'com.rachacontas.app',
+          issuer: 'https://appleid.apple.com',
+        }, (err, decoded) => {
+          if (err) reject(err);
+          else resolve(decoded);
+        });
+      });
+    } catch (error: any) {
+      console.error('Apple token verification failed:', error.message);
+      throw new Error('Token da Apple invalido ou expirado');
+    }
+
+    const appleId = decoded.sub;
+    const appleEmail = email || decoded.email;
+
+    if (!appleId) {
+      throw new Error('Apple ID nao disponivel no token');
+    }
+
+    // Buscar usuário por apple_id
+    let usuario = await this.repository.findOne({ where: { apple_id: appleId } });
+
+    // Se não encontrou por apple_id, buscar por email (se disponível)
+    if (!usuario && appleEmail) {
+      usuario = await this.findByEmail(appleEmail);
+      
+      // Se encontrou por email mas não tem apple_id, vincular
+      if (usuario && !usuario.apple_id) {
+        usuario.apple_id = appleId;
+        if (!usuario.auth_provider) {
+          usuario.auth_provider = 'apple';
+        }
+        usuario = await this.repository.save(usuario);
+      }
+    }
+
+    // Se ainda não encontrou, criar novo usuário
+    const isNewUser = !usuario;
+    if (!usuario) {
+      // Construct name from fullName if available
+      let nome = 'Usuario Apple';
+      if (fullName?.givenName || fullName?.familyName) {
+        nome = [fullName.givenName, fullName.familyName].filter(Boolean).join(' ');
+      } else if (appleEmail) {
+        nome = appleEmail.split('@')[0];
+      }
+
+      usuario = this.repository.create({
+        email: appleEmail || `apple_${appleId}@private.appleid.com`,
+        nome,
+        apple_id: appleId,
+        auth_provider: 'apple',
+        senha: undefined, // Usuários OAuth não têm senha
+      });
+      usuario = await this.repository.save(usuario);
+    }
+
+    // Enviar email de boas-vindas para novos usuários Apple (não bloquear se falhar)
+    if (isNewUser && appleEmail && !appleEmail.includes('@private.appleid.com')) {
+      EmailService.enviarEmailBoasVindasGoogle(usuario.email, usuario.nome).catch((error) => {
+        console.error('Erro ao enviar email de boas-vindas Apple:', error);
       });
     }
 
@@ -401,6 +517,81 @@ export class AuthService {
     }
     
     return null;
+  }
+
+  /**
+   * Deleta a conta do usuario e todos os dados relacionados
+   * Esta operacao e irreversivel
+   */
+  static async deleteAccount(userId: number): Promise<{ success: boolean; deletedData: any }> {
+    const usuario = await this.findById(userId);
+    
+    if (!usuario) {
+      throw new Error('Usuario nao encontrado');
+    }
+
+    const deletedData: any = {
+      eventos: 0,
+      participantes: 0,
+      despesas: 0,
+      subscriptions: 0,
+      passwordResetTokens: 0,
+    };
+
+    // Use transaction to ensure all or nothing deletion
+    const queryRunner = AppDataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Delete password reset tokens
+      const tokenResult = await queryRunner.manager.delete(PasswordResetToken, { usuario_id: userId });
+      deletedData.passwordResetTokens = tokenResult.affected || 0;
+
+      // 2. Cancel and delete subscriptions
+      const subscriptionRepo = queryRunner.manager.getRepository(Subscription);
+      const subscriptions = await subscriptionRepo.find({ where: { usuarioId: userId } });
+      deletedData.subscriptions = subscriptions.length;
+      
+      for (const sub of subscriptions) {
+        await queryRunner.manager.remove(sub);
+      }
+
+      // 3. Delete eventos (grupos) owned by user - this cascades to despesas, participacoes, etc.
+      const grupoRepo = queryRunner.manager.getRepository(Grupo);
+      const grupos = await grupoRepo.find({ where: { usuario_id: userId } });
+      deletedData.eventos = grupos.length;
+      
+      for (const grupo of grupos) {
+        await queryRunner.manager.remove(grupo);
+      }
+
+      // 4. Delete participantes created by user
+      const participanteRepo = queryRunner.manager.getRepository(Participante);
+      const participantes = await participanteRepo.find({ where: { usuario_id: userId } });
+      deletedData.participantes = participantes.length;
+      
+      for (const participante of participantes) {
+        await queryRunner.manager.remove(participante);
+      }
+
+      // 5. Finally, delete the user
+      await queryRunner.manager.remove(usuario);
+
+      await queryRunner.commitTransaction();
+
+      // Send account deletion confirmation email (don't block)
+      EmailService.enviarEmailContaExcluida(usuario.email, usuario.nome).catch((error) => {
+        console.error('Erro ao enviar email de confirmacao de exclusao:', error);
+      });
+
+      return { success: true, deletedData };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }
 

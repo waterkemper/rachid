@@ -26,6 +26,22 @@ try {
   isGoogleSignInAvailable = false;
 }
 
+// Importação condicional do Apple Sign-In (só funciona em iOS em development builds ou produção)
+let AppleAuthentication: any = null;
+let isAppleSignInAvailable = false;
+
+if (Platform.OS === 'ios') {
+  try {
+    const appleAuthModule = require('expo-apple-authentication');
+    AppleAuthentication = appleAuthModule;
+    isAppleSignInAvailable = true;
+  } catch (error) {
+    // Módulo não disponível (Expo Go) - Apple Sign-In desabilitado
+    console.log('⚠️ Apple Sign-In não disponível (Expo Go). Funciona apenas em development builds ou produção.');
+    isAppleSignInAvailable = false;
+  }
+}
+
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -88,6 +104,58 @@ const LoginScreen: React.FC = () => {
         }
       } else {
         setErro(error.response?.data?.error || error.message || 'Erro ao fazer login com Google');
+      }
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    if (!isAppleSignInAvailable || !AppleAuthentication) {
+      setErro('Login com Apple não disponível no Expo Go. Use um development build ou produção.');
+      return;
+    }
+
+    setErro('');
+    setCarregando(true);
+
+    try {
+      // Check if Apple Sign In is available on this device
+      const isAvailable = await AppleAuthentication.isAvailableAsync();
+      if (!isAvailable) {
+        setErro('Login com Apple não disponível neste dispositivo');
+        return;
+      }
+
+      // Request Apple Sign In
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (credential.identityToken) {
+        const { usuario, token } = await authApi.loginWithApple(
+          credential.identityToken,
+          credential.user,
+          credential.fullName,
+          credential.email
+        );
+        await login(usuario, token);
+      } else {
+        throw new Error('Token de identidade da Apple não disponível');
+      }
+    } catch (error: any) {
+      console.error('❌ Erro no login Apple:', error);
+      
+      // Handle specific Apple Sign In errors
+      if (error.code === 'ERR_REQUEST_CANCELED') {
+        setErro('Login cancelado');
+      } else if (error.code === 'ERR_INVALID_OPERATION') {
+        setErro('Operação inválida. Tente novamente.');
+      } else {
+        setErro(error.response?.data?.error || error.message || 'Erro ao fazer login com Apple');
       }
     } finally {
       setCarregando(false);
@@ -181,7 +249,7 @@ const LoginScreen: React.FC = () => {
               {carregando ? 'Entrando...' : 'Entrar'}
             </Button>
 
-            {isGoogleSignInAvailable && (
+            {(isGoogleSignInAvailable || isAppleSignInAvailable) && (
               <>
                 <View style={styles.dividerContainer}>
                   <View style={styles.divider} />
@@ -189,17 +257,33 @@ const LoginScreen: React.FC = () => {
                   <View style={styles.divider} />
                 </View>
 
-                <Button
-                  mode="outlined"
-                  onPress={handleGoogleSignIn}
-                  disabled={carregando}
-                  style={styles.googleButton}
-                  contentStyle={styles.buttonContent}
-                  icon="google"
-                  textColor={customColors.text}
-                >
-                  Entrar com Google
-                </Button>
+                {isGoogleSignInAvailable && (
+                  <Button
+                    mode="outlined"
+                    onPress={handleGoogleSignIn}
+                    disabled={carregando}
+                    style={styles.googleButton}
+                    contentStyle={styles.buttonContent}
+                    icon="google"
+                    textColor={customColors.text}
+                  >
+                    Entrar com Google
+                  </Button>
+                )}
+
+                {isAppleSignInAvailable && Platform.OS === 'ios' && (
+                  <Button
+                    mode="outlined"
+                    onPress={handleAppleSignIn}
+                    disabled={carregando}
+                    style={styles.appleButton}
+                    contentStyle={styles.buttonContent}
+                    icon="apple"
+                    textColor={customColors.text}
+                  >
+                    Entrar com Apple
+                  </Button>
+                )}
               </>
             )}
 
@@ -235,6 +319,29 @@ const LoginScreen: React.FC = () => {
               >
                 Não tem conta? Cadastre-se
               </Button>
+
+              <View style={styles.legalContainer}>
+                <Text style={styles.legalText}>
+                  Ao entrar, voce concorda com nossos{' '}
+                </Text>
+                <Button
+                  mode="text"
+                  onPress={() => navigation.navigate('TermsOfService' as any)}
+                  compact
+                  labelStyle={styles.legalLink}
+                >
+                  Termos de Uso
+                </Button>
+                <Text style={styles.legalText}> e </Text>
+                <Button
+                  mode="text"
+                  onPress={() => navigation.navigate('PrivacyPolicy' as any)}
+                  compact
+                  labelStyle={styles.legalLink}
+                >
+                  Politica de Privacidade
+                </Button>
+              </View>
             </View>
           </Card.Content>
         </Card>
@@ -337,9 +444,32 @@ const styles = StyleSheet.create({
   },
   googleButton: {
     marginTop: 10,
+    marginBottom: 8,
+    borderRadius: 999,
+    borderColor: 'rgba(148, 163, 184, 0.32)',
+  },
+  appleButton: {
+    marginTop: 8,
     marginBottom: 16,
     borderRadius: 999,
     borderColor: 'rgba(148, 163, 184, 0.32)',
+  },
+  legalContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingHorizontal: 8,
+  },
+  legalText: {
+    color: 'rgba(226, 232, 240, 0.6)',
+    fontSize: 11,
+  },
+  legalLink: {
+    color: 'rgba(99, 102, 241, 0.8)',
+    fontSize: 11,
+    marginHorizontal: -8,
   },
 });
 

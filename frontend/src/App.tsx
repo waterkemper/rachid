@@ -30,6 +30,9 @@ import AdminPlans from './pages/AdminPlans';
 import AdminSubscriptions from './pages/AdminSubscriptions';
 import AdminEmailQueue from './pages/AdminEmailQueue';
 import AdminEmails from './pages/AdminEmails';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
+import CookieConsent from './components/CookieConsent';
 
 function Navbar() {
   const location = useLocation();
@@ -182,6 +185,8 @@ function AppContent() {
       location.pathname === '/recuperar-senha' ||
       location.pathname === '/resetar-senha' ||
       location.pathname === '/precos' ||
+      location.pathname === '/privacidade' ||
+      location.pathname === '/termos' ||
       location.pathname.startsWith('/evento/');
 
     // Páginas com layout "full bleed" (fundo e card centralizado sem container)
@@ -346,6 +351,8 @@ function AppContent() {
           }
         />
         <Route path="/precos" element={<Precos />} />
+        <Route path="/privacidade" element={<PrivacyPolicy />} />
+        <Route path="/termos" element={<TermsOfService />} />
         <Route
           path="/assinatura"
           element={
@@ -365,6 +372,7 @@ function AppContent() {
     <Router>
       <Navbar />
       <AppLayout />
+      <CookieConsent />
     </Router>
   );
 }

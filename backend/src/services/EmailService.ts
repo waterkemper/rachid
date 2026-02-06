@@ -1074,4 +1074,53 @@ export class EmailService {
       usuarioId
     );
   }
+
+  /**
+   * Envia email de confirmacao de exclusao de conta
+   */
+  static async enviarEmailContaExcluida(
+    email: string,
+    nome: string
+  ): Promise<void> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0b1220; margin: 0; padding: 20px;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #111b33; border-radius: 16px; padding: 32px; border: 1px solid rgba(148, 163, 184, 0.16);">
+          <h1 style="color: #ffffff; margin: 0 0 24px 0; font-size: 24px;">Conta Excluida</h1>
+          <p style="color: rgba(226, 232, 240, 0.92); line-height: 1.6; margin: 0 0 16px 0;">
+            Ola ${nome},
+          </p>
+          <p style="color: rgba(226, 232, 240, 0.92); line-height: 1.6; margin: 0 0 16px 0;">
+            Sua conta no Rachid foi excluida com sucesso, conforme sua solicitacao.
+          </p>
+          <p style="color: rgba(226, 232, 240, 0.92); line-height: 1.6; margin: 0 0 16px 0;">
+            Todos os seus dados pessoais, eventos, despesas e participantes foram permanentemente removidos de nossos sistemas.
+          </p>
+          <p style="color: rgba(226, 232, 240, 0.92); line-height: 1.6; margin: 0 0 16px 0;">
+            Se voce nao solicitou esta exclusao, entre em contato imediatamente com nosso suporte.
+          </p>
+          <p style="color: rgba(226, 232, 240, 0.75); line-height: 1.6; margin: 24px 0 0 0; font-size: 14px;">
+            Obrigado por ter usado o Rachid. Esperamos ve-lo novamente no futuro!
+          </p>
+          <hr style="border: none; border-top: 1px solid rgba(148, 163, 184, 0.16); margin: 24px 0;">
+          <p style="color: rgba(148, 163, 184, 0.7); font-size: 12px; margin: 0;">
+            Rachid - Divisao de despesas simplificada
+          </p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await this.sendEmail(
+      email,
+      'Conta Excluida - Rachid',
+      html,
+      'conta-excluida'
+    );
+  }
 }

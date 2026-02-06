@@ -108,6 +108,11 @@ export const authApi = {
     const response = await api.put('/auth/me', data);
     return response.data.usuario;
   },
+
+  deleteAccount: async (senha?: string): Promise<{ message: string; deletedData: any }> => {
+    const response = await api.delete('/auth/account', { data: { senha } });
+    return response.data;
+  },
 };
 
 export const participanteApi = {

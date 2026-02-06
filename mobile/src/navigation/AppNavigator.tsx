@@ -1,12 +1,13 @@
 import React from 'react';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, LinkingOptions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../contexts/AuthContext';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Linking } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
 import { customColors } from '../theme';
+import * as ExpoLinking from 'expo-linking';
 
 // Auth Screens
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -27,6 +28,8 @@ import AjudaScreen from '../screens/AjudaScreen';
 import EventoPublicoScreen from '../screens/EventoPublicoScreen';
 import PlanosScreen from '../screens/PlanosScreen';
 import GraficosScreen from '../screens/GraficosScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import TermsOfServiceScreen from '../screens/TermsOfServiceScreen';
 
 export type RootStackParamList = {
   Auth: undefined;
@@ -42,6 +45,8 @@ export type RootStackParamList = {
   Ajuda: undefined;
   Planos: undefined;
   Graficos: { eventoId?: number } | undefined;
+  PrivacyPolicy: undefined;
+  TermsOfService: undefined;
 };
 
 export type MainTabParamList = {
@@ -54,6 +59,94 @@ export type MainTabParamList = {
 
 const Stack = createStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
+
+// Deep linking configuration
+const prefix = ExpoLinking.createURL('/');
+
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: [
+    prefix,
+    'rachid://',
+    'https://rachacontas.com',
+    'https://www.rachacontas.com',
+  ],
+  config: {
+    screens: {
+      Auth: {
+        screens: {
+          Login: 'login',
+          Cadastro: {
+            path: 'cadastro/:token?',
+            parse: {
+              token: (token: string) => token,
+            },
+          },
+          RecuperarSenha: 'recuperar-senha',
+          ResetarSenha: {
+            path: 'resetar-senha/:token',
+            parse: {
+              token: (token: string) => token,
+            },
+          },
+          EventoPublico: {
+            path: 'evento/:token',
+            parse: {
+              token: (token: string) => token,
+            },
+          },
+          PrivacyPolicy: 'privacidade',
+          TermsOfService: 'termos',
+        },
+      },
+      Main: {
+        screens: {
+          Eventos: 'eventos',
+          Participantes: 'participantes',
+          Despesas: 'despesas',
+          Relatorios: 'relatorios',
+          Conta: 'conta',
+        },
+      },
+      NovoEvento: 'novo-evento',
+      AdicionarParticipantesEvento: {
+        path: 'adicionar-participantes/:eventoId',
+        parse: {
+          eventoId: (eventoId: string) => parseInt(eventoId, 10),
+        },
+      },
+      GruposMaiores: 'grupos-maiores',
+      Ajuda: 'ajuda',
+      Planos: 'planos',
+      Graficos: {
+        path: 'graficos/:eventoId?',
+        parse: {
+          eventoId: (eventoId: string) => (eventoId ? parseInt(eventoId, 10) : undefined),
+        },
+      },
+      PrivacyPolicy: 'privacidade',
+      TermsOfService: 'termos',
+    },
+  },
+  // Handle the case when the app is opened from a deep link
+  async getInitialURL() {
+    // Check if the app was opened from a deep link
+    const url = await Linking.getInitialURL();
+    if (url != null) {
+      return url;
+    }
+    // Return null if no deep link was used to open the app
+    return null;
+  },
+  // Subscribe to incoming deep links while the app is running
+  subscribe(listener) {
+    // Listen to incoming deep links
+    const onReceiveURL = ({ url }: { url: string }) => listener(url);
+    const subscription = Linking.addEventListener('url', onReceiveURL);
+    return () => {
+      subscription.remove();
+    };
+  },
+};
 
 function MainTabs() {
   return (
@@ -139,6 +232,8 @@ function AuthStack() {
         component={EventoPublicoScreen}
         initialParams={{ token: undefined }}
       />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+      <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
     </Stack.Navigator>
   );
 }
@@ -155,7 +250,7 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <Stack.Navigator 
         screenOptions={{ 
           headerShown: false,
@@ -211,6 +306,22 @@ export default function AppNavigator() {
               options={{ 
                 headerShown: true,
                 header: () => <AppHeader title="Gráficos" showBack />,
+              }}
+            />
+            <Stack.Screen 
+              name="PrivacyPolicy" 
+              component={PrivacyPolicyScreen}
+              options={{ 
+                headerShown: true,
+                header: () => <AppHeader title="Privacidade" showBack />,
+              }}
+            />
+            <Stack.Screen 
+              name="TermsOfService" 
+              component={TermsOfServiceScreen}
+              options={{ 
+                headerShown: true,
+                header: () => <AppHeader title="Termos de Uso" showBack />,
               }}
             />
           </>

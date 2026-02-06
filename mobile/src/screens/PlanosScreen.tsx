@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert, Image, Linking } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, Image, Linking, Platform } from 'react-native';
 import { Card, Text, Button, ActivityIndicator, Divider } from 'react-native-paper';
 import * as Clipboard from 'expo-clipboard';
 import { useNavigation } from '@react-navigation/native';
 import { subscriptionApi, Plan, Subscription, Usage } from '../services/api';
 import AppHeader from '../components/AppHeader';
 import { customColors } from '../theme';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const PlanosScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -138,6 +139,45 @@ const PlanosScreen: React.FC = () => {
     }
   };
 
+  const handleRestorePurchase = async () => {
+    setAcao('Restaurando...');
+    setErro('');
+    try {
+      // Sync subscription status with backend
+      const meRes = await subscriptionApi.getMe();
+      setSubscription(meRes.subscription || null);
+      setUsage(meRes.usage || null);
+      
+      const hasActiveSubscription = 
+        meRes.subscription?.status === 'ACTIVE' || 
+        meRes.subscription?.status === 'CONFIRMED';
+      
+      if (hasActiveSubscription) {
+        Alert.alert(
+          'Sucesso',
+          'Sua assinatura foi restaurada com sucesso! Você tem acesso ao plano PRO.',
+          [{ text: 'OK' }]
+        );
+      } else if (meRes.subscription) {
+        Alert.alert(
+          'Informacao',
+          `Encontramos sua assinatura, mas ela esta com status "${meRes.subscription.status}". Entre em contato com o suporte se precisar de ajuda.`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Nenhuma compra encontrada',
+          'Nao encontramos nenhuma assinatura ativa associada a sua conta. Se voce fez uma compra recentemente, aguarde alguns minutos e tente novamente.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (err: any) {
+      Alert.alert('Erro', err?.response?.data?.error || 'Erro ao restaurar compra. Tente novamente.');
+    } finally {
+      setAcao('');
+    }
+  };
+
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
@@ -235,6 +275,37 @@ const PlanosScreen: React.FC = () => {
           </Card>
         ) : null}
 
+        {/* Restore Purchase Section */}
+        <Card style={styles.card}>
+          <Card.Content>
+            <View style={styles.restoreSection}>
+              <MaterialCommunityIcons 
+                name="refresh" 
+                size={24} 
+                color={customColors.textSecondary} 
+                style={styles.restoreIcon}
+              />
+              <View style={styles.restoreTextContainer}>
+                <Text variant="bodyMedium" style={styles.restoreTitle}>
+                  Ja fez uma compra?
+                </Text>
+                <Text variant="bodySmall" style={styles.restoreDescription}>
+                  Se voce ja possui uma assinatura ativa em outra conta ou dispositivo, restaure sua compra aqui.
+                </Text>
+              </View>
+            </View>
+            <Button
+              mode="outlined"
+              onPress={handleRestorePurchase}
+              disabled={!!acao}
+              style={styles.restoreButton}
+              icon="restore"
+            >
+              Restaurar Compra
+            </Button>
+          </Card.Content>
+        </Card>
+
         <Card style={styles.card}>
           <Card.Title title="Planos disponíveis" />
           <Card.Content>
@@ -296,6 +367,30 @@ const styles = StyleSheet.create({
   pixHint: { marginTop: 8, marginBottom: 8 },
   qrImage: { width: 200, height: 200, alignSelf: 'center' },
   loader: { marginTop: 8 },
+  restoreSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  restoreIcon: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  restoreTextContainer: {
+    flex: 1,
+  },
+  restoreTitle: {
+    fontWeight: '600',
+    color: customColors.text,
+    marginBottom: 4,
+  },
+  restoreDescription: {
+    color: customColors.textSecondary,
+    lineHeight: 18,
+  },
+  restoreButton: {
+    borderColor: customColors.border,
+  },
 });
 
 export default PlanosScreen;

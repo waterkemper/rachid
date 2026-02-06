@@ -3,13 +3,14 @@
     "name": "Rachid",
     "slug": "racha-contas-mobile",
     "version": "1.0.0",
+    "scheme": "rachid",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0b1220"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -17,26 +18,61 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.rachacontas.app",
+      "buildNumber": "1",
+      "usesAppleSignIn": true,
+      "associatedDomains": [
+        "applinks:rachacontas.com",
+        "applinks:www.rachacontas.com"
+      ],
       "infoPlist": {
-        "NSContactsUsageDescription": "Este app precisa acessar seus contatos para adicionar participantes aos eventos."
+        "NSContactsUsageDescription": "Este app precisa acessar seus contatos para adicionar participantes aos eventos.",
+        "NSCameraUsageDescription": "Este app precisa acessar sua camera para anexar fotos de comprovantes.",
+        "NSPhotoLibraryUsageDescription": "Este app precisa acessar suas fotos para anexar comprovantes de despesas."
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#4F46E5"
       },
       "package": "com.rachacontas.app",
+      "versionCode": 1,
       "permissions": [
-        "READ_CONTACTS"
+        "READ_CONTACTS",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "rachacontas.com",
+              "pathPrefix": "/evento"
+            },
+            {
+              "scheme": "https",
+              "host": "www.rachacontas.com",
+              "pathPrefix": "/evento"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiUrl": "http://localhost:3001/api"
-    }
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    },
+    "plugins": [
+      "expo-web-browser"
+    ]
   }
 }
-

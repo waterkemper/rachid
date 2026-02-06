@@ -10,6 +10,11 @@ function skipOnLocalhost(_req: Request): boolean {
   return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
 }
 
+/** Skip rate limiting for OPTIONS preflight – CORS handles these before routes, but belt-and-suspenders */
+function skipOptions(_req: Request): boolean {
+  return _req.method === 'OPTIONS';
+}
+
 /**
  * Strict rate limiter for authentication endpoints
  * Prevents brute force attacks
@@ -23,7 +28,7 @@ export const authRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false,
-  skip: skipOnLocalhost,
+  skip: (req) => skipOnLocalhost(req) || skipOptions(req),
 });
 
 /**
@@ -38,7 +43,7 @@ export const mutationRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: skipOnLocalhost,
+  skip: (req) => skipOnLocalhost(req) || skipOptions(req),
 });
 
 /**
@@ -53,7 +58,7 @@ export const readRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: skipOnLocalhost,
+  skip: (req) => skipOnLocalhost(req) || skipOptions(req),
 });
 
 /**
@@ -69,7 +74,7 @@ export const passwordResetRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false,
-  skip: skipOnLocalhost,
+  skip: (req) => skipOnLocalhost(req) || skipOptions(req),
 });
 
 /**
@@ -84,5 +89,5 @@ export const webhookRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: skipOnLocalhost,
+  skip: (req) => skipOnLocalhost(req) || skipOptions(req),
 });

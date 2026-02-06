@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, Modal, TouchableOpacity } from 'react-native';
 import { Card, Text, Button, Divider, TextInput, Switch, ActivityIndicator } from 'react-native-paper';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
@@ -7,6 +7,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { authApi } from '../services/api';
 import { customColors } from '../theme';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 type ContaScreenNavigationProp = StackNavigationProp<RootStackParamList>;
 
@@ -26,6 +27,11 @@ const ContaScreen: React.FC = () => {
   const [receberEmails, setReceberEmails] = useState(true);
   const [carregandoPrefs, setCarregandoPrefs] = useState(true);
   const [salvandoPrefs, setSalvandoPrefs] = useState(false);
+
+  // Delete account state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     if (usuario) {
@@ -94,6 +100,24 @@ const ContaScreen: React.FC = () => {
         { text: 'Sair', style: 'destructive', onPress: async () => await logout() },
       ]
     );
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'EXCLUIR') {
+      Alert.alert('Erro', 'Digite EXCLUIR para confirmar');
+      return;
+    }
+
+    setDeletingAccount(true);
+    try {
+      await authApi.deleteAccount();
+      setShowDeleteModal(false);
+      await logout();
+    } catch (error: any) {
+      Alert.alert('Erro', error?.response?.data?.error || 'Erro ao excluir conta. Tente novamente.');
+    } finally {
+      setDeletingAccount(false);
+    }
   };
 
   return (
@@ -227,6 +251,46 @@ const ContaScreen: React.FC = () => {
         <Card.Content>
           <Button
             mode="contained"
+            onPress={() => navigation.navigate('PrivacyPolicy' as any)}
+            style={styles.planButton}
+            icon="shield-check"
+          >
+            Politica de Privacidade
+          </Button>
+          <Button
+            mode="contained"
+            onPress={() => navigation.navigate('TermsOfService' as any)}
+            style={styles.planButton}
+            icon="file-document"
+          >
+            Termos de Uso
+          </Button>
+        </Card.Content>
+      </Card>
+
+      <Card style={[styles.card, styles.dangerCard]}>
+        <Card.Content>
+          <Text variant="headlineSmall" style={styles.dangerTitle}>Zona de Perigo</Text>
+          <Divider style={styles.divider} />
+          <Text style={styles.dangerText}>
+            Excluir sua conta removera permanentemente todos os seus dados, incluindo eventos, despesas e participantes. Esta acao nao pode ser desfeita.
+          </Text>
+          <Button
+            mode="outlined"
+            onPress={() => setShowDeleteModal(true)}
+            style={styles.deleteButton}
+            textColor="#ef4444"
+            icon="delete"
+          >
+            Excluir minha conta
+          </Button>
+        </Card.Content>
+      </Card>
+
+      <Card style={styles.card}>
+        <Card.Content>
+          <Button
+            mode="contained"
             onPress={handleLogout}
             style={styles.logoutButton}
             buttonColor="#d32f2f"
@@ -235,6 +299,65 @@ const ContaScreen: React.FC = () => {
           </Button>
         </Card.Content>
       </Card>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <MaterialCommunityIcons name="alert-circle" size={48} color="#ef4444" />
+              <Text style={styles.modalTitle}>Excluir Conta</Text>
+            </View>
+            
+            <Text style={styles.modalText}>
+              Tem certeza? Esta acao e irreversivel! Todos os seus dados serao permanentemente excluidos.
+            </Text>
+            
+            <Text style={styles.modalLabel}>
+              Digite <Text style={styles.modalBold}>EXCLUIR</Text> para confirmar:
+            </Text>
+            
+            <TextInput
+              value={deleteConfirmText}
+              onChangeText={(text) => setDeleteConfirmText(text.toUpperCase())}
+              placeholder="EXCLUIR"
+              mode="outlined"
+              style={styles.modalInput}
+              disabled={deletingAccount}
+              autoCapitalize="characters"
+            />
+            
+            <View style={styles.modalButtons}>
+              <Button
+                mode="outlined"
+                onPress={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmText('');
+                }}
+                disabled={deletingAccount}
+                style={styles.modalCancelButton}
+              >
+                Cancelar
+              </Button>
+              <Button
+                mode="contained"
+                onPress={handleDeleteAccount}
+                disabled={deletingAccount || deleteConfirmText !== 'EXCLUIR'}
+                buttonColor="#ef4444"
+                loading={deletingAccount}
+                style={styles.modalDeleteButton}
+              >
+                Excluir
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -297,6 +420,78 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     marginTop: 8,
+  },
+  dangerCard: {
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderWidth: 1,
+  },
+  dangerTitle: {
+    marginBottom: 16,
+    fontWeight: 'bold',
+    color: '#ef4444',
+  },
+  dangerText: {
+    color: customColors.textSecondary,
+    marginBottom: 16,
+    lineHeight: 22,
+  },
+  deleteButton: {
+    borderColor: 'rgba(239, 68, 68, 0.5)',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: customColors.backgroundSecondary,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: customColors.border,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ef4444',
+    marginTop: 12,
+  },
+  modalText: {
+    color: customColors.textSecondary,
+    marginBottom: 16,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  modalLabel: {
+    color: customColors.text,
+    marginBottom: 12,
+  },
+  modalBold: {
+    fontWeight: 'bold',
+    color: '#ef4444',
+  },
+  modalInput: {
+    marginBottom: 20,
+    backgroundColor: customColors.surface,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+  },
+  modalDeleteButton: {
+    flex: 1,
   },
 });
 

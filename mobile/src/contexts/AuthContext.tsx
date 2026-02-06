@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Usuario } from '../../shared/types';
 import { authApi } from '../services/api';
-import { STORAGE_KEYS } from '../constants/config';
+import { saveToken, getToken, removeToken } from '../services/secureStorage';
 
 interface AuthContextType {
   usuario: Usuario | null;
@@ -21,7 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verificarAutenticacao = async () => {
     try {
-      const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+      const token = await getToken();
       if (!token) {
         setUsuario(null);
         setCarregando(false);
@@ -32,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUsuario(usuarioAtual);
     } catch (error) {
       // Se não estiver autenticado, limpar token e usuário
-      await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+      await removeToken();
       setUsuario(null);
     } finally {
       setCarregando(false);
@@ -44,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (usuarioData: Usuario, token: string) => {
-    await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+    await saveToken(token);
     setUsuario(usuarioData);
   };
 
@@ -54,14 +53,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
     } finally {
-      await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+      await removeToken();
       setUsuario(null);
     }
   };
 
   const refreshUser = async () => {
     try {
-      const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+      const token = await getToken();
       if (!token) return;
       const usuarioAtual = await authApi.me();
       setUsuario(usuarioAtual);

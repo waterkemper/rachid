@@ -36,6 +36,7 @@ router.get('/config', rateLimit_1.readRateLimiter, ConfigController_1.ConfigCont
 // Rotas públicas (sem autenticação) - com rate limiting estrito e validação
 router.post('/auth/login', rateLimit_1.authRateLimiter, (0, validate_1.validate)({ body: schemas_1.loginSchema }), AuthController_1.AuthController.login);
 router.post('/auth/google', rateLimit_1.authRateLimiter, AuthController_1.AuthController.googleLogin);
+router.post('/auth/apple', rateLimit_1.authRateLimiter, AuthController_1.AuthController.appleLogin);
 router.post('/auth/logout', rateLimit_1.authRateLimiter, AuthController_1.AuthController.logout);
 router.post('/auth/create-user', rateLimit_1.authRateLimiter, (0, validate_1.validate)({ body: schemas_1.createUserSchema }), AuthController_1.AuthController.createUser);
 router.post('/auth/solicitar-recuperacao-senha', rateLimit_1.passwordResetRateLimiter, (0, validate_1.validate)({ body: schemas_1.solicitarRecuperacaoSenhaSchema }), AuthController_1.AuthController.solicitarRecuperacaoSenha);
@@ -57,6 +58,7 @@ router.get('/auth/me', rateLimit_1.readRateLimiter, auth_1.authMiddleware, AuthC
 router.put('/auth/me', rateLimit_1.mutationRateLimiter, auth_1.authMiddleware, (0, validate_1.validate)({ body: schemas_1.updateUserSchema }), AuthController_1.AuthController.updateUser);
 router.get('/auth/email-preferences', rateLimit_1.readRateLimiter, auth_1.authMiddleware, AuthController_1.AuthController.getEmailPreferences);
 router.put('/auth/email-preferences', rateLimit_1.mutationRateLimiter, auth_1.authMiddleware, AuthController_1.AuthController.updateEmailPreferences);
+router.delete('/auth/account', rateLimit_1.mutationRateLimiter, auth_1.authMiddleware, AuthController_1.AuthController.deleteAccount);
 router.post('/analytics/event', rateLimit_1.mutationRateLimiter, auth_1.authMiddleware, AnalyticsController_1.AnalyticsController.track);
 // Subscription routes
 router.post('/subscriptions', rateLimit_1.mutationRateLimiter, auth_1.authMiddleware, (0, validate_1.validate)({ body: schemas_1.createSubscriptionSchema }), SubscriptionController_1.SubscriptionController.create);

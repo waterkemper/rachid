@@ -21,6 +21,9 @@ export class Usuario {
   @Column('varchar', { nullable: true, unique: true })
   google_id?: string;
 
+  @Column('varchar', { nullable: true, unique: true })
+  apple_id?: string;
+
   @Column('varchar', { default: 'local' })
   auth_provider!: string;
 

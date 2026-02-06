@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity, Image, Linking } from 'react-native';
+import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity, Image, Linking, ActionSheetIOS, Platform, Modal as RNModal, Dimensions } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import * as WebBrowser from 'expo-web-browser';
 import { FAB, Card, Text, Button, ActivityIndicator, Portal, Modal, TextInput, Menu, Divider, Checkbox } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -53,6 +54,10 @@ const DespesasScreen: React.FC = () => {
   const [loadingAnexos, setLoadingAnexos] = useState(false);
   const [anexosList, setAnexosList] = useState<DespesaAnexo[]>([]);
   const [uploadingAnexo, setUploadingAnexo] = useState(false);
+  
+  // Modal de visualização de imagem
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
 
   const formatCurrency = (value: number): string => {
     return new Intl.NumberFormat('pt-BR', {
@@ -65,6 +70,28 @@ const DespesasScreen: React.FC = () => {
     const dataParte = dataStr.split('T')[0];
     const [ano, mes, dia] = dataParte.split('-');
     return `${dia}/${mes}/${ano}`;
+  };
+
+  const handleOpenAnexo = async (anexo: DespesaAnexo) => {
+    const url = anexo.url_download || anexo.url_cloudfront || anexo.url_s3;
+    if (!url) {
+      Alert.alert('Erro', 'URL do anexo não disponível');
+      return;
+    }
+    
+    // Se for imagem, abrir no viewer interno
+    if (isImageMime(anexo.tipo_mime)) {
+      setImageViewerUrl(url);
+      setImageViewerVisible(true);
+    } else {
+      // Para PDFs e outros, abrir no navegador in-app
+      try {
+        await WebBrowser.openBrowserAsync(url);
+      } catch (err) {
+        // Fallback para navegador externo
+        Linking.openURL(url);
+      }
+    }
   };
 
   useEffect(() => {
@@ -147,14 +174,26 @@ const DespesasScreen: React.FC = () => {
   const loadParticipantesDoEvento = async (eventoId: number, incluirPagadorAtual?: number, selecionarTodos = false) => {
     try {
       const evento = await grupoApi.getById(eventoId);
-      if (evento.participantes) {
-        const participantesIds = evento.participantes.map(p => p.participante_id);
-        let participantesFiltrados = participantes.filter(p => participantesIds.includes(p.id));
+      if (evento.participantes && evento.participantes.length > 0) {
+        // Extrair participantes diretamente da resposta da API (objeto aninhado "participante")
+        let participantesFiltrados: Participante[] = evento.participantes
+          .map((p: any) => p.participante)
+          .filter((p: any) => p != null);
         
-        if (incluirPagadorAtual && !participantesIds.includes(incluirPagadorAtual)) {
-          const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
-          if (pagadorAtual) {
-            participantesFiltrados = [...participantesFiltrados, pagadorAtual];
+        // Se não encontrou participantes aninhados, tentar filtrar da lista global
+        if (participantesFiltrados.length === 0) {
+          const participantesIds = evento.participantes.map((p: any) => p.participanteId || p.participante_id);
+          participantesFiltrados = participantes.filter(p => participantesIds.includes(p.id));
+        }
+        
+        // Incluir pagador atual se não estiver na lista
+        if (incluirPagadorAtual) {
+          const jaInclui = participantesFiltrados.some(p => p.id === incluirPagadorAtual);
+          if (!jaInclui) {
+            const pagadorAtual = participantes.find(p => p.id === incluirPagadorAtual);
+            if (pagadorAtual) {
+              participantesFiltrados = [...participantesFiltrados, pagadorAtual];
+            }
           }
         }
         
@@ -200,42 +239,74 @@ const DespesasScreen: React.FC = () => {
     }
   };
 
-  const handlePickAnexos = async () => {
+  const uploadAnexoFile = async (uri: string, name: string, type: string) => {
+    if (!editingDespesa) return;
+    setAnexosUploading(true);
+    try {
+      await despesaApi.uploadAnexo(editingDespesa.id, { uri, name, type });
+      await loadAnexos(editingDespesa.id);
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || 'Erro ao enviar anexo. Verifique se seu plano permite.';
+      Alert.alert('Erro', msg);
+    } finally {
+      setAnexosUploading(false);
+    }
+  };
+
+  const pickAnexoFromPhotos = async () => {
+    if (!editingDespesa) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão', 'É necessário permitir acesso às fotos.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    await uploadAnexoFile(asset.uri, asset.fileName || 'foto.jpg', asset.mimeType || 'image/jpeg');
+  };
+
+  const pickAnexoFromFiles = async () => {
+    if (!editingDespesa) return;
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['image/*', 'application/pdf'],
+      copyToCacheDirectory: true,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    await uploadAnexoFile(asset.uri, asset.name || 'anexo', asset.mimeType || 'application/octet-stream');
+  };
+
+  const handlePickAnexos = () => {
     if (!editingDespesa) {
       Alert.alert('Atenção', 'Salve a despesa primeiro para adicionar anexos.');
       return;
     }
-
-    try {
-      setAnexosUploading(true);
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*', 'application/pdf'],
-        multiple: true,
-      });
-
-      if (result.canceled) {
-        setAnexosUploading(false);
-        return;
-      }
-
-      const files = result.assets || [];
-      for (const file of files) {
-        if (!file.uri || !file.name || !file.mimeType) continue;
-        await despesaApi.uploadAnexo(editingDespesa.id, {
-          uri: file.uri,
-          name: file.name,
-          type: file.mimeType,
-        });
-      }
-      await loadAnexos(editingDespesa.id);
-    } catch (err: any) {
-      console.error('Erro ao fazer upload de anexos:', err);
-      Alert.alert(
-        'Erro',
-        err?.response?.data?.error || 'Erro ao fazer upload de anexos. Tente novamente.'
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancelar', 'Escolher da Galeria', 'Escolher Arquivo (PDF)'],
+          cancelButtonIndex: 0,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) pickAnexoFromPhotos();
+          else if (buttonIndex === 2) pickAnexoFromFiles();
+        }
       );
-    } finally {
-      setAnexosUploading(false);
+    } else {
+      Alert.alert(
+        'Adicionar anexo',
+        'De onde deseja escolher?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Galeria de Fotos', onPress: pickAnexoFromPhotos },
+          { text: 'Arquivos (PDF)', onPress: pickAnexoFromFiles },
+        ]
+      );
     }
   };
 
@@ -417,23 +488,8 @@ const DespesasScreen: React.FC = () => {
     setAnexosList([]);
   };
 
-  const handleUploadAnexo = async () => {
+  const uploadFile = async (uri: string, name: string, type: string) => {
     if (!despesaParaAnexos) return;
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permissão', 'É necessário permitir acesso às fotos para anexar.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: false,
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
-    const uri = asset.uri;
-    const name = asset.fileName || 'anexo.jpg';
-    const type = 'image/jpeg';
     setUploadingAnexo(true);
     try {
       await despesaApi.uploadAnexo(despesaParaAnexos.id, { uri, name, type });
@@ -447,14 +503,87 @@ const DespesasScreen: React.FC = () => {
     }
   };
 
+  const pickFromPhotos = async () => {
+    if (!despesaParaAnexos) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão', 'É necessário permitir acesso às fotos.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    await uploadFile(asset.uri, asset.fileName || 'foto.jpg', asset.mimeType || 'image/jpeg');
+  };
+
+  const pickFromFiles = async () => {
+    if (!despesaParaAnexos) return;
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['image/*', 'application/pdf'],
+      copyToCacheDirectory: true,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    await uploadFile(asset.uri, asset.name || 'anexo', asset.mimeType || 'application/octet-stream');
+  };
+
+  const handleUploadAnexo = () => {
+    if (!despesaParaAnexos) return;
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancelar', 'Escolher da Galeria', 'Escolher Arquivo (PDF)'],
+          cancelButtonIndex: 0,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) pickFromPhotos();
+          else if (buttonIndex === 2) pickFromFiles();
+        }
+      );
+    } else {
+      // Android: show Alert with options
+      Alert.alert(
+        'Adicionar anexo',
+        'De onde deseja escolher?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Galeria de Fotos', onPress: pickFromPhotos },
+          { text: 'Arquivos (PDF)', onPress: pickFromFiles },
+        ]
+      );
+    }
+  };
+
   const handleViewAnexo = async (anexo: DespesaAnexo) => {
     if (!despesaParaAnexos) return;
+    let url = anexo.url_download;
+    
     try {
-      const url = await despesaApi.getDownloadUrl(despesaParaAnexos.id, anexo.id);
-      await Linking.openURL(url);
+      url = await despesaApi.getDownloadUrl(despesaParaAnexos.id, anexo.id);
     } catch {
-      if (anexo.url_download) await Linking.openURL(anexo.url_download);
-      else Alert.alert('Erro', 'Não foi possível abrir o anexo.');
+      // Usar url_download como fallback
+    }
+    
+    if (!url) {
+      Alert.alert('Erro', 'Não foi possível obter a URL do anexo.');
+      return;
+    }
+    
+    // Se for imagem, abrir no viewer interno
+    if (isImageMime(anexo.tipo_mime)) {
+      setImageViewerUrl(url);
+      setImageViewerVisible(true);
+    } else {
+      // Para PDFs e outros, abrir no navegador in-app
+      try {
+        await WebBrowser.openBrowserAsync(url);
+      } catch {
+        Linking.openURL(url);
+      }
     }
   };
 
@@ -646,9 +775,8 @@ const DespesasScreen: React.FC = () => {
                   onPress={handleCloseModal}
                   mode="text"
                   compact
-                >
-                  {''}
-                </Button>
+                  children=""
+                />
               )}
             />
             <Card.Content>
@@ -823,64 +951,57 @@ const DespesasScreen: React.FC = () => {
                   placeholder="YYYY-MM-DD"
                 />
 
-                {/* Participantes da Despesa - Colapsado no final */}
+                {/* Participantes da Despesa */}
                 <View style={styles.participantesSection}>
-                  <TouchableOpacity
-                    style={styles.participantesHeader}
-                    onPress={() => setParticipantesExpandido(!participantesExpandido)}
-                    disabled={!formData.grupo_id || participantesDoEvento.length === 0 || salvando}
-                  >
+                  <View style={styles.participantesHeader}>
                     <View style={styles.participantesHeaderLeft}>
                       <Text variant="bodyMedium" style={styles.label}>
                         Participantes da Despesa *
                       </Text>
-                      {participantesSelecionados.length > 0 && (
-                        <Text variant="bodySmall" style={styles.participantesCount}>
-                          ({participantesSelecionados.length} selecionado{participantesSelecionados.length !== 1 ? 's' : ''})
+                      {participantesSelecionados.length > 0 && formData.valorTotal && (
+                        <Text variant="bodySmall" style={styles.valorPorPessoa}>
+                          {formatCurrency(Number(String(formData.valorTotal).replace(',', '.')) / participantesSelecionados.length)} por pessoa
                         </Text>
                       )}
                     </View>
-                    {formData.grupo_id && participantesDoEvento.length > 0 && (
+                    <View style={styles.participantesBotoes}>
                       <Button
-                        icon={participantesExpandido ? 'minus' : 'plus'}
                         mode="text"
                         compact
-                        onPress={() => setParticipantesExpandido(!participantesExpandido)}
-                        disabled={salvando}
+                        onPress={() => setParticipantesSelecionados(participantesDoEvento.map(p => p.id))}
+                        disabled={salvando || participantesDoEvento.length === 0}
                       >
-                        {participantesExpandido ? 'Ocultar' : 'Mostrar'}
+                        Todos
                       </Button>
-                    )}
-                  </TouchableOpacity>
+                      <Button
+                        mode="text"
+                        compact
+                        onPress={() => setParticipantesSelecionados([])}
+                        disabled={salvando || participantesSelecionados.length === 0}
+                      >
+                        Nenhum
+                      </Button>
+                    </View>
+                  </View>
 
-                  {participantesExpandido && participantesDoEvento.length > 0 && (
+                  {formData.grupo_id && participantesDoEvento.length > 0 && (
                     <View style={styles.participantesContainer}>
-                      <Text variant="bodySmall" style={styles.scrollHint}>
-                        {participantesDoEvento.length > 4 ? '↕ Role para ver mais' : ''}
-                      </Text>
                       <ScrollView 
                         style={styles.participantesScrollView}
                         nestedScrollEnabled={true}
                         showsVerticalScrollIndicator={true}
+                        persistentScrollbar={true}
                       >
-                        {participantesDoEvento.map((participante) => (
-                          <TouchableOpacity
-                            key={participante.id}
-                            style={styles.participanteItem}
-                            onPress={() => {
-                              const isSelected = participantesSelecionados.includes(participante.id);
-                              if (isSelected) {
-                                setParticipantesSelecionados(prev => prev.filter(id => id !== participante.id));
-                              } else {
-                                setParticipantesSelecionados(prev => [...prev, participante.id]);
-                              }
-                            }}
-                            disabled={salvando}
-                          >
-                            <Checkbox
-                              status={participantesSelecionados.includes(participante.id) ? 'checked' : 'unchecked'}
+                        {participantesDoEvento.map((participante) => {
+                          const isSelected = participantesSelecionados.includes(participante.id);
+                          const valorPorPessoa = isSelected && participantesSelecionados.length > 0 && formData.valorTotal
+                            ? Number(String(formData.valorTotal).replace(',', '.')) / participantesSelecionados.length
+                            : 0;
+                          return (
+                            <TouchableOpacity
+                              key={participante.id}
+                              style={[styles.participanteItem, isSelected && styles.participanteItemSelected]}
                               onPress={() => {
-                                const isSelected = participantesSelecionados.includes(participante.id);
                                 if (isSelected) {
                                   setParticipantesSelecionados(prev => prev.filter(id => id !== participante.id));
                                 } else {
@@ -888,11 +1009,35 @@ const DespesasScreen: React.FC = () => {
                                 }
                               }}
                               disabled={salvando}
-                            />
-                            <Text variant="bodyLarge" style={styles.participanteNome}>{participante.nome}</Text>
-                          </TouchableOpacity>
-                        ))}
+                            >
+                              <Checkbox
+                                status={isSelected ? 'checked' : 'unchecked'}
+                                onPress={() => {
+                                  if (isSelected) {
+                                    setParticipantesSelecionados(prev => prev.filter(id => id !== participante.id));
+                                  } else {
+                                    setParticipantesSelecionados(prev => [...prev, participante.id]);
+                                  }
+                                }}
+                                disabled={salvando}
+                              />
+                              <View style={styles.participanteInfo}>
+                                <Text variant="bodyLarge" style={styles.participanteNome}>{participante.nome}</Text>
+                                {isSelected && valorPorPessoa > 0 && (
+                                  <Text variant="bodySmall" style={styles.participanteValor}>
+                                    {formatCurrency(valorPorPessoa)}
+                                  </Text>
+                                )}
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
                       </ScrollView>
+                      {participantesDoEvento.length > 3 && (
+                        <Text variant="bodySmall" style={styles.scrollHint}>
+                          ↕ Role para ver mais participantes
+                        </Text>
+                      )}
                     </View>
                   )}
 
@@ -941,11 +1086,11 @@ const DespesasScreen: React.FC = () => {
                         <View key={anexo.id} style={styles.anexoItem}>
                           <TouchableOpacity
                             style={styles.anexoPreview}
-                            onPress={() => Linking.openURL(anexo.url_cloudfront || anexo.url_s3)}
+                            onPress={() => handleOpenAnexo(anexo)}
                           >
                             {isImageMime(anexo.tipo_mime) ? (
                               <Image
-                                source={{ uri: anexo.url_cloudfront || anexo.url_s3 }}
+                                source={{ uri: anexo.url_download || anexo.url_cloudfront || anexo.url_s3 }}
                                 style={styles.anexoImage}
                               />
                             ) : (
@@ -1005,9 +1150,7 @@ const DespesasScreen: React.FC = () => {
             <Card.Title
               title={`Anexos: ${despesaParaAnexos?.descricao || ''}`}
               right={(props) => (
-                <Button {...props} icon="close" onPress={handleCloseAnexos} mode="text" compact>
-                  {''}
-                </Button>
+                <Button {...props} icon="close" onPress={handleCloseAnexos} mode="text" compact children="" />
               )}
             />
             <Card.Content>
@@ -1022,11 +1165,11 @@ const DespesasScreen: React.FC = () => {
                     disabled={uploadingAnexo}
                     style={{ marginBottom: 12 }}
                   >
-                    {uploadingAnexo ? 'Enviando...' : 'Enviar foto'}
+                    {uploadingAnexo ? 'Enviando...' : 'Enviar arquivo'}
                   </Button>
                   {anexosList.length === 0 ? (
                     <Text variant="bodySmall" style={styles.emptyText}>
-                      Nenhum anexo. Envie uma foto (cupom, recibo).
+                      Nenhum anexo. Envie uma imagem ou PDF (cupom, recibo).
                     </Text>
                   ) : (
                     <ScrollView style={{ maxHeight: 300 }}>
@@ -1068,6 +1211,30 @@ const DespesasScreen: React.FC = () => {
           </Card>
         </Modal>
       </Portal>
+
+      {/* Modal de visualização de imagem */}
+      <RNModal
+        visible={imageViewerVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setImageViewerVisible(false)}
+      >
+        <View style={styles.imageViewerContainer}>
+          <TouchableOpacity
+            style={styles.imageViewerClose}
+            onPress={() => setImageViewerVisible(false)}
+          >
+            <MaterialCommunityIcons name="close" size={32} color="#fff" />
+          </TouchableOpacity>
+          {imageViewerUrl && (
+            <Image
+              source={{ uri: imageViewerUrl }}
+              style={styles.imageViewerImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </RNModal>
     </View>
   );
 };
@@ -1284,15 +1451,16 @@ const styles = StyleSheet.create({
   },
   participantesContainer: {
     marginTop: 8,
-    maxHeight: 200,
+    maxHeight: 280,
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.16)',
+    borderColor: 'rgba(148, 163, 184, 0.3)',
     borderRadius: 8,
-    backgroundColor: 'rgba(2, 6, 23, 0.32)',
+    backgroundColor: 'rgba(30, 41, 59, 0.5)',
     overflow: 'hidden',
   },
   participantesScrollView: {
-    maxHeight: 200,
+    maxHeight: 240,
+    paddingHorizontal: 4,
   },
   scrollHint: {
     color: 'rgba(148, 163, 184, 0.6)',
@@ -1310,12 +1478,53 @@ const styles = StyleSheet.create({
   participanteItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(148, 163, 184, 0.1)',
   },
   participanteNome: {
     marginLeft: 8,
     flex: 1,
+  },
+  participanteInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  participanteValor: {
+    color: '#6366f1',
+    fontWeight: '600',
+  },
+  participanteItemSelected: {
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+  },
+  participantesBotoes: {
+    flexDirection: 'row',
+  },
+  valorPorPessoa: {
+    color: '#6366f1',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  imageViewerContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    padding: 10,
+  },
+  imageViewerImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height * 0.8,
   },
 });
 

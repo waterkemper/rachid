@@ -22,7 +22,8 @@ export type EmailTipo =
   | 'pagamento-falho'
   | 'assinatura-suspensa'
   | 'assinatura-expirada'
-  | 'vencimento-proximo';
+  | 'vencimento-proximo'
+  | 'conta-excluida';
 
 @Entity('emails')
 @Index(['destinatario'])

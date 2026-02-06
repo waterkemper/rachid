@@ -26,24 +26,39 @@ if (process.env.NODE_ENV === 'production') {
 else {
     app.set('trust proxy', false); // Em desenvolvimento, não confiar em proxies
 }
+// CORS must run first so headers are on ALL responses (including 401/403/429)
+const allowedOrigins = new Set([
+    'https://orachid.com.br',
+    'https://www.orachid.com.br',
+    'https://api.orachid.com.br',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:8081',
+    'exp://localhost:8081',
+    ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+]);
 app.use((0, cors_1.default)({
-    origin: [
-        // Produção
-        'https://orachid.com.br',
-        'https://www.orachid.com.br',
-        'https://api.orachid.com.br',
-        process.env.FRONTEND_URL || 'https://orachid.com.br',
-        // Desenvolvimento
-        'http://localhost:3000',
-        'http://localhost:5173', // Vite dev
-        'http://localhost:8081', // Expo dev web
-        'exp://localhost:8081', // Expo dev
-        /^exp:\/\/192\.168\.\d+\.\d+:8081$/, // Expo dev em rede local
-        /^http:\/\/192\.168\.\d+\.\d+:8081$/, // Expo dev web em rede local
-        /^http:\/\/192\.168\.\d+\.\d+:3001$/, // Backend acessível via IP
-    ],
+    origin: (origin, cb) => {
+        if (!origin)
+            return cb(null, true); // curl, Postman, server-to-server
+        if (allowedOrigins.has(origin))
+            return cb(null, true);
+        if (/^https:\/\/(www\.)?orachid\.com\.br$/.test(origin))
+            return cb(null, true);
+        if (/^http:\/\/localhost(:\d+)?$/.test(origin))
+            return cb(null, true);
+        if (/^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/.test(origin))
+            return cb(null, true);
+        if (/^exp:\/\//.test(origin))
+            return cb(null, true);
+        return cb(null, false);
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
 }));
+// Explicit preflight handling – ensures OPTIONS gets CORS headers before any route/rate-limit
+app.options('*', (0, cors_1.default)());
 app.use(express_1.default.json());
 app.use((0, cookie_parser_1.default)());
 // Webhook route without /api prefix (for Asaas webhook compatibility)

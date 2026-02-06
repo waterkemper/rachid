@@ -191,6 +191,21 @@
   font-size: 12px;
 }
 
+.cadastro-link {
+  background: none;
+  border: none;
+  color: rgba(99, 102, 241, 0.85);
+  font-size: 12px;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.cadastro-link:hover {
+  color: rgba(99, 102, 241, 1);
+}
+
 .cadastro-brand:focus-visible,
 .cadastro-top-btn:focus-visible,
 .cadastro-btn-primary:focus-visible {

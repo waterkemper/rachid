@@ -62,6 +62,7 @@ router.get('/config', readRateLimiter, ConfigController.getConfig);
 // Rotas públicas (sem autenticação) - com rate limiting estrito e validação
 router.post('/auth/login', authRateLimiter, validate({ body: loginSchema }), AuthController.login);
 router.post('/auth/google', authRateLimiter, AuthController.googleLogin);
+router.post('/auth/apple', authRateLimiter, AuthController.appleLogin);
 router.post('/auth/logout', authRateLimiter, AuthController.logout);
 router.post('/auth/create-user', authRateLimiter, validate({ body: createUserSchema }), AuthController.createUser);
 router.post('/auth/solicitar-recuperacao-senha', passwordResetRateLimiter, validate({ body: solicitarRecuperacaoSenhaSchema }), AuthController.solicitarRecuperacaoSenha);
@@ -86,6 +87,7 @@ router.get('/auth/me', readRateLimiter, authMiddleware, AuthController.me);
 router.put('/auth/me', mutationRateLimiter, authMiddleware, validate({ body: updateUserSchema }), AuthController.updateUser);
 router.get('/auth/email-preferences', readRateLimiter, authMiddleware, AuthController.getEmailPreferences);
 router.put('/auth/email-preferences', mutationRateLimiter, authMiddleware, AuthController.updateEmailPreferences);
+router.delete('/auth/account', mutationRateLimiter, authMiddleware, AuthController.deleteAccount);
 router.post('/analytics/event', mutationRateLimiter, authMiddleware, AnalyticsController.track);
 
 // Subscription routes
