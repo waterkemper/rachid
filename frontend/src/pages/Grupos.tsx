@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { grupoApi, participanteApi, despesaApi } from '../services/api';
+import { grupoApi, participanteApi } from '../services/api';
 import { Grupo, Participante } from '../types';
 import Modal from '../components/Modal';
 import { FaEdit, FaUsers, FaMoneyBillWave, FaChartBar, FaCopy, FaTrash, FaShare, FaUserPlus } from 'react-icons/fa';
@@ -100,22 +100,12 @@ const Grupos: React.FC = () => {
       ]);
       setGrupos(gruposData);
       setParticipantes(participantesData);
-      
-      // Carregar totais de despesas para cada grupo
+
+      // Totais já vêm do backend (totalDespesas em cada grupo)
       const totaisMap = new Map<number, number>();
-      await Promise.all(
-        gruposData.map(async (grupo) => {
-          try {
-            const despesas = await despesaApi.getAll(grupo.id);
-            const total = despesas.reduce((sum, despesa) => sum + Number(despesa.valorTotal), 0);
-            totaisMap.set(grupo.id, total);
-          } catch (err) {
-            // Erro ao carregar despesas de um grupo específico não deve quebrar tudo
-            console.warn(`Erro ao carregar despesas do grupo ${grupo.id}:`, err);
-            totaisMap.set(grupo.id, 0);
-          }
-        })
-      );
+      gruposData.forEach((grupo) => {
+        totaisMap.set(grupo.id, grupo.totalDespesas ?? 0);
+      });
       setTotaisDespesas(totaisMap);
       
       setError(null);

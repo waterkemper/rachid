@@ -17,6 +17,7 @@ export interface Grupo {
   usuario_id?: number;
   usuario?: Usuario;
   participantes?: ParticipanteGrupo[];
+  totalDespesas?: number;
 }
 
 export interface ParticipanteGrupo {

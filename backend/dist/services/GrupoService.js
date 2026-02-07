@@ -147,6 +147,24 @@ class GrupoService {
                     grupo.participantes = grupo.participantes.filter(pg => pg.participante !== null && pg.participante !== undefined);
                 }
             });
+            // Calcular totalDespesas por grupo em uma única query (evita N+1 no frontend)
+            const gruposIds = gruposUnicos.map(g => g.id);
+            const totaisMap = new Map();
+            if (gruposIds.length > 0) {
+                const totais = await this.despesaRepository
+                    .createQueryBuilder('despesa')
+                    .select('despesa.grupo_id', 'grupoId')
+                    .addSelect('SUM(despesa.valorTotal)', 'total')
+                    .where('despesa.grupo_id IN (:...ids)', { ids: gruposIds })
+                    .groupBy('despesa.grupo_id')
+                    .getRawMany();
+                totais.forEach((r) => {
+                    totaisMap.set(r.grupoId, parseFloat(r.total || '0'));
+                });
+            }
+            gruposUnicos.forEach(grupo => {
+                grupo.totalDespesas = totaisMap.get(grupo.id) ?? 0;
+            });
             return gruposUnicos;
         }
         catch (error) {
