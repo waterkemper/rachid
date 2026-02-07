@@ -23,35 +23,35 @@ if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', false); // Em desenvolvimento, não confiar em proxies
 }
 
-// CORS must run first so headers are on ALL responses (including 401/403/429)
-const allowedOrigins = new Set([
-  'https://orachid.com.br',
-  'https://www.orachid.com.br',
-  'https://api.orachid.com.br',
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://localhost:8081',
-  'exp://localhost:8081',
-  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
-]);
-
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true); // curl, Postman, server-to-server
-    if (allowedOrigins.has(origin)) return cb(null, true);
-    if (/^https:\/\/(www\.)?orachid\.com\.br$/.test(origin)) return cb(null, true);
-    if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true);
-    if (/^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/.test(origin)) return cb(null, true);
-    if (/^exp:\/\//.test(origin)) return cb(null, true);
-    return cb(null, false);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-}));
-
-// Explicit preflight handling – ensures OPTIONS gets CORS headers before any route/rate-limit
-app.options('*', cors());
+// CORS: in production Apache handles it (orachid-api-ssl.conf). In development Express handles it.
+// Avoid duplicate headers that break CORS when both send Access-Control-Allow-Origin.
+if (process.env.NODE_ENV !== 'production') {
+  const allowedOrigins = new Set([
+    'https://orachid.com.br',
+    'https://www.orachid.com.br',
+    'https://api.orachid.com.br',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:8081',
+    'exp://localhost:8081',
+    ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+  ]);
+  app.use(cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.has(origin)) return cb(null, true);
+      if (/^https:\/\/(www\.)?orachid\.com\.br$/.test(origin)) return cb(null, true);
+      if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true);
+      if (/^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/.test(origin)) return cb(null, true);
+      if (/^exp:\/\//.test(origin)) return cb(null, true);
+      return cb(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  }));
+  app.options('*', cors());
+}
 app.use(express.json());
 app.use(cookieParser());
 
