@@ -370,8 +370,12 @@ export const formatarSugestoesPagamento = (
   }
   header += '\n';
 
-  // Call-to-action no final
-  let cta = '\n💡 *Use o Rachid para organizar seus eventos também!*\n\n';
+  // Call-to-action no final (link público do evento - nunca remover)
+  let cta = '\n💡 *Use o Rachid para organizar seus eventos também!*\n';
+  if (link) {
+    cta += `👉 ${link}\n`;
+    cta += 'Dá pra ver o resumo e seus saldos sem criar conta.\n\n';
+  }
   
   // Link de cadastro com referral (referenciando o evento)
   const linkCadastro = `${frontendUrl}/cadastro?ref=share_${evento.id}`;
